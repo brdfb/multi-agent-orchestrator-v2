@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="tr" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Multi-Agent Orchestrator</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+    <style>
+        :root[data-theme="dark"] {
+            --card-bg: #1a1a1a;
+        }
+        :root[data-theme="light"] {
+            --card-bg: #f8f9fa;
+        }
+        .result-card {
+            background: var(--card-bg);
+            padding: 1rem;
+            border-radius: 0.5rem;
+            margin: 1rem 0;
+        }
+        .meta-info {
+            font-size: 0.875rem;
+            opacity: 0.8;
+            margin-top: 0.5rem;
+        }
+        .log-entry {
+            border-left: 3px solid var(--primary);
+            padding-left: 1rem;
+            margin: 0.5rem 0;
+        }
+        .chain-result {
+            border-left: 4px solid var(--primary);
+            padding-left: 1rem;
+            margin: 1rem 0;
+        }
+        pre {
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+        .theme-toggle {
+            cursor: pointer;
+            float: right;
+        }
+        .loading {
+            opacity: 0.6;
+        }
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+        }
+        .metric-card {
+            background: var(--card-bg);
+            padding: 1rem;
+            border-radius: 0.5rem;
+            text-align: center;
+        }
+        .metric-value {
+            font-size: 2rem;
+            font-weight: bold;
+            color: var(--primary);
+        }
+        .metric-label {
+            font-size: 0.875rem;
+            opacity: 0.8;
+        }
+    </style>
+</head>
+<body>
+    <nav>
+        <ul>
+            <li><strong>🤖 Multi-Agent Orchestrator</strong></li>
+        </ul>
+        <ul>
+            <li><a href="#" class="theme-toggle" onclick="toggleTheme()">🌓 Theme</a></li>
+        </ul>
+    </nav>
+
+    <main class="container">
+        <section>
+            <h2>Agent Query</h2>
+            <form hx-post="/ask" hx-target="#output" hx-indicator="#loading">
+                <label>
+                    Agent
+                    <select name="agent" id="agent" required>
+                        <option value="auto">Auto (Router)</option>
+                        <option value="builder">Builder</option>
+                        <option value="critic">Critic</option>
+                        <option value="closer">Closer</option>
+                    </select>
+                </label>
+
+                <label>
+                    Model Override (Optional)
+                    <select name="override_model">
+                        <option value="">Use default</option>
+                        <option value="anthropic/claude-3-5-sonnet-20241022">Claude 3.5 Sonnet</option>
+                        <option value="openai/gpt-4o">GPT-4o</option>
+                        <option value="openai/gpt-4o-mini">GPT-4o Mini</option>
+                        <option value="google/gemini-1.5-pro">Gemini 1.5 Pro</option>
+                        <option value="google/gemini-1.5-flash">Gemini 1.5 Flash</option>
+                    </select>
+                </label>
+
+                <label>
+                    Prompt
+                    <textarea name="prompt" rows="4" placeholder="Enter your question or task..." required></textarea>
+                </label>
+
+                <div>
+                    <button type="submit">📤 Send</button>
+                    <button type="button" onclick="runChain()">⛓️ Run Chain</button>
+                    <span id="loading" class="htmx-indicator" aria-busy="true">Processing...</span>
+                </div>
+            </form>
+        </section>
+
+        <section id="output"></section>
+
+        <section>
+            <details>
+                <summary><strong>📊 Metrics</strong></summary>
+                <div id="metrics" hx-get="/metrics" hx-trigger="load, every 10s" hx-swap="innerHTML"></div>
+            </details>
+        </section>
+
+        <section>
+            <details>
+                <summary><strong>📝 Recent Logs</strong></summary>
+                <div id="logs" hx-get="/logs?limit=10" hx-trigger="load, every 5s" hx-swap="innerHTML"></div>
+            </details>
+        </section>
+    </main>
+
+    <script>
+        // Theme toggle
+        function toggleTheme() {
+            const html = document.documentElement;
+            const currentTheme = html.getAttribute('data-theme');
+            const newTheme = currentTheme === 'light' ? 'dark' : 'light';
+            html.setAttribute('data-theme', newTheme);
+            localStorage.setItem('theme', newTheme);
+        }
+
+        // Load saved theme
+        const savedTheme = localStorage.getItem('theme') || 'light';
+        document.documentElement.setAttribute('data-theme', savedTheme);
+
+        // Run chain
+        function runChain() {
+            const prompt = document.querySelector('textarea[name="prompt"]').value;
+            if (!prompt.trim()) {
+                alert('Please enter a prompt');
+                return;
+            }
+
+            const output = document.getElementById('output');
+            output.innerHTML = '<div aria-busy="true">Running chain: builder → critic → closer...</div>';
+
+            fetch('/chain', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({prompt: prompt})
+            })
+            .then(res => res.json())
+            .then(results => {
+                let html = '<h3>Chain Results</h3>';
+                results.forEach((result, idx) => {
+                    html += `
+                        <div class="chain-result">
+                            <h4>${idx + 1}. ${result.agent.toUpperCase()}</h4>
+                            <div class="result-card">
+                                <pre>${result.response}</pre>
+                                <div class="meta-info">
+                                    Model: ${result.model} |
+                                    Duration: ${Math.round(result.duration_ms)}ms |
+                                    Tokens: ${result.total_tokens}
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                });
+                output.innerHTML = html;
+            })
+            .catch(err => {
+                output.innerHTML = `<article style="background: #ff000020;"><strong>Error:</strong> ${err.message}</article>`;
+            });
+        }
+
+        // HTMX response transformer for /ask
+        document.body.addEventListener('htmx:afterRequest', function(evt) {
+            if (evt.detail.pathInfo.requestPath === '/ask' && evt.detail.successful) {
+                const result = JSON.parse(evt.detail.xhr.response);
+                const html = `
+                    <h3>Response</h3>
+                    <div class="result-card">
+                        <pre>${result.response}</pre>
+                        <div class="meta-info">
+                            <strong>Agent:</strong> ${result.agent} |
+                            <strong>Model:</strong> ${result.model} |
+                            <strong>Provider:</strong> ${result.provider} |
+                            <strong>Duration:</strong> ${Math.round(result.duration_ms)}ms |
+                            <strong>Tokens:</strong> ${result.total_tokens} (prompt: ${result.prompt_tokens}, completion: ${result.completion_tokens}) |
+                            <strong>Log:</strong> ${result.log_file}
+                        </div>
+                    </div>
+                `;
+                evt.detail.target.innerHTML = html;
+            }
+        });
+
+        // HTMX response transformer for /metrics
+        document.body.addEventListener('htmx:afterRequest', function(evt) {
+            if (evt.detail.pathInfo.requestPath === '/metrics' && evt.detail.successful) {
+                const metrics = JSON.parse(evt.detail.xhr.response);
+                const html = `
+                    <div class="metrics-grid">
+                        <div class="metric-card">
+                            <div class="metric-value">${metrics.total_requests}</div>
+                            <div class="metric-label">Total Requests</div>
+                        </div>
+                        <div class="metric-card">
+                            <div class="metric-value">${metrics.total_tokens.toLocaleString()}</div>
+                            <div class="metric-label">Total Tokens</div>
+                        </div>
+                        <div class="metric-card">
+                            <div class="metric-value">$${metrics.total_cost_usd}</div>
+                            <div class="metric-label">Est. Cost</div>
+                        </div>
+                        <div class="metric-card">
+                            <div class="metric-value">${Math.round(metrics.avg_duration_ms)}ms</div>
+                            <div class="metric-label">Avg Duration</div>
+                        </div>
+                    </div>
+                `;
+                evt.detail.target.innerHTML = html;
+            }
+        });
+
+        // HTMX response transformer for /logs
+        document.body.addEventListener('htmx:afterRequest', function(evt) {
+            if (evt.detail.pathInfo.requestPath.startsWith('/logs') && evt.detail.successful) {
+                const logs = JSON.parse(evt.detail.xhr.response);
+                if (logs.length === 0) {
+                    evt.detail.target.innerHTML = '<p><em>No logs yet</em></p>';
+                    return;
+                }
+                let html = '';
+                logs.forEach(log => {
+                    const date = new Date(log.timestamp).toLocaleString();
+                    html += `
+                        <div class="log-entry">
+                            <strong>${log.agent}</strong> @ ${date}
+                            <br><small>${log.model} | ${Math.round(log.duration_ms)}ms | ${log.total_tokens} tokens</small>
+                            <br><small>Prompt: ${log.prompt.substring(0, 100)}${log.prompt.length > 100 ? '...' : ''}</small>
+                        </div>
+                    `;
+                });
+                evt.detail.target.innerHTML = html;
+            }
+        });
+    </script>
+</body>
+</html>
