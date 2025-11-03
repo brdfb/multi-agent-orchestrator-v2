@@ -66,14 +66,15 @@ brew install python3 git
 ### Adım 1: Repository Klonlama
 
 ```bash
-# Option A: GitHub'dan klonla (public repo ise)
-git clone https://github.com/KULLANICI_ADI/orchestrator.git ~/.orchestrator
+# Private repo (HTTPS - GitHub authentication gerekli)
+git clone https://github.com/brdfb/orchestrator.git ~/.orchestrator
 
-# Option B: Private repo için SSH
-git clone git@github.com:KULLANICI_ADI/orchestrator.git ~/.orchestrator
+# Private repo (SSH - SSH key gerekli)
+git clone git@github.com:brdfb/orchestrator.git ~/.orchestrator
 
-# Option C: GitLab, Bitbucket, vs.
-git clone https://gitlab.com/KULLANICI_ADI/orchestrator.git ~/.orchestrator
+# Authentication için:
+# HTTPS: gh auth login (GitHub CLI ile)
+# SSH: ssh-keygen + GitHub'a public key ekle
 ```
 
 ### Adım 2: Virtual Environment ve Dependencies
@@ -599,7 +600,8 @@ python3 -c "from config.settings import AGENTS_CONFIG; print('OK')"
 
 ### İletişim
 
-GitHub Issues: [Repo URL]/issues
+GitHub Repo: https://github.com/brdfb/orchestrator (Private)
+GitHub Issues: https://github.com/brdfb/orchestrator/issues
 
 ---
 
