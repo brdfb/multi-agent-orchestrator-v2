@@ -12,7 +12,9 @@
       "Bash(make:*)",
       "Bash(git init:*)",
       "Bash(git add:*)",
-      "Bash(git commit -m \"$(cat <<''EOF''\nv0.1.0 - Initial Release: Multi-Agent Orchestrator\n\nComplete multi-LLM agent orchestration system\n\nFeatures:\n- 4 agent roles (builder, critic, closer, router)\n- 3 interfaces (CLI, REST API, Web UI)\n- Environment-aware configuration\n- Central installation system\n- Comprehensive documentation\n- 6 test files\n- Production-ready deployment\n\nFiles: 27 core files\nDocs: 7 comprehensive guides\nTests: 6 test files (all passing)\n\n🤖 Generated with Claude Code\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n)\")"
+      "Bash(git commit -m \"$(cat <<''EOF''\nv0.1.0 - Initial Release: Multi-Agent Orchestrator\n\nComplete multi-LLM agent orchestration system\n\nFeatures:\n- 4 agent roles (builder, critic, closer, router)\n- 3 interfaces (CLI, REST API, Web UI)\n- Environment-aware configuration\n- Central installation system\n- Comprehensive documentation\n- 6 test files\n- Production-ready deployment\n\nFiles: 27 core files\nDocs: 7 comprehensive guides\nTests: 6 test files (all passing)\n\n🤖 Generated with Claude Code\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n)\")",
+      "Bash(git config:*)",
+      "Bash(~/setup_orchestrator_local.sh)"
     ],
     "deny": [],
     "ask": []

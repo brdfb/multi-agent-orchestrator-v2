@@ -12,7 +12,7 @@ from config.settings import CONVERSATIONS_DIR, estimate_cost
 def mask_sensitive_data(text: str) -> str:
     """Mask API keys and sensitive data in text."""
     patterns = [
-        (r"(sk-[a-zA-Z0-9]{32,})", "sk-***MASKED***"),
+        (r"(sk-[a-zA-Z0-9]{8,})", "sk-***MASKED***"),
         (r"(API[_-]?KEY[=:\s]+)([^\s]+)", r"\1***MASKED***"),
         (r"(ANTHROPIC[_-]?API[_-]?KEY[=:\s]+)([^\s]+)", r"\1***MASKED***"),
         (r"(OPENAI[_-]?API[_-]?KEY[=:\s]+)([^\s]+)", r"\1***MASKED***"),
