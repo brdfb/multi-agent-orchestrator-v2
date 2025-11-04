@@ -243,6 +243,32 @@ class AgentRuntime:
         # Write log
         log_file = write_json(log_record)
 
+        # Auto-store conversation to memory (if agent has memory enabled)
+        if agent_config.get("memory_enabled", False) and not llm_response.error:
+            try:
+                self.memory.store_conversation(
+                    prompt=prompt,
+                    response=llm_response.text,
+                    agent=agent,
+                    model=llm_response.model,
+                    provider=llm_response.provider,
+                    metadata={
+                        "duration_ms": llm_response.duration_ms,
+                        "prompt_tokens": llm_response.prompt_tokens,
+                        "completion_tokens": llm_response.completion_tokens,
+                        "total_tokens": llm_response.total_tokens,
+                        "estimated_cost_usd": llm_response.estimated_cost,
+                        "fallback_used": llm_response.original_model is not None,
+                        "original_model": llm_response.original_model,
+                        "fallback_reason": llm_response.fallback_reason,
+                        "session_id": self.session_id,
+                        "injected_context_tokens": injected_context_tokens,
+                    },
+                )
+            except Exception:
+                # If memory storage fails, continue (graceful degradation)
+                pass
+
         # Create result
         result = RunResult(
             agent=agent,
