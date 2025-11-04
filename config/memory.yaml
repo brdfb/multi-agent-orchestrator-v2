@@ -1,0 +1,36 @@
+# Memory System Configuration
+
+memory:
+  # Global enable/disable
+  enabled: true
+
+  # Storage backend
+  backend: "sqlite"  # sqlite | json
+  db_path: "data/MEMORY/conversations.db"
+
+  # Default context injection settings
+  context:
+    enabled_default: true
+    max_context_tokens_default: 500
+    max_snippet_tokens: 120  # Max tokens per conversation snippet
+    strategy_default: "keywords"  # keywords | recent | hybrid
+    joiner: "\n---\n"  # Separator between context items
+    prompt_header: "[MEMORY CONTEXT - Relevant past conversations]\n"
+
+  # Filtering defaults
+  filtering:
+    time_decay_hours: 168  # 7 days - older conversations get lower weight
+    min_relevance: 0.25  # Minimum relevance score (0-1)
+    exclude_same_turn: true  # Don't include current session's last turn
+
+  # Auto-cleanup settings
+  cleanup:
+    enabled: false  # Auto-cleanup disabled by default
+    keep_days: 90  # Delete conversations older than 90 days
+    run_on_startup: false
+
+  # Performance settings
+  performance:
+    cache_enabled: false  # Future: Cache recent searches
+    cache_ttl_seconds: 300  # 5 minutes
+    max_search_results: 100  # Max results from search query
