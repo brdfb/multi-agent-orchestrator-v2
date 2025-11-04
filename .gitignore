@@ -7,3 +7,5 @@ data/MEMORY/*.db
 .pytest_cache/
 .ruff_cache/
 *.db-journal
+*.log
+nohup.out
