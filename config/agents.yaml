@@ -18,6 +18,13 @@ agents:
     fallback_order:
       - "openai/gpt-4o-mini"
       - "google/gemini-1.5-pro"
+    memory_enabled: true
+    memory:
+      max_context_tokens: 600
+      strategy: "keywords"
+      time_decay_hours: 168
+      min_relevance: 0.3
+      exclude_same_turn: true
 
   critic:
     model: "openai/gpt-4o-mini"
@@ -35,6 +42,13 @@ agents:
       - "google/gemini-2.0-flash-exp"
       - "anthropic/claude-3-5-sonnet-20241022"
       - "openai/gpt-4o"
+    memory_enabled: true
+    memory:
+      max_context_tokens: 500
+      strategy: "keywords"
+      time_decay_hours: 72  # 3 days - critic focuses on recent issues
+      min_relevance: 0.35
+      exclude_same_turn: true
 
   closer:
     model: "google/gemini-1.5-pro"
@@ -52,6 +66,7 @@ agents:
       - "google/gemini-2.0-flash-exp"
       - "openai/gpt-4o-mini"
       - "anthropic/claude-3-5-sonnet-20241022"
+    memory_enabled: false  # Closer doesn't need history context
 
   router:
     model: "openai/gpt-4o-mini"
@@ -69,3 +84,4 @@ agents:
       - "google/gemini-2.0-flash-exp"
       - "anthropic/claude-3-5-sonnet-20241022"
       - "google/gemini-1.5-flash"
+    memory_enabled: false  # Router doesn't need context
