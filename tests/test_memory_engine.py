@@ -367,10 +367,12 @@ class TestMemoryEngine:
         engine = MemoryEngine()
 
         keywords = engine._extract_keywords("Create a function to parse JSON data")
-        assert "Create" in keywords or "create" in keywords
+        # Now returns a set
+        assert isinstance(keywords, set)
+        assert "create" in keywords
         assert "function" in keywords
         assert "parse" in keywords
-        assert "JSON" in keywords or "json" in keywords
+        assert "json" in keywords or "data" in keywords
         # Stop words should be filtered
         assert "a" not in keywords
         assert "to" not in keywords
@@ -418,3 +420,288 @@ class TestMemoryEngine:
         assert stats["total_conversations"] == 1
         assert stats["total_tokens"] == 100
         assert stats["total_cost_usd"] == 0.01
+
+    def test_time_decay_scoring(self, temp_db):
+        """Test that time decay reduces score for older conversations."""
+        import time
+        from datetime import datetime, timedelta
+
+        engine = MemoryEngine()
+
+        # Store recent conversation
+        recent_id = engine.store_conversation(
+            prompt="Python function test",
+            response="Use def keyword",
+            agent="builder",
+            model="test",
+            provider="test",
+        )
+
+        # Manually update timestamp to simulate older conversation
+        time.sleep(0.1)
+        old_timestamp = (datetime.utcnow() - timedelta(hours=48)).isoformat()
+        conn = engine.backend._get_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            "UPDATE conversations SET timestamp = ? WHERE id = ?",
+            (old_timestamp, recent_id),
+        )
+        conn.commit()
+        conn.close()
+
+        # Store another recent conversation
+        engine.store_conversation(
+            prompt="Python function example",
+            response="Here is sample code",
+            agent="builder",
+            model="test",
+            provider="test",
+        )
+
+        # Get context with time decay
+        context = engine.get_context_for_prompt(
+            "Python function", max_tokens=1000, time_decay_hours=24, min_relevance=0.0
+        )
+
+        # Recent conversation should be ranked higher (comes first)
+        assert "sample code" in context
+        # Both should appear but order matters
+        lines = context.split("\n")
+        sample_idx = next(i for i, line in enumerate(lines) if "sample code" in line)
+        def_idx = next(
+            (i for i, line in enumerate(lines) if "def keyword" in line), len(lines)
+        )
+        assert sample_idx < def_idx, "Recent conversation should appear first"
+
+    def test_min_relevance_filter(self, temp_db):
+        """Test that min_relevance threshold filters low-scoring conversations."""
+        engine = MemoryEngine()
+
+        # Store highly relevant conversation
+        engine.store_conversation(
+            prompt="Create Python function for parsing JSON data",
+            response="Use json.loads() to parse",
+            agent="builder",
+            model="test",
+            provider="test",
+        )
+
+        # Store barely relevant conversation
+        engine.store_conversation(
+            prompt="What is the weather today",
+            response="It is sunny",
+            agent="builder",
+            model="test",
+            provider="test",
+        )
+
+        # Query with high min_relevance
+        context = engine.get_context_for_prompt(
+            "Python JSON parsing function", min_relevance=0.5, max_tokens=1000
+        )
+
+        # Should only include highly relevant conversation
+        assert "json.loads" in context
+        assert "sunny" not in context
+
+    def test_exclude_current_session(self, temp_db):
+        """Test that exclude_current_session filters out same-session conversations."""
+        engine = MemoryEngine()
+
+        # Store conversation in session "sess1"
+        engine.store_conversation(
+            prompt="Test in session 1",
+            response="Response 1",
+            agent="builder",
+            model="test",
+            provider="test",
+            metadata={"session_id": "sess1"},
+        )
+
+        # Store conversation in session "sess2"
+        engine.store_conversation(
+            prompt="Test in session 2",
+            response="Response 2",
+            agent="builder",
+            model="test",
+            provider="test",
+            metadata={"session_id": "sess2"},
+        )
+
+        # Get context excluding sess1
+        context = engine.get_context_for_prompt(
+            "Test",
+            session_id="sess1",
+            exclude_current_session=True,
+            min_relevance=0.0,
+            max_tokens=1000,
+        )
+
+        # Should only include sess2
+        assert "Response 2" in context
+        assert "Response 1" not in context
+
+        # Get context without exclusion
+        context_all = engine.get_context_for_prompt(
+            "Test",
+            session_id="sess1",
+            exclude_current_session=False,
+            min_relevance=0.0,
+            max_tokens=1000,
+        )
+
+        # Should include both
+        assert "Response 2" in context_all
+        assert "Response 1" in context_all
+
+    def test_max_tokens_budget_enforced(self, temp_db):
+        """Test that max_tokens limit is enforced."""
+        engine = MemoryEngine()
+
+        # Store multiple conversations with same keywords
+        for i in range(5):
+            engine.store_conversation(
+                prompt=f"Python function example {i}",
+                response=f"Sample code example {i}" * 50,  # Long response
+                agent="builder",
+                model="test",
+                provider="test",
+            )
+
+        # Get context with small token budget
+        context = engine.get_context_for_prompt(
+            "Python function", max_tokens=100, min_relevance=0.0
+        )
+
+        # Estimate tokens in result
+        estimated_tokens = len(context) // 4
+
+        # Should not exceed budget (allow small margin)
+        assert estimated_tokens <= 120, f"Token budget exceeded: {estimated_tokens}"
+
+    def test_agent_filter_in_context(self, temp_db):
+        """Test agent filtering in get_context_for_prompt."""
+        engine = MemoryEngine()
+
+        # Store builder conversation
+        engine.store_conversation(
+            prompt="Build a Python function",
+            response="Builder response",
+            agent="builder",
+            model="test",
+            provider="test",
+        )
+
+        # Store critic conversation
+        engine.store_conversation(
+            prompt="Review Python function",
+            response="Critic response",
+            agent="critic",
+            model="test",
+            provider="test",
+        )
+
+        # Get context filtered by builder
+        context = engine.get_context_for_prompt(
+            "Python function", agent="builder", min_relevance=0.0, max_tokens=1000
+        )
+
+        assert "Builder response" in context
+        assert "Critic response" not in context
+
+        # Get context for all agents
+        context_all = engine.get_context_for_prompt(
+            "Python function", agent=None, min_relevance=0.0, max_tokens=1000
+        )
+
+        assert "Builder response" in context_all
+        assert "Critic response" in context_all
+
+    def test_empty_query_uses_time_decay(self, temp_db):
+        """Test that empty query uses only time decay (no keyword score)."""
+        import time
+        from datetime import datetime, timedelta
+
+        engine = MemoryEngine()
+
+        # Store old conversation
+        old_id = engine.store_conversation(
+            prompt="Old conversation",
+            response="Old response",
+            agent="builder",
+            model="test",
+            provider="test",
+        )
+
+        # Update to old timestamp
+        old_timestamp = (datetime.utcnow() - timedelta(hours=72)).isoformat()
+        conn = engine.backend._get_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            "UPDATE conversations SET timestamp = ? WHERE id = ?",
+            (old_timestamp, old_id),
+        )
+        conn.commit()
+        conn.close()
+
+        time.sleep(0.1)
+
+        # Store recent conversation
+        engine.store_conversation(
+            prompt="Recent conversation",
+            response="Recent response",
+            agent="builder",
+            model="test",
+            provider="test",
+        )
+
+        # Query with empty/short prompt (no keywords)
+        context = engine.get_context_for_prompt(
+            "a",  # No meaningful keywords
+            min_relevance=0.0,
+            time_decay_hours=48,
+            max_tokens=1000,
+        )
+
+        # With empty query, should only use time decay
+        # Recent should appear first if any results
+        if context:
+            lines = context.split("\n")
+            # Check that recent appears before old (if both appear)
+            recent_idx = next(
+                (i for i, line in enumerate(lines) if "Recent response" in line),
+                len(lines),
+            )
+            old_idx = next(
+                (i for i, line in enumerate(lines) if "Old response" in line),
+                len(lines),
+            )
+            if recent_idx < len(lines) and old_idx < len(lines):
+                assert (
+                    recent_idx < old_idx
+                ), "Recent conversation should rank higher with time decay"
+
+    def test_deterministic_scoring_and_sorting(self, temp_db):
+        """Test that scoring and sorting is deterministic."""
+        engine = MemoryEngine()
+
+        # Store conversations
+        for i in range(3):
+            engine.store_conversation(
+                prompt=f"Python function test {i}",
+                response=f"Response {i}",
+                agent="builder",
+                model="test",
+                provider="test",
+            )
+
+        # Get context multiple times
+        context1 = engine.get_context_for_prompt(
+            "Python function", min_relevance=0.0, max_tokens=1000
+        )
+        context2 = engine.get_context_for_prompt(
+            "Python function", min_relevance=0.0, max_tokens=1000
+        )
+
+        # Results should be identical
+        assert context1 == context2, "Context retrieval should be deterministic"

@@ -11,7 +11,7 @@ memory:
   # Default context injection settings
   context:
     enabled_default: true
-    max_context_tokens_default: 500
+    max_context_tokens_default: 350  # OPTIMIZED: reduced from 500 to save tokens
     max_snippet_tokens: 120  # Max tokens per conversation snippet
     strategy_default: "keywords"  # keywords | recent | hybrid
     joiner: "\n---\n"  # Separator between context items
@@ -19,8 +19,8 @@ memory:
 
   # Filtering defaults
   filtering:
-    time_decay_hours: 168  # 7 days - older conversations get lower weight
-    min_relevance: 0.25  # Minimum relevance score (0-1)
+    time_decay_hours: 96  # OPTIMIZED: 4 days (reduced from 7) - focus on recent context
+    min_relevance: 0.35  # OPTIMIZED: increased from 0.25 - more selective filtering
     exclude_same_turn: true  # Don't include current session's last turn
 
   # Auto-cleanup settings
