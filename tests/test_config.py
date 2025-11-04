@@ -12,8 +12,8 @@ def test_config_loads():
     """Test that agents.yaml loads successfully."""
     config = load_agents_config()
     assert config is not None
-    assert "default_model" in config
     assert "agents" in config
+    # Note: default_model was removed in v0.2.0 - each agent has its own model
 
 
 def test_config_has_required_agents():
