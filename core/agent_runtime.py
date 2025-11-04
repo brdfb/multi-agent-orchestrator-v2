@@ -4,9 +4,10 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from config.settings import load_agents_config
+from config.settings import load_agents_config, load_memory_config
 from core.llm_connector import LLMConnector, LLMResponse
 from core.logging_utils import write_json
+from core.memory_engine import MemoryEngine
 
 
 @dataclass
@@ -28,6 +29,7 @@ class RunResult:
     original_model: Optional[str] = None  # If fallback was used
     fallback_reason: Optional[str] = None  # Why fallback was triggered
     fallback_used: bool = False  # Whether fallback was triggered
+    injected_context_tokens: int = 0  # Tokens from memory context injection
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary."""
@@ -52,7 +54,18 @@ class AgentRuntime:
 
     def __init__(self):
         self.config = load_agents_config()
+        self.memory_config = load_memory_config()
         self.connector = LLMConnector(retry_count=1)
+        self._memory = None  # Lazy initialization
+        # Generate session ID for this runtime instance
+        self.session_id = datetime.utcnow().isoformat()
+
+    @property
+    def memory(self) -> MemoryEngine:
+        """Lazy initialization of memory engine."""
+        if self._memory is None:
+            self._memory = MemoryEngine()
+        return self._memory
 
     def route(self, prompt: str) -> str:
         """
@@ -125,10 +138,77 @@ class AgentRuntime:
         if not override_model:
             fallback_order = agent_config.get("fallback_order", [])
 
+        # Memory context injection
+        system_prompt = agent_config["system"]
+        injected_context_tokens = 0
+
+        if agent_config.get("memory_enabled", False):
+            try:
+                # Get agent-specific memory config (with global defaults)
+                agent_memory_config = agent_config.get("memory", {})
+                global_memory_config = self.memory_config.get("memory", {})
+
+                # Merge configs (agent-specific overrides global)
+                max_tokens = agent_memory_config.get(
+                    "max_context_tokens",
+                    global_memory_config.get("context", {}).get(
+                        "max_context_tokens_default", 350
+                    ),
+                )
+                min_relevance = agent_memory_config.get(
+                    "min_relevance",
+                    global_memory_config.get("filtering", {}).get(
+                        "min_relevance", 0.35
+                    ),
+                )
+                time_decay_hours = agent_memory_config.get(
+                    "time_decay_hours",
+                    global_memory_config.get("filtering", {}).get(
+                        "time_decay_hours", 96
+                    ),
+                )
+                exclude_same_turn = agent_memory_config.get(
+                    "exclude_same_turn",
+                    global_memory_config.get("filtering", {}).get(
+                        "exclude_same_turn", True
+                    ),
+                )
+
+                # Get context from memory
+                memory_context = self.memory.get_context_for_prompt(
+                    prompt,
+                    strategy=agent_memory_config.get("strategy", "keywords"),
+                    max_tokens=max_tokens,
+                    min_relevance=min_relevance,
+                    time_decay_hours=time_decay_hours,
+                    exclude_current_session=exclude_same_turn,
+                    agent=agent,  # Filter by current agent
+                    session_id=self.session_id,
+                )
+
+                # Inject context if available
+                if memory_context:
+                    # Add context header from config
+                    context_header = global_memory_config.get("context", {}).get(
+                        "prompt_header",
+                        "[MEMORY CONTEXT - Relevant past conversations]\n",
+                    )
+                    context_block = f"{context_header}{memory_context}"
+
+                    # Inject into system prompt
+                    system_prompt = f"{agent_config['system']}\n\n{context_block}"
+
+                    # Estimate injected tokens (4 chars ≈ 1 token)
+                    injected_context_tokens = len(context_block) // 4
+            except Exception:
+                # If memory retrieval fails (e.g., database not available), continue without context
+                # This ensures graceful degradation in test/development environments
+                pass
+
         # Call LLM with fallback support
         llm_response: LLMResponse = self.connector.call(
             model=model,
-            system=agent_config["system"],
+            system=system_prompt,
             user=prompt,
             temperature=agent_config.get("temperature", 0.2),
             max_tokens=agent_config.get("max_tokens", 1500),
@@ -149,6 +229,7 @@ class AgentRuntime:
             "total_tokens": llm_response.total_tokens,
             "timestamp": timestamp,
             "error": llm_response.error,
+            "injected_context_tokens": injected_context_tokens,
         }
 
         # Add fallback metadata if applicable
@@ -179,6 +260,7 @@ class AgentRuntime:
             original_model=llm_response.original_model,
             fallback_reason=llm_response.fallback_reason,
             fallback_used=llm_response.original_model is not None,
+            injected_context_tokens=injected_context_tokens,
         )
 
         return result
