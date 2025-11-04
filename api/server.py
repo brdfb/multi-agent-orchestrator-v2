@@ -22,7 +22,7 @@ from core.memory_engine import MemoryEngine
 app = FastAPI(
     title="Multi-Agent Orchestrator",
     description="Multi-LLM agent system with CLI, API, and UI",
-    version="0.1.0",
+    version="0.2.0",
 )
 
 
