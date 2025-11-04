@@ -16,6 +16,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from config.settings import get_env_source, get_provider_status, get_available_providers
 from core.agent_runtime import AgentRuntime
 from core.logging_utils import get_metrics, read_logs
+from core.memory_engine import MemoryEngine
 
 # Initialize FastAPI
 app = FastAPI(
@@ -59,8 +60,9 @@ static_dir = BASE_DIR / "ui" / "static"
 if static_dir.exists():
     app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 
-# Initialize runtime
+# Initialize runtime and memory
 runtime = AgentRuntime()
+memory = MemoryEngine()
 
 
 # Request/Response models
@@ -217,6 +219,100 @@ async def health():
         "available_providers": available_providers,
         "total_available": len(available_providers),
     }
+
+
+# Memory API endpoints
+@app.get("/memory/search")
+async def memory_search(
+    q: str,
+    agent: Optional[str] = None,
+    model: Optional[str] = None,
+    limit: int = 10,
+):
+    """
+    Search conversations by keyword.
+
+    Args:
+        q: Search query
+        agent: Filter by agent (optional)
+        model: Filter by model (optional)
+        limit: Maximum results (1-100)
+
+    Returns:
+        List of matching conversations
+    """
+    if not q.strip():
+        raise HTTPException(status_code=422, detail="Query cannot be empty")
+
+    if limit < 1 or limit > 100:
+        raise HTTPException(status_code=400, detail="Limit must be between 1 and 100")
+
+    try:
+        results = memory.search_conversations(
+            query=q, agent=agent, model=model, limit=limit
+        )
+        return {"results": results, "count": len(results)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Search failed: {str(e)}")
+
+
+@app.get("/memory/recent")
+async def memory_recent(agent: Optional[str] = None, limit: int = 10):
+    """
+    Get recent conversations.
+
+    Args:
+        agent: Filter by agent (optional)
+        limit: Maximum results (1-100)
+
+    Returns:
+        List of recent conversations
+    """
+    if limit < 1 or limit > 100:
+        raise HTTPException(status_code=400, detail="Limit must be between 1 and 100")
+
+    try:
+        results = memory.get_recent_conversations(limit=limit, agent=agent)
+        return {"results": results, "count": len(results)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get recent: {str(e)}")
+
+
+@app.get("/memory/stats")
+async def memory_stats():
+    """
+    Get memory statistics.
+
+    Returns:
+        Statistics about stored conversations
+    """
+    try:
+        stats = memory.get_stats()
+        return stats
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get stats: {str(e)}")
+
+
+@app.delete("/memory/{conversation_id}")
+async def memory_delete(conversation_id: int):
+    """
+    Delete a conversation by ID.
+
+    Args:
+        conversation_id: Conversation ID to delete
+
+    Returns:
+        Success status
+    """
+    try:
+        deleted = memory.delete_conversation(conversation_id)
+        if not deleted:
+            raise HTTPException(status_code=404, detail="Conversation not found")
+        return {"success": True, "message": f"Deleted conversation {conversation_id}"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Delete failed: {str(e)}")
 
 
 if __name__ == "__main__":
