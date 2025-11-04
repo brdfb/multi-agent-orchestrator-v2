@@ -392,7 +392,57 @@
                 output.innerHTML = html;
             })
             .catch(err => {
-                output.innerHTML = `<article style="background: #ff000020;"><strong>Error:</strong> ${err.message}</article>`;
+                let errorHtml = `
+                    <article style="background: #ff000020; border-left: 4px solid #e74c3c;">
+                        <strong>❌ Error</strong><br>
+                        ${err.message}
+                `;
+
+                // Actionable solutions based on error type
+                if (err.message.includes('API key') || err.message.includes('authentication')) {
+                    errorHtml += `
+                        <br><br>
+                        <strong>💡 Solution:</strong>
+                        <ul>
+                            <li>Check your <code>.env</code> file has valid API keys</li>
+                            <li>Restart the server after adding keys</li>
+                            <li>Verify keys at provider dashboards</li>
+                        </ul>
+                    `;
+                } else if (err.message.includes('rate limit') || err.message.includes('quota')) {
+                    errorHtml += `
+                        <br><br>
+                        <strong>💡 Solution:</strong>
+                        <ul>
+                            <li>Wait 60 seconds before retrying</li>
+                            <li>Upgrade your API plan</li>
+                            <li>Enable fallback models in agents.yaml</li>
+                        </ul>
+                    `;
+                } else if (err.message.includes('network') || err.message.includes('timeout')) {
+                    errorHtml += `
+                        <br><br>
+                        <strong>💡 Solution:</strong>
+                        <ul>
+                            <li>Check your internet connection</li>
+                            <li>Verify firewall settings</li>
+                            <li>Try again in a few seconds</li>
+                        </ul>
+                    `;
+                } else {
+                    errorHtml += `
+                        <br><br>
+                        <strong>💡 Troubleshooting:</strong>
+                        <ul>
+                            <li>Check <code>.server.log</code> for details</li>
+                            <li>Run <code>make test</code> to verify setup</li>
+                            <li>Check <code>/health</code> endpoint</li>
+                        </ul>
+                    `;
+                }
+
+                errorHtml += `</article>`;
+                output.innerHTML = errorHtml;
             });
         }
 

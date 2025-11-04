@@ -1,6 +1,5 @@
-default_model: "google/gemini-1.5-pro"    # eskisi: anthropic/claude-3-5-sonnet-20241022
-fallback_model: "openai/gpt-4o-mini"      # aynı kalabilir default_model: "anthropic/claude-3-5-sonnet-20241022"
-
+# Multi-Agent Orchestrator Configuration
+# Each agent has its own model and fallback_order
 
 agents:
   builder:
