@@ -38,6 +38,7 @@ make run-api
   - ✅ **Closer**: Synthesizes decisions into actionable steps
   - 🧭 **Router**: Automatically selects the right agent
 - **Multi-Agent Chains**: Run builder → critic → closer workflows
+- **Persistent Memory System**: SQLite-backed conversation memory with context injection
 - **Three Interfaces**: CLI, REST API, Web UI (HTMX + PicoCSS)
 - **Complete Observability**: JSON logs, metrics, token/cost tracking
 - **Model Override**: Test any model on any agent
@@ -49,21 +50,25 @@ make run-api
 .
 ├── config/
 │   ├── agents.yaml          # Agent definitions and prompts
+│   ├── memory.yaml          # Memory system configuration
 │   └── settings.py          # Configuration management
 ├── core/
 │   ├── llm_connector.py     # LiteLLM wrapper with retry
 │   ├── agent_runtime.py     # Orchestration engine
+│   ├── memory_engine.py     # Memory system (SQLite backend)
 │   └── logging_utils.py     # JSON logging and metrics
 ├── api/
-│   └── server.py            # FastAPI REST API
+│   └── server.py            # FastAPI REST API + Memory endpoints
 ├── ui/
 │   └── templates/
 │       └── index.html       # HTMX web interface
 ├── scripts/
-│   └── agent_runner.py      # CLI tool
-├── tests/                   # 6 comprehensive tests
+│   ├── agent_runner.py      # CLI tool
+│   └── memory_cli.py        # Memory system CLI
+├── tests/                   # 55+ comprehensive tests
 └── data/
-    └── CONVERSATIONS/       # JSON logs (auto-created)
+    ├── CONVERSATIONS/       # JSON logs (auto-created)
+    └── MEMORY/             # SQLite database (auto-created)
 ```
 
 ## 🔧 Configuration
@@ -197,6 +202,174 @@ make agent-chain Q="Design a scalable chat system"
 ```
 
 Default flow: builder creates → critic reviews → closer summarizes actions
+
+## 🧠 Memory System
+
+The orchestrator includes a persistent memory system that stores all conversations and enables context-aware responses across sessions.
+
+### Features
+
+- **Automatic Storage**: Every successful conversation is automatically stored in SQLite
+- **Context Injection**: Relevant past conversations are injected into agent prompts
+- **Relevance Scoring**: Keyword-based matching with time decay
+- **Agent-Specific Memory**: Each agent can access its own conversation history
+- **Session Management**: Prevents same-session context repetition
+- **REST API**: Search and manage conversations via HTTP
+- **CLI Tools**: Command-line interface for memory operations
+
+### How It Works
+
+When memory is enabled for an agent (via `memory_enabled: true` in `config/agents.yaml`):
+
+1. **Before LLM call**: System searches for relevant past conversations
+2. **Relevance scoring**: `score = keyword_overlap × exp(-age_hours / decay_hours)`
+3. **Context injection**: Top-scoring conversations are added to system prompt
+4. **Token budgeting**: Context limited to configured max tokens (default: 350)
+5. **After LLM call**: New conversation automatically stored for future retrieval
+
+### CLI Commands
+
+```bash
+# Search conversations by keyword
+make memory-search Q="authentication"
+make memory-search Q="bug fix" AGENT=critic LIMIT=5
+
+# View recent conversations
+make memory-recent LIMIT=10
+make memory-recent AGENT=builder LIMIT=5
+
+# Show memory statistics
+make memory-stats
+# Output:
+#   Total Conversations: 42
+#   Total Tokens: 125,430
+#   Total Cost: $2.34
+#   By Agent: builder (20), critic (15), closer (7)
+
+# Delete specific conversation
+python scripts/memory_cli.py delete 123 -y
+
+# Cleanup old conversations
+make memory-cleanup DAYS=90 CONFIRM=1
+
+# Export conversations
+make memory-export FORMAT=json > conversations.json
+make memory-export FROM=2024-01-01 TO=2024-12-31 FORMAT=csv
+```
+
+### REST API Endpoints
+
+```bash
+# Search conversations
+curl "http://localhost:5050/memory/search?q=authentication&agent=builder&limit=10"
+
+# Get recent conversations
+curl "http://localhost:5050/memory/recent?limit=10&agent=critic"
+
+# Get memory statistics
+curl "http://localhost:5050/memory/stats"
+
+# Delete conversation
+curl -X DELETE "http://localhost:5050/memory/123"
+```
+
+**Response Format:**
+```json
+{
+  "results": [
+    {
+      "id": 1,
+      "timestamp": "2024-01-01T12:00:00",
+      "agent": "builder",
+      "model": "anthropic/claude-3-5-sonnet-20241022",
+      "prompt": "Create a REST API...",
+      "response": "Here's the implementation...",
+      "total_tokens": 850,
+      "estimated_cost_usd": 0.0255
+    }
+  ],
+  "count": 1
+}
+```
+
+### Configuration
+
+Edit `config/memory.yaml`:
+
+```yaml
+memory:
+  enabled: true
+  backend: "sqlite"
+  database_path: "data/MEMORY/conversations.db"
+
+  # Context injection settings
+  context:
+    max_context_tokens_default: 350  # Max tokens for injected context
+    prompt_header: "[MEMORY CONTEXT - Relevant past conversations]\n"
+
+  # Relevance filtering
+  filtering:
+    min_relevance: 0.35  # Minimum relevance score (0-1)
+    time_decay_hours: 96  # Reduce relevance over time
+    exclude_same_turn: true  # Don't include current session
+```
+
+Per-agent memory settings in `config/agents.yaml`:
+
+```yaml
+agents:
+  builder:
+    model: "anthropic/claude-3-5-sonnet-20241022"
+    memory_enabled: true  # Enable memory for this agent
+    memory:
+      strategy: "keywords"  # Relevance strategy
+      max_context_tokens: 350  # Agent-specific token limit
+      min_relevance: 0.35  # Agent-specific relevance threshold
+```
+
+### Database Schema
+
+SQLite schema in `data/MEMORY/conversations.db`:
+
+```sql
+CREATE TABLE conversations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+    agent TEXT NOT NULL,
+    model TEXT NOT NULL,
+    provider TEXT NOT NULL,
+    prompt TEXT NOT NULL,
+    response TEXT NOT NULL,
+    duration_ms REAL,
+    prompt_tokens INTEGER,
+    completion_tokens INTEGER,
+    total_tokens INTEGER,
+    estimated_cost_usd REAL,
+    fallback_used BOOLEAN DEFAULT 0,
+    session_id TEXT,
+    INDEX idx_timestamp (timestamp DESC),
+    INDEX idx_agent (agent)
+);
+```
+
+### Example: Context Injection
+
+**Without Memory:**
+```
+User: "How do I authenticate users?"
+Builder: [Generic authentication response]
+```
+
+**With Memory (sees past conversation about JWT):**
+```
+[MEMORY CONTEXT - Relevant past conversations]
+Previous conversation (relevance: 0.82):
+Q: "Set up JWT tokens"
+A: "Here's your JWT implementation with refresh tokens..."
+
+User: "How do I authenticate users?"
+Builder: "Based on your JWT setup from earlier, you can use..."
+```
 
 ## 📊 Observability
 
@@ -456,6 +629,6 @@ Built with:
 
 ---
 
-**Version**: 0.1.0
+**Version**: 0.2.0
 **Status**: Production Ready
 **Maintained**: Active

@@ -69,6 +69,10 @@ Flow: builder creates → critic reviews → closer summarizes
 - `GET /logs` - View history
 - `GET /metrics` - Statistics
 - `GET /health` - Health check
+- `GET /memory/search` - Search conversations
+- `GET /memory/recent` - Recent conversations
+- `GET /memory/stats` - Memory statistics
+- `DELETE /memory/{id}` - Delete conversation
 
 ## Testing
 
@@ -90,26 +94,41 @@ agents:
 
 **Override per request** - Via UI or API
 
-## Memory System Integration
+## Conversation Memory
+
+Search and manage past conversations:
 
 ```bash
-make memory-init                    # Initialize project memory
-make memory-note MSG="your note"    # Add a note
-make memory-log MSG="log entry"     # Add log entry
-make memory-sync                    # Sync QUICKSTART to ~/memory
+# Search conversations by keyword
+make memory-search Q="authentication" AGENT=builder
+
+# View recent conversations
+make memory-recent LIMIT=10
+
+# Show statistics
+make memory-stats
+
+# Export conversations
+make memory-export FORMAT=json > backup.json
+
+# Cleanup old conversations (90+ days)
+make memory-cleanup DAYS=90 CONFIRM=1
 ```
+
+Memory system automatically stores conversations and injects relevant context into agent prompts (configurable in `config/agents.yaml`).
 
 ## File Structure
 
 ```
 .
-├── config/              # Agent configurations
-├── core/               # Orchestration engine
-├── api/                # FastAPI server
+├── config/              # Agent configurations + memory.yaml
+├── core/               # Orchestration engine + memory_engine.py
+├── api/                # FastAPI server + memory endpoints
 ├── ui/                 # HTMX web interface
-├── scripts/            # CLI tools
-├── tests/              # Test suite
-└── data/CONVERSATIONS/ # JSON logs
+├── scripts/            # CLI tools + memory_cli.py
+├── tests/              # Test suite (55+ tests)
+├── data/CONVERSATIONS/ # JSON logs
+└── data/MEMORY/        # SQLite conversation database
 ```
 
 ## Observability

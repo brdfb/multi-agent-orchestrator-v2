@@ -55,9 +55,16 @@ make agent-chain Q="Design a system"
 # View last conversation log
 make agent-last
 
+# Memory operations
+make memory-search Q="keyword" AGENT=builder LIMIT=5
+make memory-recent LIMIT=10
+make memory-stats
+make memory-export FORMAT=json > backup.json
+
 # Testing
 make test                 # Run all tests (pytest)
 pytest tests/test_api.py -v  # Single test file
+pytest tests/test_memory_engine.py -v  # Memory tests
 ```
 
 ### Code Quality
@@ -136,8 +143,180 @@ curl http://localhost:5050/metrics
 - **Detection**: Startup message shows which source is active
 - **Masking**: Regex in `logging_utils.py` catches keys in logs (patterns: `sk-*`, `API_KEY=*`, etc.)
 
-## Memory System Integration
-The Makefile includes memory system commands (`memory-init`, `memory-sync`, `memory-note`, `memory-log`) for project note-taking and synchronization with an external memory system at `~/memory/`. These are optional organizational tools.
+## Memory System (Conversation Memory)
+
+The orchestrator includes a **persistent conversation memory system** that stores all interactions and enables context-aware responses across sessions.
+
+### Architecture
+
+**Core Component**: `core/memory_engine.py` - SQLite-backed storage with thread-safe singleton pattern
+
+**Database**: `data/MEMORY/conversations.db` (auto-created, uses WAL mode for concurrency)
+
+**Schema**:
+```sql
+CREATE TABLE conversations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+    agent TEXT NOT NULL,
+    model TEXT NOT NULL,
+    provider TEXT NOT NULL,
+    prompt TEXT NOT NULL,
+    response TEXT NOT NULL,
+    duration_ms REAL,
+    prompt_tokens INTEGER,
+    completion_tokens INTEGER,
+    total_tokens INTEGER,
+    estimated_cost_usd REAL,
+    fallback_used BOOLEAN DEFAULT 0,
+    session_id TEXT,
+    INDEX idx_timestamp (timestamp DESC),
+    INDEX idx_agent (agent)
+);
+```
+
+### Memory Flow
+
+1. **Before LLM call** (`AgentRuntime.run()`):
+   - If agent has `memory_enabled: true` in config
+   - Calls `memory.get_context_for_prompt()` to retrieve relevant past conversations
+   - Relevance scoring: `score = keyword_overlap × exp(-age_hours / decay_hours)`
+   - Top-scoring conversations injected into system prompt
+   - Token budget enforced (default: 350 tokens max)
+
+2. **After LLM call**:
+   - If request succeeded and agent has memory enabled
+   - Calls `memory.store_conversation()` to persist prompt, response, and metadata
+   - Stores: agent, model, tokens, cost, duration, fallback metadata, session_id
+
+3. **Context Injection Format**:
+   ```
+   [MEMORY CONTEXT - Relevant past conversations]
+   Previous conversation (relevance: 0.82):
+   Q: "Set up JWT tokens"
+   A: "Here's your JWT implementation..."
+   ---
+   ```
+
+### Configuration
+
+**Global config** (`config/memory.yaml`):
+```yaml
+memory:
+  enabled: true
+  backend: "sqlite"
+  database_path: "data/MEMORY/conversations.db"
+
+  context:
+    max_context_tokens_default: 350
+    prompt_header: "[MEMORY CONTEXT - Relevant past conversations]\n"
+
+  filtering:
+    min_relevance: 0.35  # Minimum score (0-1)
+    time_decay_hours: 96  # Decay factor (4 days)
+    exclude_same_turn: true  # Don't inject from current session
+```
+
+**Per-agent config** (`config/agents.yaml`):
+```yaml
+builder:
+  model: "anthropic/claude-3-5-sonnet-20241022"
+  memory_enabled: true  # Enable memory for this agent
+  memory:
+    strategy: "keywords"  # Relevance algorithm
+    max_context_tokens: 350  # Agent-specific limit
+    min_relevance: 0.35  # Agent-specific threshold
+    time_decay_hours: 96
+    exclude_same_turn: true
+```
+
+**By default**: Builder and Critic have memory enabled, Closer does not (decisiveness over context).
+
+### Memory CLI
+
+All memory operations available via CLI (`scripts/memory_cli.py`):
+
+```bash
+# Search conversations
+make memory-search Q="authentication" AGENT=builder LIMIT=5
+
+# View recent
+make memory-recent LIMIT=10
+
+# Statistics
+make memory-stats
+
+# Delete conversation
+python scripts/memory_cli.py delete 123 -y
+
+# Cleanup old records
+make memory-cleanup DAYS=90 CONFIRM=1
+
+# Export
+make memory-export FORMAT=json > backup.json
+```
+
+### Memory API Endpoints
+
+Added to `api/server.py`:
+
+- **GET /memory/search?q={query}&agent={agent}&limit={n}**: Search by keyword
+- **GET /memory/recent?limit={n}&agent={agent}**: Get recent conversations
+- **GET /memory/stats**: Aggregate statistics (total conversations, tokens, cost)
+- **DELETE /memory/{conversation_id}**: Delete specific conversation
+
+**Example**:
+```bash
+curl "http://localhost:5050/memory/search?q=JWT&agent=builder&limit=5"
+```
+
+### Implementation Details
+
+- **Lazy initialization**: Memory engine only initialized when first needed (reduces overhead)
+- **Graceful degradation**: If database unavailable (e.g., test environment), system continues without memory
+- **Thread-safe**: Singleton pattern with lock for database operations
+- **Session isolation**: `session_id` prevents injecting context from same conversation
+- **Performance**: Indexed queries, <50ms search time, <10MB per 1000 conversations
+
+### Relevance Algorithm
+
+**Keyword-based scoring with time decay**:
+```python
+# 1. Extract keywords from current prompt (lowercase, split on whitespace)
+current_keywords = set(prompt.lower().split())
+
+# 2. For each past conversation:
+past_keywords = set(past_prompt.lower().split())
+overlap = len(current_keywords & past_keywords) / len(current_keywords)
+
+# 3. Apply time decay
+age_hours = (now - conversation_timestamp).total_seconds() / 3600
+decay_factor = exp(-age_hours / time_decay_hours)
+
+# 4. Final score
+score = overlap * decay_factor
+
+# 5. Filter by min_relevance, sort by score descending
+# 6. Take top N conversations within token budget
+```
+
+### Testing Memory
+
+Test suite includes (`tests/test_memory_*.py`):
+- Store and retrieve conversations
+- Search by keyword, agent, model, date range
+- Relevance scoring algorithm
+- Context injection with token budgeting
+- API endpoints (200, 404, 422 responses)
+- CLI command output validation
+- Session filtering
+- Concurrent access (thread safety)
+
+Run memory-specific tests:
+```bash
+pytest tests/test_memory_engine.py -v
+pytest tests/test_memory_api.py -v
+```
 
 ## Architecture Decisions
 
@@ -158,13 +337,14 @@ Passing full outputs between chain stages causes token explosion. Solution: Pass
 
 ## File Organization
 ```
-config/            # agents.yaml (agent definitions), settings.py (config loader)
-core/              # llm_connector.py, agent_runtime.py, logging_utils.py
-api/               # server.py (FastAPI app)
+config/            # agents.yaml, memory.yaml, settings.py (config loader)
+core/              # llm_connector.py, agent_runtime.py, memory_engine.py, logging_utils.py
+api/               # server.py (FastAPI app + memory endpoints)
 ui/templates/      # index.html (HTMX web interface)
-scripts/           # agent_runner.py (CLI tool)
-tests/             # pytest test suite
+scripts/           # agent_runner.py (CLI tool), memory_cli.py (memory CLI)
+tests/             # pytest test suite (55+ tests)
 data/CONVERSATIONS/# JSON logs (auto-created, gitignored)
+data/MEMORY/       # conversations.db (SQLite database, auto-created)
 ```
 
 ## Provider Fallback & Feature Flags

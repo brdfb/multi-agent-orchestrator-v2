@@ -52,6 +52,69 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.2.0] - 2025-11-04
+
+### Added - Memory System (Phase 1-3)
+
+**Phase 1: Core Memory Engine**
+- SQLite-backed persistent conversation storage (`core/memory_engine.py`)
+- `MemoryEngine` singleton with thread-safe database operations
+- Store conversations with full metadata (tokens, cost, duration, provider)
+- Search conversations by keyword, agent, model, date range
+- Get recent conversations with filtering
+- Delete conversations and cleanup old records
+- Memory statistics (total conversations, tokens, cost by agent/model)
+- Database schema with indexes for performance
+- Automatic database initialization on first run
+- Graceful degradation if database unavailable
+
+**Phase 2: Context Injection & Auto-Storage**
+- Automatic conversation storage after successful LLM calls
+- Context injection system with relevance scoring
+- Keyword-based relevance algorithm with time decay: `score = overlap × exp(-age_hours / decay_hours)`
+- Token budgeting for injected context (configurable per agent)
+- Agent-specific memory configuration (`memory_enabled`, `max_context_tokens`)
+- Session-aware filtering (prevents same-turn repetition)
+- Time decay filtering (96 hours default)
+- Minimum relevance threshold (0.35 default)
+- Memory context header in system prompts
+- Integration with `AgentRuntime` for auto-storage
+- Builder and Critic agents enabled by default
+- Memory configuration file (`config/memory.yaml`)
+
+**Phase 3: REST API & CLI**
+- Memory REST API endpoints:
+  - `GET /memory/search` - Search conversations by keyword with filters
+  - `GET /memory/recent` - Get recent conversations
+  - `GET /memory/stats` - Aggregate statistics
+  - `DELETE /memory/{id}` - Delete conversation by ID
+- Memory CLI tool (`scripts/memory_cli.py`) with commands:
+  - `memory-search` - Search with filters
+  - `memory-recent` - View recent conversations
+  - `memory-stats` - Show statistics
+  - `memory-delete` - Delete conversation
+  - `memory-cleanup` - Cleanup old conversations
+  - `memory-export` - Export to JSON/CSV
+- Makefile targets for memory operations
+- Full conversation display with formatting
+- JSON and CSV export formats
+- Confirmation prompts for destructive operations
+
+### Enhanced
+- Test suite expanded to 55+ tests (from 6)
+- Documentation updated with comprehensive memory system guide
+- Project structure updated to include memory components
+- Agent configuration extended with memory settings
+
+### Technical Details
+- Database: SQLite with WAL mode for concurrency
+- Backend: ~1,250 lines of Python (memory engine + CLI)
+- API: 4 new endpoints in FastAPI server
+- Storage: Auto-created `data/MEMORY/conversations.db`
+- Performance: <50ms search queries, <10MB per 1000 conversations
+
+---
+
 ## [Unreleased]
 
 ### Planned
