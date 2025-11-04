@@ -374,6 +374,54 @@ class SQLiteBackend:
 
         return deleted_count
 
+    def query_candidates(
+        self,
+        agent: Optional[str] = None,
+        exclude_session_id: Optional[str] = None,
+        limit: int = 500,
+    ) -> List[Dict[str, Any]]:
+        """
+        Query candidate conversations for context retrieval.
+
+        Optimized for fetching candidates that will be scored and filtered
+        by the memory engine.
+
+        Args:
+            agent: Filter by agent (None = all agents)
+            exclude_session_id: Exclude conversations from this session
+            limit: Maximum candidates to return
+
+        Returns:
+            List of conversation dictionaries
+        """
+        conn = self._get_connection()
+        cursor = conn.cursor()
+
+        # Build query
+        where_clauses = []
+        params = []
+
+        if agent:
+            where_clauses.append("agent = ?")
+            params.append(agent)
+
+        if exclude_session_id:
+            where_clauses.append("(session_id IS NULL OR session_id != ?)")
+            params.append(exclude_session_id)
+
+        # Construct SQL
+        sql = "SELECT * FROM conversations"
+        if where_clauses:
+            sql += " WHERE " + " AND ".join(where_clauses)
+        sql += " ORDER BY timestamp DESC LIMIT ?"
+        params.append(limit)
+
+        cursor.execute(sql, params)
+        rows = cursor.fetchall()
+        conn.close()
+
+        return [self._row_to_dict(row) for row in rows]
+
     def _row_to_dict(self, row: sqlite3.Row) -> Dict[str, Any]:
         """Convert SQLite row to dictionary."""
         return {

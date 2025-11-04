@@ -1,6 +1,8 @@
 """Memory engine for persistent conversation storage and retrieval."""
 
-from typing import Any, Dict, List, Optional
+import math
+from datetime import datetime
+from typing import Any, Dict, List, Optional, Set
 
 from core.memory_backend import SQLiteBackend
 
@@ -191,18 +193,31 @@ class MemoryEngine:
         return self.backend.cleanup(days)
 
     def get_context_for_prompt(
-        self, prompt: str, max_tokens: int = 500, agent: Optional[str] = None
+        self,
+        prompt: str,
+        *,
+        strategy: str = "keywords",
+        max_tokens: int = 500,
+        min_relevance: float = 0.25,
+        time_decay_hours: int = 168,
+        exclude_current_session: bool = True,
+        agent: Optional[str] = None,
+        session_id: Optional[str] = None,
     ) -> str:
         """
         Get relevant context from past conversations for a prompt.
 
-        Uses simple keyword matching to find relevant conversations.
-        Future: Upgrade to semantic search with embeddings.
+        Uses keyword matching with relevance scoring and time decay filtering.
 
         Args:
             prompt: Current user prompt
+            strategy: Retrieval strategy ("keywords" only for now)
             max_tokens: Maximum tokens for context
-            agent: Filter by agent (optional)
+            min_relevance: Minimum relevance score threshold (0-1)
+            time_decay_hours: Time decay factor in hours (0 = no decay)
+            exclude_current_session: Exclude conversations from current session
+            agent: Filter by agent (None = all agents)
+            session_id: Current session ID (for exclusion)
 
         Returns:
             Formatted context string
@@ -210,52 +225,54 @@ class MemoryEngine:
         if not self.enabled:
             return ""
 
-        # Extract keywords from prompt (simple approach)
-        keywords = self._extract_keywords(prompt)
+        # Extract keywords from prompt
+        query_tokens = self._extract_keywords(prompt)
 
-        if not keywords:
-            # No keywords - return recent conversations
-            conversations = self.get_recent_conversations(limit=3, agent=agent)
-        else:
-            # Search by keywords
-            conversations = []
-            for keyword in keywords[:3]:  # Try top 3 keywords
-                results = self.search_conversations(query=keyword, agent=agent, limit=2)
-                conversations.extend(results)
+        # Query candidates from backend
+        exclude_session = session_id if exclude_current_session else None
+        candidates = self.backend.query_candidates(
+            agent=agent, exclude_session_id=exclude_session, limit=500
+        )
 
-            # Remove duplicates
-            seen = set()
-            unique_conversations = []
-            for conv in conversations:
-                if conv["id"] not in seen:
-                    seen.add(conv["id"])
-                    unique_conversations.append(conv)
-            conversations = unique_conversations[:5]  # Max 5 conversations
-
-        if not conversations:
+        if not candidates:
             return ""
 
-        # Format context with token budgeting
-        context_parts = []
-        current_tokens = 0
+        # Score each candidate
+        scored = []
+        for rec in candidates:
+            score = self._score_record(
+                rec, query_tokens, time_decay_hours=time_decay_hours
+            )
+            if score >= min_relevance:
+                rec["_score"] = score
+                rec["_est_tokens"] = self._estimate_tokens(rec)
+                scored.append(rec)
 
-        for conv in conversations:
-            # Estimate tokens (rough: 4 chars = 1 token)
-            conv_text = f"[Past conversation]\nQ: {conv['prompt']}\nA: {conv['response'][:200]}..."
-            estimated_tokens = len(conv_text) // 4
-
-            if current_tokens + estimated_tokens > max_tokens:
-                break
-
-            context_parts.append(conv_text)
-            current_tokens += estimated_tokens
-
-        if not context_parts:
+        if not scored:
             return ""
 
-        return "\n\n".join(context_parts)
+        # Sort by score DESC, then timestamp DESC
+        scored.sort(
+            key=lambda r: (
+                -r["_score"],
+                -self._parse_timestamp(r["timestamp"]).timestamp(),
+            )
+        )
 
-    def _extract_keywords(self, text: str, min_length: int = 4) -> List[str]:
+        # Budget selection
+        picked = []
+        budget = max_tokens
+        for r in scored:
+            if r["_est_tokens"] <= budget:
+                picked.append(r)
+                budget -= r["_est_tokens"]
+
+        if not picked:
+            return ""
+
+        return self._format_context(picked)
+
+    def _extract_keywords(self, text: str, min_length: int = 3) -> Set[str]:
         """
         Extract keywords from text (simple word extraction).
 
@@ -264,7 +281,7 @@ class MemoryEngine:
             min_length: Minimum word length
 
         Returns:
-            List of keywords
+            Set of keywords
         """
         # Simple approach: split by space, filter short words and common words
         stop_words = {
@@ -310,13 +327,109 @@ class MemoryEngine:
         }
 
         words = text.lower().split()
-        keywords = [
+        keywords = {
             w.strip(".,!?;:")
             for w in words
             if len(w) >= min_length and w.lower() not in stop_words
-        ]
+        }
 
-        return keywords[:10]  # Return top 10 keywords
+        return keywords
+
+    def _score_record(
+        self, rec: Dict[str, Any], query_tokens: Set[str], *, time_decay_hours: int
+    ) -> float:
+        """
+        Calculate relevance score for a conversation record.
+
+        Score = keyword_overlap * exp(-age_hours / decay_hours)
+
+        Args:
+            rec: Conversation record
+            query_tokens: Set of query keywords
+            time_decay_hours: Time decay factor (0 = no decay)
+
+        Returns:
+            Relevance score (0-1)
+        """
+        # Keyword overlap scoring
+        if not query_tokens:
+            kw_score = 0.0
+        else:
+            doc_tokens = self._extract_keywords(rec["prompt"] + " " + rec["response"])
+            overlap = len(query_tokens & doc_tokens)
+            kw_score = overlap / max(1, len(query_tokens))
+
+        # Time decay
+        if time_decay_hours:
+            age_hours = max(
+                0.0,
+                (
+                    datetime.utcnow() - self._parse_timestamp(rec["timestamp"])
+                ).total_seconds()
+                / 3600,
+            )
+            decay = math.exp(-age_hours / float(time_decay_hours))
+        else:
+            decay = 1.0
+
+        return kw_score * decay
+
+    def _estimate_tokens(self, rec: Dict[str, Any]) -> int:
+        """
+        Estimate token count for a conversation record.
+
+        Args:
+            rec: Conversation record
+
+        Returns:
+            Estimated token count
+        """
+        # Simple heuristic: 4 chars ≈ 1 token
+        # Format: "[Past conversation]\nQ: {prompt}\nA: {response}"
+        text = f"[Past conversation]\nQ: {rec['prompt']}\nA: {rec['response']}"
+        return len(text) // 4
+
+    def _format_context(self, conversations: List[Dict[str, Any]]) -> str:
+        """
+        Format conversation records into context string.
+
+        Args:
+            conversations: List of conversation records (already scored/filtered)
+
+        Returns:
+            Formatted context string
+        """
+        if not conversations:
+            return ""
+
+        context_parts = []
+        for conv in conversations:
+            # Format: [Past conversation (score: X.XX)]
+            score = conv.get("_score", 0.0)
+            context_parts.append(
+                f"[Past conversation (relevance: {score:.2f})]\n"
+                f"Q: {conv['prompt']}\n"
+                f"A: {conv['response']}"
+            )
+
+        return "\n\n".join(context_parts)
+
+    def _parse_timestamp(self, timestamp_str: str) -> datetime:
+        """
+        Parse timestamp string to datetime object.
+
+        Args:
+            timestamp_str: ISO format timestamp string
+
+        Returns:
+            datetime object
+        """
+        # Handle both with and without microseconds
+        try:
+            return datetime.fromisoformat(timestamp_str.replace("Z", "+00:00"))
+        except Exception:
+            # Fallback: try without timezone
+            return datetime.fromisoformat(timestamp_str.split("+")[0].split("Z")[0])
 
     def enable(self):
         """Enable memory system."""
