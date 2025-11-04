@@ -2,16 +2,44 @@
 
 Production-ready multi-LLM agent system with CLI, REST API, and modern web UI. Route tasks intelligently across OpenAI, Anthropic Claude, and Google Gemini models.
 
-## ⚡ Quick Start (60 seconds)
+## ⚡ Quick Start
+
+### Option 1: Automated Setup (Recommended - 60 seconds)
+
+**Single command - does everything:**
 
 ```bash
-# 1. Setup (choose ONE method)
+# Clone and run setup script
+git clone https://github.com/brdfb/multi-agent-orchestrator-v2.git
+cd multi-agent-orchestrator-v2
+./setup.sh
+```
 
-# Option A: Use .env file (recommended for development)
+**What it does:**
+1. ✅ Checks Python 3.11+
+2. ✅ Creates virtual environment
+3. ✅ Installs dependencies
+4. ✅ Interactive API key setup (or uses existing .env)
+5. ✅ Initializes database
+6. ✅ Runs health checks
+7. ✅ Starts server + opens browser
+
+**Non-interactive mode:**
+```bash
+# For CI/automation (uses environment variables)
+./setup.sh --yes --no-browser --port 5050
+```
+
+### Option 2: Manual Setup
+
+```bash
+# 1. Configure API keys (choose ONE method)
+
+# Method A: .env file (recommended for development)
 cp .env.example .env
-# Edit .env and add your API keys
+nano .env  # Add your API keys
 
-# Option B: Use environment variables (recommended for CI/production)
+# Method B: Environment variables (recommended for CI/production)
 export OPENAI_API_KEY=sk-...
 export ANTHROPIC_API_KEY=sk-ant-...
 export GOOGLE_API_KEY=...
@@ -21,9 +49,7 @@ make install
 
 # 3. Run (UI + API)
 make run-api
-# On startup, you'll see where keys were loaded from:
-# 🔑 API keys loaded from environment variables (if using export)
-# 📁 API keys loaded from .env (if using .env file)
+# System shows: 🔑 API keys loaded from [environment|.env file]
 
 # Access UI at http://localhost:5050
 ```
