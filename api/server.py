@@ -316,6 +316,11 @@ async def memory_delete(conversation_id: int):
 
 
 if __name__ == "__main__":
+    import os
     import uvicorn
 
-    uvicorn.run(app, host="0.0.0.0", port=5050)
+    # Read port from environment variable (default: 5050)
+    port = int(os.getenv("PORT", "5050"))
+
+    print(f"🚀 Starting Multi-Agent Orchestrator on port {port}")
+    uvicorn.run(app, host="0.0.0.0", port=port)

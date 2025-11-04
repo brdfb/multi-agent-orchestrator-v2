@@ -312,8 +312,27 @@ class AgentRuntime:
             # For stages after the first, add context from previous
             if i > 0:
                 prev_result = results[-1]
-                # Create summary to avoid token explosion
-                summary = f"Previous {prev_result.agent} output (summarized): {prev_result.response[:200]}..."
+
+                # Smart context truncation based on agent memory settings
+                agent_cfg = self.config["agents"].get(agent, {})
+                has_memory = agent_cfg.get("memory_enabled", False)
+
+                # Memory-enabled agents can handle more context (they have history)
+                # Non-memory agents need fuller immediate context
+                max_chars = 300 if has_memory else 500
+
+                # Intelligent truncation: try to end at sentence boundary
+                response_text = prev_result.response
+                if len(response_text) > max_chars:
+                    truncated = response_text[:max_chars]
+                    # Find last sentence end
+                    last_period = max(truncated.rfind('.'), truncated.rfind('!'), truncated.rfind('?'))
+                    if last_period > max_chars * 0.5:  # If sentence end is in second half
+                        response_text = truncated[:last_period + 1]
+                    else:
+                        response_text = truncated + "..."
+
+                summary = f"Previous {prev_result.agent} output:\n{response_text}"
                 context = (
                     f"Original request: {prompt}\n\n{summary}\n\nYour task as {agent}:"
                 )
