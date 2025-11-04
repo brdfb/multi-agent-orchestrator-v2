@@ -65,6 +65,183 @@
             font-size: 0.875rem;
             opacity: 0.8;
         }
+
+        /* Memory UI Styles - Living Organism Vibe */
+        .memory-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 1.5rem;
+            margin: 1rem 0;
+        }
+
+        .memory-search-box {
+            max-width: 600px;
+            margin: 0 auto 2rem;
+        }
+
+        .memory-search-box input {
+            font-size: 1.1rem;
+            padding: 0.75rem;
+            transition: all 0.2s ease;
+        }
+
+        .memory-search-box input:focus {
+            transform: scale(1.02);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+
+        .memory-result-card {
+            background: var(--card-bg);
+            padding: 1rem;
+            border-radius: 0.5rem;
+            border-left: 3px solid var(--primary);
+            margin: 0.75rem 0;
+            transition: all 0.15s ease-in-out;
+            cursor: pointer;
+        }
+
+        .memory-result-card:hover {
+            transform: translateX(4px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            border-left-width: 5px;
+        }
+
+        .memory-result-card.expanded {
+            border-left-color: #2ecc71;
+        }
+
+        .memory-score {
+            display: inline-block;
+            padding: 0.25rem 0.5rem;
+            background: var(--primary);
+            color: white;
+            border-radius: 0.25rem;
+            font-size: 0.75rem;
+            font-weight: bold;
+        }
+
+        .memory-timestamp {
+            font-size: 0.75rem;
+            opacity: 0.6;
+            margin-left: 0.5rem;
+        }
+
+        .memory-preview {
+            margin-top: 0.5rem;
+            font-size: 0.875rem;
+            opacity: 0.8;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .memory-full-text {
+            display: none;
+            margin-top: 0.75rem;
+            padding-top: 0.75rem;
+            border-top: 1px solid rgba(0,0,0,0.1);
+            font-size: 0.875rem;
+            line-height: 1.5;
+        }
+
+        .memory-result-card.expanded .memory-preview {
+            display: none;
+        }
+
+        .memory-result-card.expanded .memory-full-text {
+            display: block;
+            animation: fadeIn 0.2s ease-in;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.6; }
+        }
+
+        .memory-stat-card {
+            background: var(--card-bg);
+            padding: 1.25rem;
+            border-radius: 0.5rem;
+            text-align: center;
+            transition: transform 0.15s ease;
+            border: 1px solid rgba(0,0,0,0.05);
+        }
+
+        .memory-stat-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 6px 16px rgba(0,0,0,0.1);
+        }
+
+        .memory-stat-value {
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: var(--primary);
+            line-height: 1;
+            margin-bottom: 0.5rem;
+        }
+
+        .memory-stat-label {
+            font-size: 0.875rem;
+            opacity: 0.7;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+        }
+
+        .context-injection-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 0.75rem;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 0.5rem;
+            font-size: 0.875rem;
+            font-weight: 600;
+            margin-top: 0.5rem;
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        .context-item {
+            background: var(--card-bg);
+            padding: 0.75rem;
+            border-radius: 0.5rem;
+            margin: 0.5rem 0;
+            border-left: 3px solid #667eea;
+            font-size: 0.875rem;
+            transition: all 0.15s ease;
+        }
+
+        .context-item:hover {
+            transform: translateX(4px);
+            box-shadow: 0 2px 8px rgba(102, 126, 234, 0.2);
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 3rem 1rem;
+            opacity: 0.6;
+            font-style: italic;
+        }
+
+        .empty-state-emoji {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+            display: block;
+        }
+
+        @media (max-width: 768px) {
+            .memory-grid {
+                grid-template-columns: 1fr;
+            }
+            .memory-stat-value {
+                font-size: 2rem;
+            }
+        }
     </style>
 </head>
 <body>
@@ -122,6 +299,37 @@
             <details>
                 <summary><strong>📊 Metrics</strong></summary>
                 <div id="metrics" hx-get="/metrics" hx-trigger="load, every 10s" hx-swap="innerHTML"></div>
+            </details>
+        </section>
+
+        <!-- Memory System - Living Organism UI -->
+        <section>
+            <details open>
+                <summary><strong>🧠 Memory System</strong></summary>
+
+                <!-- Memory Stats -->
+                <h4 style="margin-top: 1.5rem;">📊 Memory Stats</h4>
+                <div class="memory-grid" id="memory-stats" hx-get="/memory/stats" hx-trigger="load, every 10s" hx-swap="innerHTML"></div>
+
+                <!-- Memory Search -->
+                <h4 style="margin-top: 2rem;">🔍 Search Memory</h4>
+                <div class="memory-search-box">
+                    <form hx-get="/memory/search" hx-target="#memory-search-results" hx-trigger="submit">
+                        <input
+                            type="search"
+                            name="q"
+                            placeholder="Search conversations... (try 'authentication', 'bug fix')"
+                            required
+                        />
+                        <button type="submit">Search</button>
+                    </form>
+                </div>
+                <div id="memory-search-results"></div>
+
+                <!-- Recent Conversations -->
+                <h4 style="margin-top: 2rem;">💬 Recent Conversations</h4>
+                <div id="memory-recent" hx-get="/memory/recent?limit=5" hx-trigger="load, every 15s" hx-swap="innerHTML"></div>
+
             </details>
         </section>
 
@@ -192,8 +400,28 @@
         document.body.addEventListener('htmx:afterRequest', function(evt) {
             if (evt.detail.pathInfo.requestPath === '/ask' && evt.detail.successful) {
                 const result = JSON.parse(evt.detail.xhr.response);
+
+                // Context injection badge (living organism indicator!)
+                let contextBadge = '';
+                if (result.injected_context_tokens && result.injected_context_tokens > 0) {
+                    contextBadge = `
+                        <div class="context-injection-badge">
+                            🧠 Memory Context Injected: ${result.injected_context_tokens} tokens
+                        </div>
+                    `;
+                }
+
+                // Fallback indicator
+                let fallbackInfo = '';
+                if (result.fallback_used) {
+                    fallbackInfo = `
+                        <br><strong>⚠️ Fallback:</strong> ${result.original_model} → ${result.model}
+                    `;
+                }
+
                 const html = `
                     <h3>Response</h3>
+                    ${contextBadge}
                     <div class="result-card">
                         <pre>${result.response}</pre>
                         <div class="meta-info">
@@ -201,8 +429,8 @@
                             <strong>Model:</strong> ${result.model} |
                             <strong>Provider:</strong> ${result.provider} |
                             <strong>Duration:</strong> ${Math.round(result.duration_ms)}ms |
-                            <strong>Tokens:</strong> ${result.total_tokens} (prompt: ${result.prompt_tokens}, completion: ${result.completion_tokens}) |
-                            <strong>Log:</strong> ${result.log_file}
+                            <strong>Tokens:</strong> ${result.total_tokens} (prompt: ${result.prompt_tokens}, completion: ${result.completion_tokens})
+                            ${fallbackInfo}
                         </div>
                     </div>
                 `;
@@ -260,6 +488,112 @@
                 evt.detail.target.innerHTML = html;
             }
         });
+
+        // HTMX response transformer for /memory/stats
+        document.body.addEventListener('htmx:afterRequest', function(evt) {
+            if (evt.detail.pathInfo.requestPath === '/memory/stats' && evt.detail.successful) {
+                const stats = JSON.parse(evt.detail.xhr.response);
+                const html = `
+                    <div class="memory-stat-card">
+                        <div class="memory-stat-value">${stats.total_conversations || 0}</div>
+                        <div class="memory-stat-label">Conversations</div>
+                    </div>
+                    <div class="memory-stat-card">
+                        <div class="memory-stat-value">${(stats.total_tokens || 0).toLocaleString()}</div>
+                        <div class="memory-stat-label">Total Tokens</div>
+                    </div>
+                    <div class="memory-stat-card">
+                        <div class="memory-stat-value">$${(stats.total_cost_usd || 0).toFixed(4)}</div>
+                        <div class="memory-stat-label">Est. Cost</div>
+                    </div>
+                    <div class="memory-stat-card">
+                        <div class="memory-stat-value">${Object.keys(stats.by_agent || {}).length}</div>
+                        <div class="memory-stat-label">Active Agents</div>
+                    </div>
+                `;
+                evt.detail.target.innerHTML = html;
+            }
+        });
+
+        // HTMX response transformer for /memory/search
+        document.body.addEventListener('htmx:afterRequest', function(evt) {
+            if (evt.detail.pathInfo.requestPath.startsWith('/memory/search') && evt.detail.successful) {
+                const data = JSON.parse(evt.detail.xhr.response);
+                const results = data.results || [];
+
+                if (results.length === 0) {
+                    evt.detail.target.innerHTML = `
+                        <div class="empty-state">
+                            <span class="empty-state-emoji">🔍</span>
+                            <p>No results found. Try a different search term.</p>
+                        </div>
+                    `;
+                    return;
+                }
+
+                let html = `<p style="opacity:0.7; margin-bottom:1rem;">${results.length} result(s)</p>`;
+                results.forEach((conv, idx) => {
+                    const date = new Date(conv.timestamp).toLocaleString();
+                    html += `
+                        <div class="memory-result-card" onclick="toggleExpand(this)">
+                            <div>
+                                <span class="memory-score">ID: ${conv.id}</span>
+                                <span class="memory-timestamp">${date}</span>
+                            </div>
+                            <div style="margin-top:0.5rem;">
+                                <strong>${conv.agent}</strong> • ${conv.model}
+                            </div>
+                            <div class="memory-preview">
+                                ${conv.prompt.substring(0, 120)}${conv.prompt.length > 120 ? '...' : ''}
+                            </div>
+                            <div class="memory-full-text">
+                                <strong>Prompt:</strong><br>${conv.prompt}<br><br>
+                                <strong>Response:</strong><br>${conv.response.substring(0, 500)}${conv.response.length > 500 ? '...' : ''}
+                                <br><br>
+                                <small>Tokens: ${conv.total_tokens} | Cost: $${(conv.estimated_cost_usd || 0).toFixed(4)}</small>
+                            </div>
+                        </div>
+                    `;
+                });
+                evt.detail.target.innerHTML = html;
+            }
+        });
+
+        // HTMX response transformer for /memory/recent
+        document.body.addEventListener('htmx:afterRequest', function(evt) {
+            if (evt.detail.pathInfo.requestPath.startsWith('/memory/recent') && evt.detail.successful) {
+                const data = JSON.parse(evt.detail.xhr.response);
+                const results = data.results || [];
+
+                if (results.length === 0) {
+                    evt.detail.target.innerHTML = `
+                        <div class="empty-state">
+                            <span class="empty-state-emoji">💬</span>
+                            <p>No conversations yet. Start by asking a question above!</p>
+                        </div>
+                    `;
+                    return;
+                }
+
+                let html = '';
+                results.forEach(conv => {
+                    const date = new Date(conv.timestamp).toLocaleDateString();
+                    html += `
+                        <div class="context-item">
+                            <strong>${conv.agent}</strong> • ${date}
+                            <br>
+                            <small style="opacity:0.8;">${conv.prompt.substring(0, 80)}${conv.prompt.length > 80 ? '...' : ''}</small>
+                        </div>
+                    `;
+                });
+                evt.detail.target.innerHTML = html;
+            }
+        });
+
+        // Toggle expand for memory cards
+        function toggleExpand(element) {
+            element.classList.toggle('expanded');
+        }
     </script>
 </body>
 </html>
