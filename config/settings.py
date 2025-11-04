@@ -153,6 +153,30 @@ def load_agents_config() -> Dict[str, Any]:
         return yaml.safe_load(f)
 
 
+def load_memory_config() -> Dict[str, Any]:
+    """Load memory system configuration from YAML."""
+    config_path = CONFIG_DIR / "memory.yaml"
+    if not config_path.exists():
+        # Return defaults if config doesn't exist
+        return {
+            "memory": {
+                "enabled": True,
+                "backend": "sqlite",
+                "db_path": "data/MEMORY/conversations.db",
+                "context": {
+                    "enabled_default": True,
+                    "max_context_tokens_default": 500,
+                    "max_snippet_tokens": 120,
+                    "strategy_default": "keywords",
+                    "joiner": "\n---\n",
+                    "prompt_header": "[MEMORY CONTEXT - Relevant past conversations]\n",
+                },
+            }
+        }
+    with open(config_path, "r", encoding="utf-8") as f:
+        return yaml.safe_load(f)
+
+
 class ProviderUnavailableError(Exception):
     """Raised when a provider is unavailable (disabled or missing API key)."""
 
