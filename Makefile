@@ -1,4 +1,4 @@
-.PHONY: install run-api run-ui agent-ask agent-chain agent-last lint test clean memory-init memory-sync memory-note memory-log
+.PHONY: install run-api run-ui agent-ask agent-chain agent-last lint test clean memory-init memory-sync memory-note memory-log memory-search memory-recent memory-stats memory-cleanup memory-export
 
 install:
 	python3 -m venv .venv && . .venv/bin/activate && pip install -r requirements.txt
@@ -62,3 +62,33 @@ memory-log:
 		exit 1; \
 	fi
 	@~/memory/BIN/pm_log.sh "$(shell basename $(CURDIR))" "$(MSG)"
+
+# Memory CLI commands (conversation memory system)
+memory-search:
+	@if [ -z "$(Q)" ]; then \
+		echo "Usage: make memory-search Q='query' [AGENT=agent] [LIMIT=10]"; \
+		exit 1; \
+	fi
+	. .venv/bin/activate && python scripts/memory_cli.py search "$(Q)" \
+		$(if $(AGENT),--agent $(AGENT)) \
+		$(if $(LIMIT),--limit $(LIMIT))
+
+memory-recent:
+	. .venv/bin/activate && python scripts/memory_cli.py recent \
+		$(if $(LIMIT),--limit $(LIMIT),--limit 10) \
+		$(if $(AGENT),--agent $(AGENT))
+
+memory-stats:
+	. .venv/bin/activate && python scripts/memory_cli.py stats
+
+memory-cleanup:
+	. .venv/bin/activate && python scripts/memory_cli.py cleanup \
+		$(if $(DAYS),--days $(DAYS),--days 90) \
+		$(if $(CONFIRM),-y)
+
+memory-export:
+	. .venv/bin/activate && python scripts/memory_cli.py export \
+		$(if $(FROM),--from-date $(FROM)) \
+		$(if $(TO),--to-date $(TO)) \
+		$(if $(FORMAT),--format $(FORMAT),--format json) \
+		$(if $(LIMIT),--limit $(LIMIT))
