@@ -2,7 +2,6 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from pathlib import Path
 from datetime import datetime
-import os
 
 app = FastAPI(title="Beginner FastAPI Project")
 
@@ -47,7 +46,9 @@ def save_note(note: Note):
 def list_notes():
     """List all saved notes"""
     try:
-        notes = [f.name for f in NOTES_DIR.iterdir() if f.is_file() and f.name != ".gitkeep"]
+        notes = [
+            f.name for f in NOTES_DIR.iterdir() if f.is_file() and f.name != ".gitkeep"
+        ]
         notes.sort(reverse=True)  # Most recent first
         return {"notes": notes, "count": len(notes)}
     except Exception as e:

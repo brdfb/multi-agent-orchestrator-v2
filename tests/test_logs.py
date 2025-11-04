@@ -1,4 +1,5 @@
 """Test logging utilities."""
+
 import sys
 from pathlib import Path
 

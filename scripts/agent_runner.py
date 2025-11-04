@@ -58,7 +58,9 @@ def main():
     print(f"\n✅ Agent: {result.agent}")
     print(f"📊 Model: {result.model}")
     print(f"⏱️  Duration: {result.duration_ms:.0f}ms")
-    print(f"🔢 Tokens: {result.total_tokens} (prompt: {result.prompt_tokens}, completion: {result.completion_tokens})")
+    print(
+        f"🔢 Tokens: {result.total_tokens} (prompt: {result.prompt_tokens}, completion: {result.completion_tokens})"
+    )
     print(f"📁 Log file: {result.log_file}")
     print()
     print("Response:")

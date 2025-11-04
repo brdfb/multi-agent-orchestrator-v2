@@ -1,5 +1,6 @@
-default_model: "anthropic/claude-3-5-sonnet-20241022"
-fallback_model: "openai/gpt-4o-mini"
+default_model: "google/gemini-1.5-pro"    # eskisi: anthropic/claude-3-5-sonnet-20241022
+fallback_model: "openai/gpt-4o-mini"      # aynı kalabilir default_model: "anthropic/claude-3-5-sonnet-20241022"
+
 
 agents:
   builder:
@@ -14,6 +15,9 @@ agents:
     description: "Builds practical solutions and implementation plans"
     temperature: 0.3
     max_tokens: 2000
+    fallback_order:
+      - "openai/gpt-4o-mini"
+      - "google/gemini-1.5-pro"
 
   critic:
     model: "openai/gpt-4o-mini"
@@ -27,6 +31,10 @@ agents:
     description: "Reviews and critiques solutions with rigorous analysis"
     temperature: 0.4
     max_tokens: 1500
+    fallback_order:
+      - "google/gemini-2.0-flash-exp"
+      - "anthropic/claude-3-5-sonnet-20241022"
+      - "openai/gpt-4o"
 
   closer:
     model: "google/gemini-1.5-pro"
@@ -40,6 +48,10 @@ agents:
     description: "Synthesizes discussions into actionable next steps"
     temperature: 0.2
     max_tokens: 1000
+    fallback_order:
+      - "google/gemini-2.0-flash-exp"
+      - "openai/gpt-4o-mini"
+      - "anthropic/claude-3-5-sonnet-20241022"
 
   router:
     model: "openai/gpt-4o-mini"
@@ -53,3 +65,7 @@ agents:
     description: "Routes requests to the appropriate agent"
     temperature: 0.1
     max_tokens: 10
+    fallback_order:
+      - "google/gemini-2.0-flash-exp"
+      - "anthropic/claude-3-5-sonnet-20241022"
+      - "google/gemini-1.5-flash"

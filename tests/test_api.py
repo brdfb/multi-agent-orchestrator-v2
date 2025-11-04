@@ -1,9 +1,9 @@
 """Test FastAPI endpoints."""
+
 import sys
 from pathlib import Path
 from unittest.mock import patch
 
-import pytest
 from fastapi.testclient import TestClient
 
 sys.path.insert(0, str(Path(__file__).parent.parent))

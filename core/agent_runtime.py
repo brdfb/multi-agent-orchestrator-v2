@@ -1,4 +1,5 @@
 """Agent runtime orchestration."""
+
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Dict, List, Optional
@@ -24,6 +25,9 @@ class RunResult:
     timestamp: str
     log_file: str
     error: Optional[str] = None
+    original_model: Optional[str] = None  # If fallback was used
+    fallback_reason: Optional[str] = None  # Why fallback was triggered
+    fallback_used: bool = False  # Whether fallback was triggered
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary."""
@@ -52,7 +56,7 @@ class AgentRuntime:
 
     def route(self, prompt: str) -> str:
         """
-        Route prompt to appropriate agent.
+        Route prompt to appropriate agent with fallback support.
 
         Args:
             prompt: User prompt to route
@@ -64,13 +68,21 @@ class AgentRuntime:
         if not router_config:
             return "builder"  # Default fallback
 
+        # Get fallback order for router
+        fallback_order = router_config.get("fallback_order", [])
+
         response = self.connector.call(
             model=router_config["model"],
             system=router_config["system"],
             user=prompt,
             temperature=router_config.get("temperature", 0.1),
             max_tokens=router_config.get("max_tokens", 10),
+            fallback_order=fallback_order,
         )
+
+        # If router call failed completely, default to builder
+        if response.error:
+            return "builder"
 
         # Extract agent name from response
         agent = response.text.strip().lower()
@@ -86,7 +98,7 @@ class AgentRuntime:
         self, agent: str, prompt: str, override_model: Optional[str] = None
     ) -> RunResult:
         """
-        Run agent with prompt.
+        Run agent with prompt and fallback support.
 
         Args:
             agent: Agent name (auto, builder, critic, closer)
@@ -108,13 +120,19 @@ class AgentRuntime:
         # Determine model to use
         model = override_model if override_model else agent_config["model"]
 
-        # Call LLM
+        # Get fallback order (only if not using override)
+        fallback_order = None
+        if not override_model:
+            fallback_order = agent_config.get("fallback_order", [])
+
+        # Call LLM with fallback support
         llm_response: LLMResponse = self.connector.call(
             model=model,
             system=agent_config["system"],
             user=prompt,
             temperature=agent_config.get("temperature", 0.2),
             max_tokens=agent_config.get("max_tokens", 1500),
+            fallback_order=fallback_order,
         )
 
         # Create log record
@@ -133,6 +151,14 @@ class AgentRuntime:
             "error": llm_response.error,
         }
 
+        # Add fallback metadata if applicable
+        if llm_response.original_model:
+            log_record["original_model"] = llm_response.original_model
+            log_record["fallback_reason"] = llm_response.fallback_reason
+            log_record["fallback_used"] = True
+        else:
+            log_record["fallback_used"] = False
+
         # Write log
         log_file = write_json(log_record)
 
@@ -150,13 +176,14 @@ class AgentRuntime:
             timestamp=timestamp,
             log_file=str(log_file.name),
             error=llm_response.error,
+            original_model=llm_response.original_model,
+            fallback_reason=llm_response.fallback_reason,
+            fallback_used=llm_response.original_model is not None,
         )
 
         return result
 
-    def chain(
-        self, prompt: str, stages: Optional[List[str]] = None
-    ) -> List[RunResult]:
+    def chain(self, prompt: str, stages: Optional[List[str]] = None) -> List[RunResult]:
         """
         Execute multi-agent chain.
 
@@ -179,7 +206,9 @@ class AgentRuntime:
                 prev_result = results[-1]
                 # Create summary to avoid token explosion
                 summary = f"Previous {prev_result.agent} output (summarized): {prev_result.response[:200]}..."
-                context = f"Original request: {prompt}\n\n{summary}\n\nYour task as {agent}:"
+                context = (
+                    f"Original request: {prompt}\n\n{summary}\n\nYour task as {agent}:"
+                )
 
             result = self.run(agent=agent, prompt=context)
             results.append(result)

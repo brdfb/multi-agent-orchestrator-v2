@@ -1,4 +1,5 @@
 """Logging utilities for conversation tracking."""
+
 import json
 import re
 import uuid
@@ -52,7 +53,11 @@ def write_json(record: Dict[str, Any]) -> Path:
         record["response"] = mask_sensitive_data(record["response"])
 
     # Add cost estimate
-    if "model" in record and "prompt_tokens" in record and "completion_tokens" in record:
+    if (
+        "model" in record
+        and "prompt_tokens" in record
+        and "completion_tokens" in record
+    ):
         record["estimated_cost_usd"] = estimate_cost(
             record["model"], record["prompt_tokens"], record["completion_tokens"]
         )
@@ -78,7 +83,9 @@ def read_logs(limit: int = 20) -> list[Dict[str, Any]]:
         return []
 
     # Get all JSON files, sorted by modification time (newest first)
-    files = sorted(CONVERSATIONS_DIR.glob("*.json"), key=lambda x: x.stat().st_mtime, reverse=True)
+    files = sorted(
+        CONVERSATIONS_DIR.glob("*.json"), key=lambda x: x.stat().st_mtime, reverse=True
+    )
 
     logs = []
     for filepath in files[:limit]:

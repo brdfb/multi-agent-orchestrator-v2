@@ -1,7 +1,8 @@
 """Configuration and settings management."""
+
 import os
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 import yaml
 from dotenv import load_dotenv
@@ -22,9 +23,101 @@ if ENV_FILE.exists():
     load_dotenv(ENV_FILE, override=False)  # Don't override existing env vars
 
 
+# Provider management
+def _is_truthy(value: Optional[str]) -> bool:
+    """Check if environment variable value is truthy."""
+    if not value:
+        return False
+    return value.lower() in ("1", "true", "yes", "on")
+
+
+def is_provider_enabled(provider: str) -> bool:
+    """
+    Check if a provider is enabled based on API key availability and feature flags.
+
+    Args:
+        provider: Provider name (openai, anthropic, google, openrouter)
+
+    Returns:
+        True if provider is enabled, False otherwise
+    """
+    provider = provider.lower()
+
+    # Check for explicit disable flag
+    disable_flags = {
+        "openai": "DISABLE_OPENAI",
+        "anthropic": "DISABLE_ANTHROPIC",
+        "google": "DISABLE_GOOGLE",
+        "openrouter": "DISABLE_OPENROUTER",
+    }
+
+    disable_flag = disable_flags.get(provider)
+    if disable_flag and _is_truthy(os.getenv(disable_flag)):
+        return False
+
+    # Check if API key exists
+    key_map = {
+        "openai": "OPENAI_API_KEY",
+        "anthropic": "ANTHROPIC_API_KEY",
+        "google": "GOOGLE_API_KEY",
+        "openrouter": "OPENROUTER_API_KEY",
+    }
+
+    env_var = key_map.get(provider)
+    if not env_var:
+        return False
+
+    return bool(os.getenv(env_var))
+
+
+def get_available_providers() -> List[str]:
+    """
+    Get list of available (enabled) providers.
+
+    Returns:
+        List of enabled provider names
+    """
+    all_providers = ["openai", "anthropic", "google", "openrouter"]
+    return [p for p in all_providers if is_provider_enabled(p)]
+
+
+def get_provider_status() -> Dict[str, Dict[str, Any]]:
+    """
+    Get detailed status for all providers.
+
+    Returns:
+        Dict with provider status information
+    """
+    providers = ["openai", "anthropic", "google", "openrouter"]
+    status = {}
+
+    for provider in providers:
+        enabled = is_provider_enabled(provider)
+        has_key = bool(
+            os.getenv(
+                {
+                    "openai": "OPENAI_API_KEY",
+                    "anthropic": "ANTHROPIC_API_KEY",
+                    "google": "GOOGLE_API_KEY",
+                    "openrouter": "OPENROUTER_API_KEY",
+                }.get(provider)
+            )
+        )
+
+        disabled_by_flag = _is_truthy(os.getenv(f"DISABLE_{provider.upper()}"))
+
+        status[provider] = {
+            "enabled": enabled,
+            "has_api_key": has_key,
+            "disabled_by_flag": disabled_by_flag,
+        }
+
+    return status
+
+
 def get_env_source() -> str:
     """
-    Detect where API keys are loaded from.
+    Detect where API keys are loaded from and show provider status.
 
     Returns:
         String indicating the source of environment variables
@@ -43,9 +136,11 @@ def get_env_source() -> str:
         with open(env_file, "r") as f:
             env_content = f.read()
             # Simple heuristic: if .env has uncommented keys, assume it's the source
-            if any(f"{key}=" in env_content and not f"#{key}=" in line
-                   for line in env_content.split("\n")
-                   for key in ["OPENAI_API_KEY", "ANTHROPIC_API_KEY", "GOOGLE_API_KEY"]):
+            if any(
+                f"{key}=" in env_content and f"#{key}=" not in line
+                for line in env_content.split("\n")
+                for key in ["OPENAI_API_KEY", "ANTHROPIC_API_KEY", "GOOGLE_API_KEY"]
+            ):
                 return "dotenv"
 
     return "environment"  # Shell export, CI, or system env
@@ -58,8 +153,27 @@ def load_agents_config() -> Dict[str, Any]:
         return yaml.safe_load(f)
 
 
-def get_api_key(provider: str) -> str:
-    """Get API key for a provider from environment."""
+class ProviderUnavailableError(Exception):
+    """Raised when a provider is unavailable (disabled or missing API key)."""
+
+    pass
+
+
+def get_api_key(provider: str, optional: bool = False) -> Optional[str]:
+    """
+    Get API key for a provider from environment.
+
+    Args:
+        provider: Provider name (openai, anthropic, google, openrouter)
+        optional: If True, return None instead of raising error when key is missing
+
+    Returns:
+        API key string or None (if optional=True and key missing)
+
+    Raises:
+        ValueError: Unknown provider
+        ProviderUnavailableError: Provider disabled or missing key (if optional=False)
+    """
     key_map = {
         "openai": "OPENAI_API_KEY",
         "anthropic": "ANTHROPIC_API_KEY",
@@ -71,9 +185,21 @@ def get_api_key(provider: str) -> str:
     if not env_var:
         raise ValueError(f"Unknown provider: {provider}")
 
+    # Check if provider is disabled
+    if not is_provider_enabled(provider):
+        if optional:
+            return None
+        raise ProviderUnavailableError(
+            f"Provider '{provider}' is disabled or missing API key"
+        )
+
     key = os.getenv(env_var)
     if not key:
-        raise ValueError(f"Missing API key: {env_var} not set in environment")
+        if optional:
+            return None
+        raise ProviderUnavailableError(
+            f"Missing API key: {env_var} not set in environment"
+        )
 
     return key
 
@@ -85,6 +211,8 @@ COST_TABLE = {
     "openai/gpt-4o-mini": {"input": 0.15, "output": 0.6},
     "google/gemini-1.5-pro": {"input": 1.25, "output": 5.0},
     "google/gemini-1.5-flash": {"input": 0.075, "output": 0.3},
+    "google/gemini-2.0-flash-exp": {"input": 0.0, "output": 0.0},  # Free tier
+    "google/gemini-2.0-pro-exp": {"input": 0.0, "output": 0.0},  # Experimental
 }
 
 

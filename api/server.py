@@ -1,4 +1,5 @@
 """FastAPI server for multi-agent orchestration."""
+
 import sys
 from pathlib import Path
 from typing import List, Optional
@@ -12,8 +13,8 @@ from pydantic import BaseModel
 # Add parent directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from config.settings import get_env_source
-from core.agent_runtime import AgentRuntime, RunResult
+from config.settings import get_env_source, get_provider_status, get_available_providers
+from core.agent_runtime import AgentRuntime
 from core.logging_utils import get_metrics, read_logs
 
 # Initialize FastAPI
@@ -26,7 +27,7 @@ app = FastAPI(
 
 @app.on_event("startup")
 async def startup_event():
-    """Log environment source on startup."""
+    """Log environment source and provider status on startup."""
     env_source = get_env_source()
     if env_source == "environment":
         print("🔑 API keys loaded from environment variables (shell/CI)")
@@ -34,6 +35,20 @@ async def startup_event():
         print("📁 API keys loaded from .env file (development mode)")
     else:
         print("⚠️  No API keys detected - requests will fail")
+
+    # Show available providers
+    available = get_available_providers()
+    if available:
+        print(f"✓ Available providers: {', '.join(available)}")
+    else:
+        print("⚠️  No providers available!")
+
+    # Show disabled providers
+    all_providers = ["openai", "anthropic", "google", "openrouter"]
+    disabled = [p for p in all_providers if p not in available]
+    if disabled:
+        print(f"✗ Disabled providers: {', '.join(disabled)}")
+
 
 # Setup templates and static files
 BASE_DIR = Path(__file__).parent.parent
@@ -191,8 +206,17 @@ async def metrics():
 
 @app.get("/health")
 async def health():
-    """Health check endpoint."""
-    return {"status": "ok", "service": "multi-agent-orchestrator"}
+    """Health check endpoint with provider status."""
+    provider_status = get_provider_status()
+    available_providers = get_available_providers()
+
+    return {
+        "status": "ok",
+        "service": "multi-agent-orchestrator",
+        "providers": provider_status,
+        "available_providers": available_providers,
+        "total_available": len(available_providers),
+    }
 
 
 if __name__ == "__main__":

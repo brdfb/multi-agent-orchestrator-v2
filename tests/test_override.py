@@ -1,4 +1,5 @@
 """Test model override functionality."""
+
 import sys
 from pathlib import Path
 from unittest.mock import patch
@@ -15,7 +16,7 @@ def test_override_model_used():
 
     model_used = None
 
-    def mock_call(model, system, user, temperature, max_tokens):
+    def mock_call(model, system, user, temperature, max_tokens, fallback_order=None):
         nonlocal model_used
         model_used = model
         return LLMResponse(
@@ -47,7 +48,7 @@ def test_default_model_used_without_override():
 
     model_used = None
 
-    def mock_call(model, system, user, temperature, max_tokens):
+    def mock_call(model, system, user, temperature, max_tokens, fallback_order=None):
         nonlocal model_used
         model_used = model
         return LLMResponse(
@@ -64,7 +65,7 @@ def test_default_model_used_without_override():
         with patch("core.agent_runtime.write_json") as mock_write:
             mock_write.return_value = Path("test.json")
 
-            result = runtime.run("builder", "test")
+            _ = runtime.run("builder", "test")
 
             # Verify default model from config was used
             assert "claude" in model_used.lower() or "gpt" in model_used.lower()
