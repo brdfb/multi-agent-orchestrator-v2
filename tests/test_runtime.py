@@ -74,3 +74,92 @@ def test_run_with_mock():
             assert result.response == "This is a test response"
             assert result.total_tokens == 70
             assert result.error is None
+
+
+def test_intelligent_truncate():
+    """Test intelligent truncation fallback."""
+    runtime = AgentRuntime()
+
+    # Short text - no truncation
+    short_text = "This is a short text."
+    result = runtime._intelligent_truncate(short_text, 100)
+    assert result == short_text
+
+    # Long text with sentence boundary
+    long_text = "First sentence. Second sentence. Third sentence. Fourth sentence."
+    result = runtime._intelligent_truncate(long_text, 40)
+    assert result.endswith(".")
+    assert len(result) <= 45  # Allow some margin
+    assert "First sentence" in result
+
+    # Long text without good sentence boundary
+    no_punctuation = "a" * 100
+    result = runtime._intelligent_truncate(no_punctuation, 50)
+    assert result.endswith("...")
+    assert len(result) <= 53
+
+
+def test_compress_semantic():
+    """Test semantic compression with mock LLM."""
+    runtime = AgentRuntime()
+
+    long_output = """
+    I recommend using PostgreSQL for the database because it provides ACID guarantees
+    which are essential for financial transactions. However, this comes with the trade-off
+    of more complex horizontal scaling compared to NoSQL solutions like MongoDB.
+
+    For authentication, I suggest JWT tokens with 15-minute expiry and refresh tokens
+    stored in Redis for fast session lookup.
+
+    Open question: How should we handle PostgreSQL failover in production?
+    """ * 10  # Make it long
+
+    # Mock compression response
+    mock_compressed = """{
+  "key_decisions": ["PostgreSQL for database", "JWT with 15-min expiry"],
+  "rationale": {"PostgreSQL": "ACID guarantees for transactions", "JWT": "Stateless auth"},
+  "trade_offs": ["PostgreSQL harder to scale horizontally than MongoDB"],
+  "open_questions": ["PostgreSQL failover strategy?"],
+  "technical_specs": {"database": "PostgreSQL", "auth": "JWT", "cache": "Redis"}
+}"""
+
+    mock_response = LLMResponse(
+        text=mock_compressed,
+        model="gemini/gemini-flash-latest",
+        provider="google",
+        prompt_tokens=500,
+        completion_tokens=100,
+        total_tokens=600,
+        duration_ms=200.0,
+    )
+
+    with patch.object(runtime.connector, "call", return_value=mock_response):
+        result = runtime._compress_semantic(long_output, max_tokens=500)
+        assert "key_decisions" in result
+        assert "PostgreSQL" in result
+        assert len(result) < len(long_output)  # Should be compressed
+
+
+def test_compress_semantic_fallback():
+    """Test semantic compression falls back to truncation on error."""
+    runtime = AgentRuntime()
+
+    long_text = "a" * 5000
+
+    # Mock failed compression
+    mock_response = LLMResponse(
+        text="",
+        model="gemini/gemini-flash-latest",
+        provider="google",
+        prompt_tokens=0,
+        completion_tokens=0,
+        total_tokens=0,
+        duration_ms=100.0,
+        error="API error",
+    )
+
+    with patch.object(runtime.connector, "call", return_value=mock_response):
+        result = runtime._compress_semantic(long_text, max_tokens=500)
+        # Should fallback to intelligent truncation
+        assert len(result) <= 2100  # 500 tokens * 4 chars + "..."
+        assert isinstance(result, str)

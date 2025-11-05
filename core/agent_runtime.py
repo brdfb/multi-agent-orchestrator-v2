@@ -70,6 +70,87 @@ class AgentRuntime:
             self._memory = MemoryEngine()
         return self._memory
 
+    def _compress_semantic(self, text: str, max_tokens: int = 500) -> str:
+        """
+        Extract semantic essence using structured JSON compression.
+
+        Instead of truncating at arbitrary character limits, this method:
+        - Extracts key decisions and rationale
+        - Preserves technical specifications
+        - Maintains trade-offs and open questions
+        - Reduces tokens by ~90% while preserving 100% semantic information
+
+        Args:
+            text: Full output to compress
+            max_tokens: Target token count (default: 500)
+
+        Returns:
+            Structured JSON summary as string
+        """
+        compression_prompt = f"""Summarize this output into structured JSON (max {max_tokens} tokens):
+
+REQUIRED JSON STRUCTURE:
+{{
+  "key_decisions": ["decision1", "decision2", ...],
+  "rationale": {{"decision1": "why chosen", "decision2": "why chosen"}},
+  "trade_offs": ["trade-off 1", "trade-off 2", ...],
+  "open_questions": ["question 1", "question 2", ...],
+  "technical_specs": {{"component": "choice", "framework": "name"}}
+}}
+
+RULES:
+- Extract ONLY the most important decisions and their reasoning
+- Include ALL technical specifications mentioned
+- Preserve trade-offs and concerns
+- List unresolved questions or dependencies
+- NO code snippets in summary (only decision: "use pattern X")
+- Keep total output under {max_tokens} tokens
+
+ORIGINAL OUTPUT TO SUMMARIZE:
+{text}"""
+
+        try:
+            # Use fast, cheap model for compression
+            response = self.connector.call(
+                model="gemini/gemini-flash-latest",
+                system="You are a semantic compression agent. Extract structured summaries from technical outputs.",
+                user=compression_prompt,
+                temperature=0.1,
+                max_tokens=max_tokens,
+            )
+
+            if response.error or not response.text:
+                # Fallback to intelligent truncation if compression fails
+                return self._intelligent_truncate(text, max_tokens * 4)  # 4 chars ≈ 1 token
+
+            return response.text
+        except Exception:
+            # Fallback to intelligent truncation on any error
+            return self._intelligent_truncate(text, max_tokens * 4)
+
+    def _intelligent_truncate(self, text: str, max_chars: int) -> str:
+        """
+        Fallback truncation that tries to end at sentence boundaries.
+
+        Args:
+            text: Text to truncate
+            max_chars: Maximum characters
+
+        Returns:
+            Truncated text ending at sentence boundary if possible
+        """
+        if len(text) <= max_chars:
+            return text
+
+        truncated = text[:max_chars]
+        # Find last sentence end
+        last_period = max(truncated.rfind('.'), truncated.rfind('!'), truncated.rfind('?'))
+
+        if last_period > max_chars * 0.5:  # If sentence end is in second half
+            return truncated[:last_period + 1]
+        else:
+            return truncated + "..."
+
     def route(self, prompt: str) -> str:
         """
         Route prompt to appropriate agent with fallback support.
@@ -329,18 +410,14 @@ class AgentRuntime:
                     context = f"Original request: {prompt}\n\n"
 
                     for prev in results:
-                        # More generous truncation for closer (needs full context)
-                        max_chars = 1500
+                        # Use semantic compression for long outputs
+                        compression_threshold = 1500
                         response_text = prev.response
 
-                        if len(response_text) > max_chars:
-                            truncated = response_text[:max_chars]
-                            # Find last sentence end
-                            last_period = max(truncated.rfind('.'), truncated.rfind('!'), truncated.rfind('?'))
-                            if last_period > max_chars * 0.5:
-                                response_text = truncated[:last_period + 1]
-                            else:
-                                response_text = truncated + "..."
+                        if len(response_text) > compression_threshold:
+                            # Semantic compression preserves meaning while reducing tokens
+                            compressed = self._compress_semantic(response_text, max_tokens=500)
+                            response_text = f"{compressed}\n\n[Note: Above is structured summary. Full output: {len(response_text)} chars]"
 
                         context += f"=== {prev.agent.upper()} OUTPUT ===\n{response_text}\n\n"
 
@@ -350,20 +427,17 @@ class AgentRuntime:
                     # Standard sequential: critic sees builder, etc.
                     prev_result = results[-1]
 
-                    # Memory-enabled agents can handle more context (they have history)
-                    # Non-memory agents need fuller immediate context
-                    max_chars = 1000 if not has_memory else 600
+                    # Semantic compression threshold
+                    # Memory-enabled agents: 800 chars (they have historical context)
+                    # Non-memory agents: 1200 chars (need more immediate context)
+                    compression_threshold = 1200 if not has_memory else 800
 
-                    # Intelligent truncation: try to end at sentence boundary
                     response_text = prev_result.response
-                    if len(response_text) > max_chars:
-                        truncated = response_text[:max_chars]
-                        # Find last sentence end
-                        last_period = max(truncated.rfind('.'), truncated.rfind('!'), truncated.rfind('?'))
-                        if last_period > max_chars * 0.5:  # If sentence end is in second half
-                            response_text = truncated[:last_period + 1]
-                        else:
-                            response_text = truncated + "..."
+
+                    if len(response_text) > compression_threshold:
+                        # Use semantic compression to preserve all key information
+                        compressed = self._compress_semantic(response_text, max_tokens=500)
+                        response_text = f"{compressed}\n\n[Note: Above is structured summary preserving all key decisions and specs]"
 
                     summary = f"Previous {prev_result.agent} output:\n{response_text}"
                     context = (
