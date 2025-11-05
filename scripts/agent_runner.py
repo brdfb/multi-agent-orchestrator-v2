@@ -57,6 +57,12 @@ def main():
 
     print(f"\n✅ Agent: {result.agent}")
     print(f"📊 Model: {result.model}")
+
+    # Show fallback information if used
+    if result.fallback_used:
+        print(f"⚠️  Fallback: {result.original_model} → {result.model}")
+        print(f"   Reason: {result.fallback_reason}")
+
     print(f"⏱️  Duration: {result.duration_ms:.0f}ms")
     print(
         f"🔢 Tokens: {result.total_tokens} (prompt: {result.prompt_tokens}, completion: {result.completion_tokens})"

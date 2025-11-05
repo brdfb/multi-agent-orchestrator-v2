@@ -56,20 +56,21 @@ class LLMConnector:
         temperature: float,
         max_tokens: int,
         start_time: float,
-    ) -> Optional[LLMResponse]:
+    ) -> tuple[Optional[LLMResponse], Optional[str]]:
         """
         Try calling a specific model.
 
         Returns:
-            LLMResponse if successful, None if provider unavailable
+            Tuple of (LLMResponse if successful, error_reason if failed)
         """
         provider = self._extract_provider(model)
 
         # Check if provider is enabled
         if not is_provider_enabled(provider):
-            return None
+            return None, f"Missing API key for provider '{provider}'"
 
         # Try calling the model
+        last_error = None
         for attempt in range(self.retry_count + 1):
             try:
                 response = litellm.completion(
@@ -90,25 +91,30 @@ class LLMConnector:
                 completion_tokens = usage.completion_tokens if usage else 0
                 total_tokens = usage.total_tokens if usage else 0
 
-                return LLMResponse(
-                    text=text,
-                    model=model,
-                    provider=provider,
-                    prompt_tokens=prompt_tokens,
-                    completion_tokens=completion_tokens,
-                    total_tokens=total_tokens,
-                    duration_ms=duration_ms,
+                return (
+                    LLMResponse(
+                        text=text,
+                        model=model,
+                        provider=provider,
+                        prompt_tokens=prompt_tokens,
+                        completion_tokens=completion_tokens,
+                        total_tokens=total_tokens,
+                        duration_ms=duration_ms,
+                    ),
+                    None,
                 )
 
             except Exception as e:
                 error_str = str(e).lower()
+                last_error = str(e)
+
                 # Check if error is due to missing API key or auth
                 if any(
                     keyword in error_str
                     for keyword in ["api key", "authentication", "unauthorized", "auth"]
                 ):
                     # Provider unavailable - don't retry
-                    return None
+                    return None, f"Authentication failed for provider '{provider}'"
 
                 # Other errors - retry
                 if attempt < self.retry_count:
@@ -116,7 +122,7 @@ class LLMConnector:
                     continue
 
         # All retries failed
-        return None
+        return None, f"Model call failed after {self.retry_count + 1} attempts: {last_error}"
 
     def call(
         self,
@@ -154,12 +160,11 @@ class LLMConnector:
         if fallback_order:
             models_to_try.extend(fallback_order)
 
-        last_error = None
+        first_error = None  # Track primary model error
+        last_error = None   # Track most recent error
         for idx, current_model in enumerate(models_to_try):
-            provider = self._extract_provider(current_model)
-
             # Try this model
-            result = self._try_model(
+            result, error_reason = self._try_model(
                 model=current_model,
                 messages=messages,
                 temperature=temperature,
@@ -171,14 +176,17 @@ class LLMConnector:
                 # Success! Add fallback metadata if we used a fallback
                 if idx > 0:
                     result.original_model = original_model
-                    result.fallback_reason = f"Provider '{self._extract_provider(original_model)}' unavailable"
+                    # Use the error from the PRIMARY model (idx == 0)
+                    result.fallback_reason = first_error or "Primary model unavailable"
                 return result
 
             # This model failed, track reason
-            if not is_provider_enabled(provider):
-                last_error = f"Provider '{provider}' disabled or missing API key"
-            else:
-                last_error = f"Model '{current_model}' failed"
+            error = error_reason or f"Model '{current_model}' failed"
+            last_error = error
+
+            # Save the first error (primary model failure reason)
+            if idx == 0:
+                first_error = error
 
         # All models exhausted - return error
         duration_ms = (time.perf_counter() - start_time) * 1000
