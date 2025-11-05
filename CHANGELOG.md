@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.5.0] - 2025-11-05
 
+### Added - Comprehensive Health Monitoring
+
+- **Enhanced `/health` Endpoint** (`api/server.py`)
+  - Health status levels: `healthy`, `degraded`, `unhealthy`
+  - Real-time timestamp in all responses
+  - Request tracking middleware (tracks last request time)
+  - Memory system health monitoring:
+    - Database connection status
+    - Total conversations count
+    - Database file size (MB)
+    - Last conversation timestamp
+  - System metrics:
+    - Server uptime (seconds)
+    - Data directory size tracking
+    - Conversation files count
+    - Last API request timestamp
+  - 24-hour statistics:
+    - Total requests
+    - Token usage
+    - Estimated costs
+    - Error count (placeholder)
+  - Intelligent health status calculation:
+    - `unhealthy`: No providers available
+    - `degraded`: <2 providers OR memory disconnected
+    - `healthy`: ≥2 providers AND memory connected
+
 ### Added - Comprehensive Documentation Suite
 
 - **Idiot-Proof Documentation**
