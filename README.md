@@ -224,6 +224,14 @@ curl http://localhost:5050/metrics
 Run coordinated workflows with real-time progress:
 
 ```bash
+# Easy CLI command (recommended)
+mao-chain "Design a scalable chat system"
+
+# Interactive mode (no quotes needed)
+mao-chain
+# Enter your prompt: Design a scalable chat system
+
+# Via Makefile (from orchestrator dir)
 make agent-chain Q="Design a scalable chat system"
 ```
 
@@ -232,6 +240,7 @@ make agent-chain Q="Design a scalable chat system"
 - ⚠️  **Fallback transparency**: Shows model fallback reasons (e.g., missing API keys)
 - 📊 **Full output**: No truncation - see complete responses from all agents
 - 🧠 **Smart context**: Closer sees ALL previous stages for better synthesis
+- 💡 **Interactive mode**: Just run `mao-chain` without arguments
 
 **Output example:**
 ```
@@ -253,7 +262,10 @@ Total duration: 45.2s | Total tokens: 7,391
 
 **Custom stages:**
 ```bash
-# Run specific agents
+# Run specific agents (via CLI)
+mao-chain "Review security" critic closer
+
+# Via Makefile
 make agent-chain Q="Review security" STAGES="critic closer"
 ```
 
