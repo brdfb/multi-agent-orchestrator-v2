@@ -22,7 +22,10 @@
       "Bash(pytest:*)",
       "Bash(black:*)",
       "Bash(ruff check:*)",
-      "Bash(git reset:*)"
+      "Bash(git reset:*)",
+      "Bash(sqlite3:*)",
+      "Bash(.venv/bin/python:*)",
+      "Bash(.venv/bin/pip install:*)"
     ],
     "deny": [],
     "ask": []

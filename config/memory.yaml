@@ -13,7 +13,7 @@ memory:
     enabled_default: true
     max_context_tokens_default: 350  # OPTIMIZED: reduced from 500 to save tokens
     max_snippet_tokens: 120  # Max tokens per conversation snippet
-    strategy_default: "keywords"  # keywords | recent | hybrid
+    strategy_default: "semantic"  # keywords | semantic | hybrid
     joiner: "\n---\n"  # Separator between context items
     prompt_header: "[MEMORY CONTEXT - Relevant past conversations]\n"
 

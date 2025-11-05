@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Set
 
 from core.memory_backend import SQLiteBackend
+from core.embedding_engine import get_embedding_engine, EmbeddingEngine
 
 
 class MemoryEngine:
@@ -29,7 +30,15 @@ class MemoryEngine:
         if not self._initialized:
             self.backend = SQLiteBackend()
             self.enabled = True  # Can be disabled via config
+            self._embedding_engine: Optional[EmbeddingEngine] = None  # Lazy load
             self._initialized = True
+
+    @property
+    def embedding_engine(self) -> EmbeddingEngine:
+        """Lazy load embedding engine only when needed."""
+        if self._embedding_engine is None:
+            self._embedding_engine = get_embedding_engine()
+        return self._embedding_engine
 
     def store_conversation(
         self,
@@ -39,9 +48,10 @@ class MemoryEngine:
         model: str,
         provider: str,
         metadata: Optional[Dict[str, Any]] = None,
+        generate_embedding: bool = True,
     ) -> int:
         """
-        Store conversation to memory.
+        Store conversation to memory with optional embedding generation.
 
         Args:
             prompt: User prompt
@@ -50,6 +60,7 @@ class MemoryEngine:
             model: Model identifier
             provider: Provider name (openai, anthropic, google)
             metadata: Additional metadata (tokens, cost, duration, etc.)
+            generate_embedding: Whether to generate and store embedding
 
         Returns:
             Conversation ID
@@ -69,6 +80,17 @@ class MemoryEngine:
         # Merge metadata
         if metadata:
             conversation.update(metadata)
+
+        # Generate embedding if requested
+        if generate_embedding:
+            try:
+                # Combine prompt + first 200 chars of response for embedding
+                text_for_embedding = f"{prompt}\n{response[:200]}"
+                embedding = self.embedding_engine.encode(text_for_embedding)
+                conversation["embedding"] = EmbeddingEngine.serialize_embedding(embedding)
+            except Exception:
+                # If embedding fails, continue without it (graceful degradation)
+                pass
 
         # Store to backend
         return self.backend.store(conversation)
@@ -207,11 +229,14 @@ class MemoryEngine:
         """
         Get relevant context from past conversations for a prompt.
 
-        Uses keyword matching with relevance scoring and time decay filtering.
+        Supports multiple retrieval strategies:
+        - keywords: Simple keyword matching (fast, multilingual-friendly)
+        - semantic: Embedding-based semantic similarity (slow first time, accurate)
+        - hybrid: Combination of both (weighted 70% semantic + 30% keywords)
 
         Args:
             prompt: Current user prompt
-            strategy: Retrieval strategy ("keywords" only for now)
+            strategy: Retrieval strategy ("keywords", "semantic", or "hybrid")
             max_tokens: Maximum tokens for context
             min_relevance: Minimum relevance score threshold (0-1)
             time_decay_hours: Time decay factor in hours (0 = no decay)
@@ -225,9 +250,6 @@ class MemoryEngine:
         if not self.enabled:
             return ""
 
-        # Extract keywords from prompt
-        query_tokens = self._extract_keywords(prompt)
-
         # Query candidates from backend
         exclude_session = session_id if exclude_current_session else None
         candidates = self.backend.query_candidates(
@@ -237,16 +259,25 @@ class MemoryEngine:
         if not candidates:
             return ""
 
-        # Score each candidate
-        scored = []
-        for rec in candidates:
-            score = self._score_record(
-                rec, query_tokens, time_decay_hours=time_decay_hours
-            )
-            if score >= min_relevance:
-                rec["_score"] = score
-                rec["_est_tokens"] = self._estimate_tokens(rec)
-                scored.append(rec)
+        # Score candidates based on strategy
+        if strategy == "semantic":
+            scored = self._score_semantic(prompt, candidates, time_decay_hours)
+        elif strategy == "hybrid":
+            scored = self._score_hybrid(prompt, candidates, time_decay_hours)
+        else:  # Default: keywords
+            query_tokens = self._extract_keywords(prompt)
+            scored = []
+            for rec in candidates:
+                score = self._score_record(
+                    rec, query_tokens, time_decay_hours=time_decay_hours
+                )
+                if score >= min_relevance:
+                    rec["_score"] = score
+                    rec["_est_tokens"] = self._estimate_tokens(rec)
+                    scored.append(rec)
+
+        # Filter by min relevance
+        scored = [r for r in scored if r.get("_score", 0) >= min_relevance]
 
         if not scored:
             return ""
@@ -438,6 +469,134 @@ class MemoryEngine:
     def disable(self):
         """Disable memory system."""
         self.enabled = False
+
+    def _score_semantic(
+        self,
+        prompt: str,
+        candidates: List[Dict[str, Any]],
+        time_decay_hours: int,
+    ) -> List[Dict[str, Any]]:
+        """
+        Score candidates using semantic similarity (embedding-based).
+
+        Args:
+            prompt: Query prompt
+            candidates: Candidate conversation records
+            time_decay_hours: Time decay factor
+
+        Returns:
+            List of scored records with _score and _est_tokens fields
+        """
+        # Generate query embedding
+        query_embedding = self.embedding_engine.encode(prompt)
+
+        scored = []
+        for rec in candidates:
+            # Get or generate embedding for candidate
+            candidate_embedding = self._get_or_generate_embedding(rec)
+
+            if candidate_embedding is None:
+                continue  # Skip if embedding unavailable
+
+            # Calculate semantic similarity
+            similarity = self.embedding_engine.cosine_similarity(
+                query_embedding, candidate_embedding
+            )
+
+            # Apply time decay
+            if time_decay_hours > 0:
+                age_hours = (
+                    datetime.now(timezone.utc)
+                    - self._parse_timestamp(rec["timestamp"])
+                ).total_seconds() / 3600
+                decay = math.exp(-age_hours / time_decay_hours)
+                score = similarity * decay
+            else:
+                score = similarity
+
+            rec["_score"] = score
+            rec["_est_tokens"] = self._estimate_tokens(rec)
+            scored.append(rec)
+
+        return scored
+
+    def _score_hybrid(
+        self,
+        prompt: str,
+        candidates: List[Dict[str, Any]],
+        time_decay_hours: int,
+    ) -> List[Dict[str, Any]]:
+        """
+        Score candidates using hybrid approach (70% semantic + 30% keywords).
+
+        Args:
+            prompt: Query prompt
+            candidates: Candidate conversation records
+            time_decay_hours: Time decay factor
+
+        Returns:
+            List of scored records with _score and _est_tokens fields
+        """
+        # Get keyword scores
+        query_tokens = self._extract_keywords(prompt)
+        keyword_scores = {}
+        for rec in candidates:
+            score = self._score_record(
+                rec, query_tokens, time_decay_hours=time_decay_hours
+            )
+            keyword_scores[rec["id"]] = score
+
+        # Get semantic scores
+        semantic_scored = self._score_semantic(prompt, candidates, time_decay_hours)
+
+        # Combine: 70% semantic + 30% keywords
+        scored = []
+        for rec in semantic_scored:
+            semantic_score = rec["_score"]
+            keyword_score = keyword_scores.get(rec["id"], 0.0)
+            hybrid_score = 0.7 * semantic_score + 0.3 * keyword_score
+
+            rec["_score"] = hybrid_score
+            scored.append(rec)
+
+        return scored
+
+    def _get_or_generate_embedding(self, record: Dict[str, Any]) -> Optional[Any]:
+        """
+        Get embedding from record or generate if missing.
+
+        Args:
+            record: Conversation record
+
+        Returns:
+            Embedding numpy array or None if unavailable
+        """
+        # Check if embedding exists
+        if record.get("embedding"):
+            try:
+                return EmbeddingEngine.deserialize_embedding(record["embedding"])
+            except Exception:
+                pass  # Fall through to generation
+
+        # Generate on-demand if missing
+        try:
+            text = f"{record['prompt']}\n{record['response'][:200]}"
+            embedding = self.embedding_engine.encode(text)
+
+            # Update database with new embedding (async, fire-and-forget)
+            try:
+                serialized = EmbeddingEngine.serialize_embedding(embedding)
+                self.backend._conn.execute(
+                    "UPDATE conversations SET embedding = ? WHERE id = ?",
+                    (serialized, record["id"]),
+                )
+                self.backend._conn.commit()
+            except Exception:
+                pass  # Continue even if update fails
+
+            return embedding
+        except Exception:
+            return None  # Embedding unavailable
 
 
 # Global singleton instance

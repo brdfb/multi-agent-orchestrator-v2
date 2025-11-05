@@ -28,7 +28,7 @@ agents:
     memory_enabled: true
     memory:
       max_context_tokens: 600
-      strategy: "keywords"
+      strategy: "semantic"  # Using multilingual semantic search for better context retrieval
       time_decay_hours: 168
       min_relevance: 0.3
       exclude_same_turn: true
