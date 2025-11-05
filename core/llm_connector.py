@@ -20,6 +20,7 @@ class LLMResponse:
     completion_tokens: int
     total_tokens: int
     duration_ms: float
+    estimated_cost: float = 0.0  # Estimated cost in USD
     error: Optional[str] = None
     original_model: Optional[str] = None  # If fallback was used
     fallback_reason: Optional[str] = None  # Why fallback was triggered

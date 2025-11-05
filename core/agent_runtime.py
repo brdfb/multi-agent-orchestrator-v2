@@ -268,9 +268,11 @@ class AgentRuntime:
                         "injected_context_tokens": injected_context_tokens,
                     },
                 )
-            except Exception:
+            except Exception as e:
                 # If memory storage fails, continue (graceful degradation)
-                pass
+                # Log the error for debugging
+                import sys
+                print(f"⚠️  Memory storage failed: {e}", file=sys.stderr)
 
         # Create result
         result = RunResult(
