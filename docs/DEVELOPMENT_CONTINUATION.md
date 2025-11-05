@@ -507,7 +507,7 @@ cat > ~/projects/client-xyz/TODO.md << 'EOF'
 - [ ] Authentication middleware
 - [ ] Rate limiting
 
-## v0.3.0 (Future)
+## v0.6.0 (Future)
 - [ ] Cursor MCP bridge
 - [ ] VSCode extension
 - [ ] Additional agents (researcher, validator)
