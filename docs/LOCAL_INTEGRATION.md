@@ -567,7 +567,7 @@ nano ~/.bashrc
 
 ---
 
-**Version:** 0.3.0 - Local Integration
+**Version:** 0.5.0 - Local Integration
 **Updated:** 2025-11-05
 
 **Recent Updates:**
