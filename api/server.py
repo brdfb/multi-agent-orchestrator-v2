@@ -22,7 +22,7 @@ from core.memory_engine import MemoryEngine
 app = FastAPI(
     title="Multi-Agent Orchestrator",
     description="Multi-LLM agent system with CLI, API, and UI",
-    version="0.2.0",
+    version="0.5.0",
 )
 
 
@@ -218,6 +218,7 @@ async def health():
     return {
         "status": "ok",
         "service": "multi-agent-orchestrator",
+        "version": "0.5.0",
         "providers": provider_status,
         "available_providers": available_providers,
         "total_available": len(available_providers),
