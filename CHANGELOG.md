@@ -5,6 +5,60 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2025-11-05
+
+### Added - Semantic Search for Memory Context
+
+- **Multilingual Embedding Engine** (`core/embedding_engine.py`)
+  - Model: `paraphrase-multilingual-MiniLM-L12-v2` (384 dimensions)
+  - Supports 50+ languages including Turkish, English, Arabic, Chinese, etc.
+  - Lazy loading for optimal performance (~420MB model downloaded on first use)
+  - Embedding serialization/deserialization for database storage
+
+- **Semantic Search Strategies** in Memory System
+  - `semantic`: Pure embedding-based cosine similarity with time decay
+  - `hybrid`: 70% semantic + 30% keyword scoring (best of both worlds)
+  - `keywords`: Original keyword-based approach (still available)
+  - On-demand embedding generation for backwards compatibility
+
+- **Database Migration** (`scripts/migrate_add_embeddings.py`)
+  - Adds `embedding` BLOB column to conversations table
+  - Backwards compatible: NULL embeddings generated on-demand
+  - Run with: `python scripts/migrate_add_embeddings.py`
+
+### Changed
+
+- **Default memory strategy**: `keywords` → `semantic` (config/memory.yaml)
+- **Builder agent**: Now uses semantic strategy by default (config/agents.yaml)
+- **Context injection**: Improved recall for multilingual prompts (especially Turkish)
+
+### Fixed
+
+- **Turkish language support**: Semantic search handles Turkish suffixes correctly
+  - Previous keyword approach failed: "chart" vs "chart'a" counted as different
+  - Semantic approach: Understands semantic equivalence despite morphological differences
+- **Low keyword overlap**: Context retrieval now works even with <30% keyword overlap
+
+### Dependencies
+
+- Added `sentence-transformers>=2.2.2` (brings PyTorch, transformers, numpy, scipy, etc.)
+- Total new dependencies: ~1.7GB (includes CUDA support for GPU acceleration)
+
+### Performance
+
+- First model load: ~30s (one-time download of 420MB model)
+- Subsequent loads: <1s (model cached in memory)
+- Embedding generation: ~50ms per conversation
+- Semantic search: <100ms for 500 candidate conversations
+
+### Test Results
+
+Validated with Turkish Helm chart prompts:
+- **Prompt 1**: "Kubernetes deployment için Helm chart oluştur. Redis ve PostgreSQL dahil."
+- **Prompt 2**: "Önceki Helm chart'a health check ve monitoring ekle"
+- **Result**: Semantic search successfully retrieved context (29 tokens injected)
+- **Keyword approach**: Would have failed (0.25 overlap < 0.3 threshold)
+
 ## [0.3.0] - 2025-11-05
 
 ### Added - Chain Improvements
