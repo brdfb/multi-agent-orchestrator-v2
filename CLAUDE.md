@@ -2,6 +2,35 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## 🆕 Recent Changes (For Claude Code)
+
+### 2025-11-05: Memory System Fix (CRITICAL)
+**Problem**: Memory storage silently failing - conversations not being persisted to database
+**Root Cause**: `LLMResponse` dataclass missing `estimated_cost` field
+**Symptom**: `agent_runtime.py:271` catching exceptions silently with bare `except: pass`
+**Solution**: Added `estimated_cost: float = 0.0` to `LLMResponse` (llm_connector.py:23)
+**Lesson**: Never use bare `except: pass` - at minimum log the error. Added debug logging.
+**Verification**: Test with `mao auto "test"` then check `sqlite3 data/MEMORY/conversations.db "SELECT COUNT(*) FROM conversations"`
+
+### 2025-11-05: Truncation Fix
+**Problem**: Agent responses cut off mid-sentence (hitting max_tokens limit)
+**Example**: Builder response was 2496/2500 tokens - incomplete code examples
+**Solution**: Increased token limits in `config/agents.yaml`:
+- Builder: 2500 → 4096 (+64%)
+- Critic: 2000 → 3072 (+54%)
+- Closer: 1800 → 2560 (+42%)
+**Rationale**: Modern LLMs need space for comprehensive code examples + explanations
+
+### 2025-11-05: New User-Facing Tools
+Added CLI tools (user doesn't need to know Makefile syntax):
+- `mao-chain "prompt"` - Interactive chain runner (easier than `make agent-chain Q="..."`)
+- `mao-chain --save-to file.md` - Save full output for documentation
+- `mao-last-chain` - View complete chain execution (all stages)
+- `mao-logs 10` - Browse recent conversation history
+- `scripts/view_logs.py` - Comprehensive log viewer (powers above aliases)
+
+**Implementation**: Added argparse to chain_runner.py, created view_logs.py, updated .bashrc aliases
+
 ## System Overview
 
 Multi-Agent Orchestrator is a production-ready system that routes user queries across multiple LLM providers (OpenAI, Anthropic, Google) using specialized agent roles. The architecture follows a three-layer design: **LLMConnector** (unified API wrapper) → **AgentRuntime** (orchestration) → **Interfaces** (CLI/API/UI).
@@ -17,6 +46,12 @@ Four specialized agents defined in `config/agents.yaml`:
 
 Each agent has distinct `system` prompts, `temperature`, and `max_tokens` settings that define their behavior.
 
+**Current Token Limits** (as of v0.3.0):
+- Builder: 4096 tokens (comprehensive code examples)
+- Critic: 3072 tokens (detailed analysis with examples)
+- Closer: 2560 tokens (synthesis + action plans)
+- Router: 10 tokens (just agent name)
+
 ### Request Flow
 ```
 User Query → AgentRuntime.run()
@@ -29,8 +64,12 @@ User Query → AgentRuntime.run()
 ### Chain Execution
 Multi-agent workflows (`AgentRuntime.chain()`) pass context between stages:
 - Default: builder → critic → closer
-- Each stage receives: original prompt + summary of previous output (first 200 chars)
-- Prevents token explosion while maintaining context
+- **Context passing** (agent_runtime.py:300-350):
+  - Closer receives: original prompt + 1500 chars from builder + 1500 chars from critic
+  - Other stages: original prompt + 600-1000 chars from previous stage
+  - Smart truncation prevents token explosion while maintaining context
+- **Progress indicators**: Real-time callback shows "Stage X/Y: Running AGENT..."
+- **Fallback transparency**: Logs show model switches (e.g., Claude → Gemini when API key missing)
 
 ### Configuration System
 - **Environment detection** (`config/settings.py:get_env_source()`): Checks if API keys from `.env` file or shell environment
@@ -40,19 +79,34 @@ Multi-agent workflows (`AgentRuntime.chain()`) pass context between stages:
 
 ## Development Commands
 
-### Essential Workflows
+### User-Facing CLI (Recommended - v0.3.0+)
+These are what users actually use (simpler than Makefile):
+```bash
+# Single agent
+mao auto "your question"
+mao builder "create code"
+mao critic "review this"
+
+# Multi-agent chain (PREFERRED METHOD)
+mao-chain "Design a system"              # Interactive if no prompt
+mao-chain "prompt" --save-to report.md   # Save full output to file
+mao-chain "prompt" builder critic        # Custom stages
+
+# View results
+mao-last-chain    # See FULL chain output (all stages)
+mao-last          # See last single conversation
+mao-logs 10       # Browse 10 recent conversations
+```
+
+### Legacy Makefile Commands (Still Supported)
+For development/testing only:
 ```bash
 # Run API server (also serves Web UI)
 make run-api              # http://localhost:5050
 
-# CLI interactions
+# CLI interactions (prefer direct aliases above)
 make agent-ask AGENT=builder Q="Your prompt"
-make agent-ask AGENT=auto Q="Your prompt"     # Auto-routes
-
-# Multi-agent chains
-make agent-chain Q="Design a system"
-
-# View last conversation log
+make agent-chain Q="Design a system"  # Harder to use than mao-chain
 make agent-last
 
 # Memory operations
@@ -332,8 +386,12 @@ Each LLM model has strengths. Builder uses Claude (creative), Critic uses GPT-4o
 - Token and cost tracking built-in
 - Easy to parse for analytics/debugging
 
-### Chain Context Strategy
-Passing full outputs between chain stages causes token explosion. Solution: Pass original prompt + 200-char summary of previous stage. Maintains context while controlling costs.
+### Chain Context Strategy (Updated v0.3.0)
+Passing full outputs between chain stages causes token explosion. Solution:
+- **Closer stage**: Gets original prompt + 1500 chars from builder + 1500 chars from critic (needs full context for synthesis)
+- **Other stages**: Get original prompt + 600-1000 chars from previous stage
+- **Implementation**: See `agent_runtime.py:chain()` around line 300-350
+- Trade-off: Maintains context while controlling token costs (previously was just 200 chars - too little)
 
 ## File Organization
 ```
@@ -341,7 +399,11 @@ config/            # agents.yaml, memory.yaml, settings.py (config loader)
 core/              # llm_connector.py, agent_runtime.py, memory_engine.py, logging_utils.py
 api/               # server.py (FastAPI app + memory endpoints)
 ui/templates/      # index.html (HTMX web interface)
-scripts/           # agent_runner.py (CLI tool), memory_cli.py (memory CLI)
+scripts/
+  ├── agent_runner.py    # CLI tool (powers `mao` command)
+  ├── chain_runner.py    # Chain CLI (powers `mao-chain` command)
+  ├── view_logs.py       # Log viewer (NEW - powers `mao-last-chain`, `mao-logs`)
+  └── memory_cli.py      # Memory operations CLI
 tests/             # pytest test suite (55+ tests)
 data/CONVERSATIONS/# JSON logs (auto-created, gitignored)
 data/MEMORY/       # conversations.db (SQLite database, auto-created)
@@ -411,9 +473,18 @@ make agent-last | jq '.fallback_used'
 ```
 
 ## Important Constraints
+
+### For Claude Code (Development Rules)
 - **No direct LLM calls**: Always go through `LLMConnector` (ensures logging, retries, cost tracking, fallback)
 - **Agent config in YAML**: Don't hardcode prompts or models in Python
 - **Log everything**: `write_json()` called for every LLM interaction (includes fallback metadata)
+- **Never silent exceptions**: Bare `except: pass` hides bugs - at minimum log the error (see memory bug 2025-11-05)
 - **Validate inputs**: API uses Pydantic models - maintain this for type safety
 - **Auto-reload enabled**: Uvicorn watches for code changes in dev mode
 - **Fallback transparency**: All fallback usage is logged - never silent failover
+
+### For Users (What to Know)
+- **Memory is persistent**: All conversations stored in SQLite - context builds over time
+- **Fallback is automatic**: If Claude unavailable, falls back to Gemini/GPT seamlessly
+- **Chains are saved**: Use `--save-to` to export full chain output for documentation
+- **Logs are local**: All data in `~/.orchestrator/data/` - never sent to cloud
