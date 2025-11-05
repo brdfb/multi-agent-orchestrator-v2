@@ -49,14 +49,14 @@ python -c "from core.embedding_engine import get_embedding_engine; print(get_emb
 **Lesson**: Never use bare `except: pass` - at minimum log the error. Added debug logging.
 **Verification**: Test with `mao auto "test"` then check `sqlite3 data/MEMORY/conversations.db "SELECT COUNT(*) FROM conversations"`
 
-### 2025-11-05: Truncation Fix
+### 2025-11-05: Truncation Fix & Token Limit Optimization
 **Problem**: Agent responses cut off mid-sentence (hitting max_tokens limit)
 **Example**: Builder response was 2496/2500 tokens - incomplete code examples
-**Solution**: Increased token limits in `config/agents.yaml`:
-- Builder: 2500 → 4096 (+64%)
-- Critic: 2000 → 3072 (+54%)
-- Closer: 1800 → 2560 (+42%)
-**Rationale**: Modern LLMs need space for comprehensive code examples + explanations
+**Solution**: Progressive token limit increases in `config/agents.yaml`:
+- Builder: 2500 → 4096 → 8000 → 9000 (3.6x increase)
+- Critic: 2000 → 3072 → 6000 → 7000 (3.5x increase)
+- Closer: 1800 → 2560 → 8000 → 9000 (5x increase)
+**Rationale**: Modern LLMs need space for comprehensive code examples + explanations. Final limits include 1K buffer for complex responses while maintaining cost efficiency (9K chosen over 32K max for 4x cost savings and 3x speed improvement).
 
 ### 2025-11-05: New User-Facing Tools
 Added CLI tools (user doesn't need to know Makefile syntax):
@@ -83,10 +83,10 @@ Four specialized agents defined in `config/agents.yaml`:
 
 Each agent has distinct `system` prompts, `temperature`, and `max_tokens` settings that define their behavior.
 
-**Current Token Limits** (as of v0.3.0):
-- Builder: 4096 tokens (comprehensive code examples)
-- Critic: 3072 tokens (detailed analysis with examples)
-- Closer: 2560 tokens (synthesis + action plans)
+**Current Token Limits** (as of v0.5.0):
+- Builder: 9000 tokens (comprehensive code examples with 1K buffer)
+- Critic: 7000 tokens (detailed analysis with examples and 1K buffer)
+- Closer: 9000 tokens (synthesis + action plans with 1K buffer)
 - Router: 10 tokens (just agent name)
 
 ### Request Flow

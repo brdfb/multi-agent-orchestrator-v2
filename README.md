@@ -622,11 +622,25 @@ CMD ["uvicorn", "api.server:app", "--host", "0.0.0.0", "--port", "5050"]
 
 ## 🐛 Troubleshooting
 
+**For complete troubleshooting guide, see [TROUBLESHOOTING.md](TROUBLESHOOTING.md)**
+
+### Quick Fixes
+
+**"mao: command not found"**
+```bash
+source ~/.bashrc   # Reload shell configuration
+```
+
+**"ModuleNotFoundError: No module named 'dotenv'"**
+```bash
+cd ~/.orchestrator
+make clean && make install
+```
+
 **"Why am I being asked for API keys again?"**
 
 If you've already exported keys in your shell (`~/.bashrc`, `~/.zshrc`, etc.), you don't need a `.env` file. The system automatically detects and uses environment variables.
 
-Check your current environment:
 ```bash
 # Check if keys are in environment
 echo $OPENAI_API_KEY
@@ -635,27 +649,13 @@ echo $ANTHROPIC_API_KEY
 # If they're set, you're good to go!
 ```
 
-**API key errors:**
-```bash
-# Option 1: Check environment variables
-printenv | grep API_KEY
-
-# Option 2: Check .env file (if using)
-cat .env | grep API_KEY
-
-# Option 3: See what the system detects
-make run-api
-# Look for startup message:
-# 🔑 API keys loaded from environment variables
-# 📁 API keys loaded from .env file
-# ⚠️  No API keys detected
-```
-
-**Module not found:**
-```bash
-# Reinstall in venv
-make clean && make install
-```
+**See [TROUBLESHOOTING.md](TROUBLESHOOTING.md) for:**
+- Installation issues
+- API key problems
+- Agent execution errors
+- Memory system debugging
+- Network and performance issues
+- Complete reset procedures
 
 **Tests failing:**
 ```bash
@@ -669,7 +669,45 @@ python --version  # Needs 3.11+
 uvicorn api.server:app --port 5051
 ```
 
-## 📚 Resources
+## 📚 Documentation
+
+### User Guides (Non-Technical)
+
+- **[HOW_IT_WORKS.md](HOW_IT_WORKS.md)** - Idiot-proof guide (English)
+  - 5-year-old level explanations
+  - Restaurant analogy
+  - ASCII diagrams
+  - FAQ for beginners
+
+- **[NASIL_ÇALIŞIR.md](NASIL_ÇALIŞIR.md)** - Idiot-proof guide (Turkish)
+  - Teknik olmayan anlatım
+  - Restoran benzetmesi
+  - ASCII akış diyagramları
+  - Sıkça sorulan sorular
+
+### Specialized Guides
+
+- **[MEMORY_GUIDE.md](MEMORY_GUIDE.md)** - Complete memory system guide
+  - How semantic search works
+  - Multilingual examples (50+ languages)
+  - Search strategies comparison
+  - CLI commands reference
+  - Best practices and troubleshooting
+
+- **[TROUBLESHOOTING.md](TROUBLESHOOTING.md)** - Common issues and solutions
+  - Installation problems
+  - API key errors
+  - Agent execution issues
+  - Memory system debugging
+  - Performance optimization
+
+### Quick References
+
+- **[QUICKSTART.md](QUICKSTART.md)** - 60-second setup and basic usage
+- **[CLAUDE.md](CLAUDE.md)** - Developer guide for Claude Code users
+- **[docs/POSTSETUP_MANIFEST.md](docs/POSTSETUP_MANIFEST.md)** - Post-installation reference
+
+### External Resources
 
 - [LiteLLM Docs](https://docs.litellm.ai/)
 - [FastAPI Guide](https://fastapi.tiangolo.com/)

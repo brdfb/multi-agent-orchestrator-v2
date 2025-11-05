@@ -26,6 +26,18 @@ Artık aşağıdaki komutlar **her yerden** çalışır:
 | `mao-dir` | Orchestrator dizinine git (`~/.orchestrator`) |
 | `mao-status` | Git durumunu kontrol et |
 | `mao-update` | Sistemi güncelle (git pull) |
+| `mao-last-chain` | Son chain çalıştırmasının detaylarını göster |
+| `mao-logs [N]` | Son N konuşmayı listele (varsayılan: 10) |
+
+### Memory (Konuşma Hafızası) Komutları
+
+| Komut | Açıklama | Örnek |
+|-------|----------|-------|
+| `make memory-search Q="..."` | Konuşmalarda arama yap | `make memory-search Q="JWT" AGENT=builder` |
+| `make memory-recent LIMIT=N` | Son N konuşmayı göster | `make memory-recent LIMIT=20` |
+| `make memory-stats` | Hafıza istatistiklerini göster | `make memory-stats` |
+| `make memory-export FORMAT=json` | Tüm konuşmaları dışa aktar | `make memory-export FORMAT=json > backup.json` |
+| `make memory-cleanup DAYS=N CONFIRM=1` | N günden eski konuşmaları sil | `make memory-cleanup DAYS=90 CONFIRM=1` |
 
 ## 📍 Önemli Lokasyonlar
 
@@ -317,9 +329,24 @@ cd ~/.orchestrator && git pull && make install
 
 ---
 
-**Sistem Versiyonu:** 0.3.0
+**Sistem Versiyonu:** 0.5.0
 **Kurulum Tarihi:** Otomatik tespit edilir
 **Destek:** `~/.orchestrator/docs/` altındaki tüm dokümantasyon
+
+## 🆕 v0.5.0 Yenilikleri
+
+- ✅ **Token limit optimizasyonu** - Builder: 9000, Critic: 7000, Closer: 9000 tokens (truncation tamamen çözüldü)
+- ✅ **İdiot-proof dokümantasyon** - NASIL_ÇALIŞIR.md (teknik olmayan, sade Türkçe anlatım)
+- ✅ **Gelişmiş CLI komutları** - `mao-last-chain`, `mao-logs` komutları eklendi
+- ✅ **Memory system komutları** - Konuşma arama, istatistik ve export komutları
+
+## 🆕 v0.4.0 Yenilikleri
+
+- ✅ **Semantic Search Memory** - Çok dilli (50+ dil) anlam bazlı konuşma hafızası
+- ✅ **Multilingual Support** - Türkçe ekleri otomatik tanıyor ("chart" → "chart'ı", "chart'a")
+- ✅ **Context Injection** - Önceki konuşmalar otomatik bulunup ekleniyor
+- ✅ **Memory Strategies** - semantic, hybrid, keywords arama stratejileri
+- ✅ **SQLite Memory Database** - data/MEMORY/conversations.db ile kalıcı hafıza
 
 ## 🆕 v0.3.0 Yenilikleri
 

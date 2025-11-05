@@ -5,6 +5,54 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - 2025-11-05
+
+### Added - Comprehensive Documentation Suite
+
+- **Idiot-Proof Documentation**
+  - `NASIL_ÇALIŞIR.md` (Turkish) - Non-technical explanation with 5-year-old level analogies
+  - `HOW_IT_WORKS.md` (English) - Complete English version of idiot-proof guide
+  - Restaurant analogy, ASCII diagrams, real-world examples
+  - FAQ section covering common questions from non-technical users
+
+- **Specialized Guides**
+  - `MEMORY_GUIDE.md` - User-friendly memory system documentation
+    - How semantic search works with multilingual examples
+    - Search strategies comparison (semantic, keywords, hybrid)
+    - Real-world use cases and best practices
+    - Complete CLI command reference for memory operations
+  - `TROUBLESHOOTING.md` - Common issues and solutions
+    - Installation, API key, agent execution issues
+    - Memory system debugging
+    - Network and performance optimization
+    - Complete reset procedures
+
+### Changed - Documentation Updates
+
+- **QUICKSTART.md**
+  - Added Multi-Agent Chains section with `mao-chain` examples
+  - Added semantic search explanation with multilingual support details
+  - Enhanced memory system documentation with real examples
+
+- **CLAUDE.md**
+  - Updated token limits to current values (Builder: 9000, Critic: 7000, Closer: 9000)
+  - Added progression history showing token limit evolution (2500→4096→8000→9000)
+  - Documented cost optimization rationale (9K chosen over 32K for 4x savings)
+
+- **docs/POSTSETUP_MANIFEST.md**
+  - Added new CLI commands: `mao-last-chain`, `mao-logs`
+  - Added complete Memory Commands section with all `make memory-*` commands
+  - Updated version to 0.5.0
+  - Added v0.4.0 and v0.5.0 changelog sections
+
+### Token Limit Optimization
+
+- Finalized token limits after testing:
+  - Builder: 9000 tokens (includes 1K buffer for complex responses)
+  - Critic: 7000 tokens (includes 1K buffer for detailed analysis)
+  - Closer: 9000 tokens (includes 1K buffer for comprehensive synthesis)
+  - Chosen over 32K maximum for cost efficiency (4x cheaper) and speed (3x faster)
+
 ## [0.4.0] - 2025-11-05
 
 ### Added - Semantic Search for Memory Context

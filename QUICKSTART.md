@@ -55,12 +55,30 @@ curl -X POST http://localhost:5050/ask \
 
 ## Multi-Agent Chains
 
-Run coordinated workflows:
+Run coordinated workflows (builder → critic → closer):
+
+**Option 1: Using mao-chain (Interactive)**
+```bash
+mao-chain
+# Prompts for input
+
+# Or direct:
+mao-chain "Design a scalable e-commerce platform"
+
+# Save output to file:
+mao-chain "Design a system" --save-to report.md
+```
+
+**Option 2: Using Makefile**
 ```bash
 make agent-chain Q="Design a scalable system"
 ```
 
-Flow: builder creates → critic reviews → closer summarizes
+**View chain results:**
+```bash
+mao-last-chain   # View last chain execution details
+mao-logs         # View recent conversations
+```
 
 ## Key Endpoints
 
@@ -96,10 +114,15 @@ agents:
 
 ## Conversation Memory
 
-Search and manage past conversations:
+### Semantic Search (Multilingual!)
+
+The memory system uses **semantic search** to understand meaning, not just keywords:
 
 ```bash
-# Search conversations by keyword
+# Searches work even with Turkish suffixes:
+# "Helm chart" finds "chart'a", "chart'ı", etc.
+
+# Search conversations
 make memory-search Q="authentication" AGENT=builder
 
 # View recent conversations
@@ -115,7 +138,27 @@ make memory-export FORMAT=json > backup.json
 make memory-cleanup DAYS=90 CONFIRM=1
 ```
 
-Memory system automatically stores conversations and injects relevant context into agent prompts (configurable in `config/agents.yaml`).
+**How it works:**
+- Automatically stores all conversations with embeddings
+- Semantic search finds related conversations (not just keyword matching)
+- Supports 50+ languages including Turkish, Arabic, Chinese
+- Automatically injects relevant context into new prompts
+
+**Example:**
+```
+First prompt: "Create Kubernetes Helm chart"
+Second prompt: "Add monitoring to previous chart"
+→ Memory finds first conversation automatically! ✅
+```
+
+Configure in `config/agents.yaml`:
+```yaml
+builder:
+  memory_enabled: true
+  memory:
+    strategy: "semantic"  # or "hybrid" or "keywords"
+    max_context_tokens: 600
+```
 
 ## File Structure
 
