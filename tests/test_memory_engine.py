@@ -424,7 +424,7 @@ class TestMemoryEngine:
     def test_time_decay_scoring(self, temp_db):
         """Test that time decay reduces score for older conversations."""
         import time
-        from datetime import datetime, timedelta
+        from datetime import datetime, timedelta, timezone
 
         engine = MemoryEngine()
 
@@ -439,7 +439,7 @@ class TestMemoryEngine:
 
         # Manually update timestamp to simulate older conversation
         time.sleep(0.1)
-        old_timestamp = (datetime.utcnow() - timedelta(hours=48)).isoformat()
+        old_timestamp = (datetime.now(timezone.utc) - timedelta(hours=48)).isoformat()
         conn = engine.backend._get_connection()
         cursor = conn.cursor()
         cursor.execute(
@@ -620,7 +620,7 @@ class TestMemoryEngine:
     def test_empty_query_uses_time_decay(self, temp_db):
         """Test that empty query uses only time decay (no keyword score)."""
         import time
-        from datetime import datetime, timedelta
+        from datetime import datetime, timedelta, timezone
 
         engine = MemoryEngine()
 
@@ -634,7 +634,7 @@ class TestMemoryEngine:
         )
 
         # Update to old timestamp
-        old_timestamp = (datetime.utcnow() - timedelta(hours=72)).isoformat()
+        old_timestamp = (datetime.now(timezone.utc) - timedelta(hours=72)).isoformat()
         conn = engine.backend._get_connection()
         cursor = conn.cursor()
         cursor.execute(

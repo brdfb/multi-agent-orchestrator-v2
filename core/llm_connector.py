@@ -34,8 +34,20 @@ class LLMConnector:
         litellm.suppress_debug_info = True
 
     def _extract_provider(self, model: str) -> str:
-        """Extract provider name from model string."""
-        return model.split("/")[0] if "/" in model else "unknown"
+        """
+        Extract provider name from model string.
+
+        Maps LiteLLM model prefixes to canonical provider names.
+        Example: "gemini/gemini-2.5-pro" → "google"
+        """
+        prefix = model.split("/")[0] if "/" in model else "unknown"
+
+        # Map LiteLLM prefixes to canonical provider names
+        provider_map = {
+            "gemini": "google",  # gemini/* models use GOOGLE_API_KEY
+        }
+
+        return provider_map.get(prefix, prefix)
 
     def _try_model(
         self,

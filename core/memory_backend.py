@@ -2,7 +2,7 @@
 
 import json
 import sqlite3
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -90,7 +90,7 @@ class SQLiteBackend:
         cursor = conn.cursor()
 
         # Extract fields
-        timestamp = conversation.get("timestamp", datetime.utcnow().isoformat())
+        timestamp = conversation.get("timestamp", datetime.now(timezone.utc).isoformat())
         agent = conversation.get("agent", "unknown")
         model = conversation.get("model", "unknown")
         provider = conversation.get("provider", "unknown")
@@ -360,7 +360,7 @@ class SQLiteBackend:
         conn = self._get_connection()
         cursor = conn.cursor()
 
-        cutoff_date = datetime.utcnow().replace(
+        cutoff_date = datetime.now(timezone.utc).replace(
             hour=0, minute=0, second=0, microsecond=0
         )
         cutoff_date = cutoff_date.replace(day=cutoff_date.day - days)

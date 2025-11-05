@@ -90,7 +90,7 @@ class TestLLMConnectorFallback:
             model="anthropic/claude-3-5-sonnet-20241022",
             system="Test system",
             user="Test user",
-            fallback_order=["openai/gpt-4o-mini", "google/gemini-1.5-pro"],
+            fallback_order=["openai/gpt-4o-mini", "gemini/gemini-2.5-pro"],
         )
 
         # Assert: Error returned
@@ -150,7 +150,7 @@ class TestLLMConnectorFallback:
             model="anthropic/claude-3-5-sonnet-20241022",
             system="Test system",
             user="Test user",
-            fallback_order=["openai/gpt-4o-mini", "google/gemini-1.5-pro"],
+            fallback_order=["openai/gpt-4o-mini", "gemini/gemini-2.5-pro"],
         )
 
         # Assert: Error after all fallbacks exhausted
