@@ -294,13 +294,14 @@ class AgentRuntime:
 
         return result
 
-    def chain(self, prompt: str, stages: Optional[List[str]] = None) -> List[RunResult]:
+    def chain(self, prompt: str, stages: Optional[List[str]] = None, progress_callback=None) -> List[RunResult]:
         """
         Execute multi-agent chain.
 
         Args:
             prompt: Initial user prompt
             stages: List of agent names (default: builder -> critic -> closer)
+            progress_callback: Optional function(stage_num, total, agent_name) to report progress
 
         Returns:
             List of RunResults from each stage
@@ -312,6 +313,9 @@ class AgentRuntime:
         context = prompt
 
         for i, agent in enumerate(stages):
+            # Report progress if callback provided
+            if progress_callback:
+                progress_callback(i + 1, len(stages), agent)
             # For stages after the first, add context from previous
             if i > 0:
                 agent_cfg = self.config["agents"].get(agent, {})
