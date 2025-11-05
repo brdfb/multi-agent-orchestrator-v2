@@ -20,12 +20,12 @@ agent-ask:
 
 agent-chain:
 	@if [ -z "$(Q)" ]; then \
-		echo "Usage: make agent-chain Q='<question>'"; \
+		echo "Usage: make agent-chain Q='<question>' [STAGES='agent1 agent2...']"; \
+		echo "  Example: make agent-chain Q='Design API'"; \
+		echo "  Example: make agent-chain Q='Review code' STAGES='builder critic'"; \
 		exit 1; \
 	fi
-	. .venv/bin/activate && curl -X POST http://localhost:5050/chain \
-		-H "Content-Type: application/json" \
-		-d '{"prompt": "$(Q)"}'
+	. .venv/bin/activate && python scripts/chain_runner.py "$(Q)" $(STAGES)
 
 agent-last:
 	@ls -t data/CONVERSATIONS/*.json 2>/dev/null | head -1 | xargs cat | python3 -m json.tool || echo "No logs found"

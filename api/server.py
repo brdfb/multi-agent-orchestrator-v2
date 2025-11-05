@@ -82,7 +82,7 @@ class RunResultResponse(BaseModel):
     model: str
     provider: str
     prompt: str
-    response: str
+    response: Optional[str] = None  # Can be None when error occurs
     duration_ms: float
     prompt_tokens: int
     completion_tokens: int
@@ -90,6 +90,9 @@ class RunResultResponse(BaseModel):
     timestamp: str
     log_file: str
     error: Optional[str] = None
+    original_model: Optional[str] = None  # If fallback was used
+    fallback_reason: Optional[str] = None  # Why fallback was triggered
+    fallback_used: bool = False
 
 
 # API endpoints

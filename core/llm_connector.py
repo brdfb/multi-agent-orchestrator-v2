@@ -85,6 +85,19 @@ class LLMConnector:
                 # Extract text
                 text = response.choices[0].message.content
 
+                # Check for empty/filtered content
+                if text is None or (isinstance(text, str) and not text.strip()):
+                    # Check finish_reason for filtering
+                    finish_reason = response.choices[0].finish_reason if hasattr(response.choices[0], 'finish_reason') else None
+
+                    if finish_reason in ['content_filter', 'safety']:
+                        return None, f"Content filtered by provider (reason: {finish_reason})"
+                    elif completion_tokens := (response.usage.completion_tokens if response.usage else 0):
+                        # Model generated tokens but returned empty content - unusual
+                        return None, f"Empty response despite {completion_tokens} completion tokens (possible content filter)"
+                    else:
+                        return None, "Empty response from model"
+
                 # Extract usage
                 usage = response.usage
                 prompt_tokens = usage.prompt_tokens if usage else 0

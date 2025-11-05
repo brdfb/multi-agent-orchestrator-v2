@@ -46,6 +46,9 @@ class RunResult:
             "timestamp": self.timestamp,
             "log_file": self.log_file,
             "error": self.error,
+            "original_model": self.original_model,
+            "fallback_reason": self.fallback_reason,
+            "fallback_used": self.fallback_used,
         }
 
 
