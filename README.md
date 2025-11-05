@@ -221,13 +221,43 @@ curl http://localhost:5050/metrics
 
 ### Multi-Agent Chains
 
-Run coordinated workflows:
+Run coordinated workflows with real-time progress:
 
 ```bash
 make agent-chain Q="Design a scalable chat system"
 ```
 
-Default flow: builder creates → critic reviews → closer summarizes actions
+**Features:**
+- 🔄 **Progress indicators**: See which agent is running in real-time
+- ⚠️  **Fallback transparency**: Shows model fallback reasons (e.g., missing API keys)
+- 📊 **Full output**: No truncation - see complete responses from all agents
+- 🧠 **Smart context**: Closer sees ALL previous stages for better synthesis
+
+**Output example:**
+```
+🔗 Running chain: builder → critic → closer
+📝 Prompt: Design a scalable chat system
+
+🔄 Stage 1/3: Running BUILDER...
+[Full builder response with code examples]
+
+🔄 Stage 2/3: Running CRITIC...
+[Full critic analysis with specific issues]
+
+🔄 Stage 3/3: Running CLOSER...
+[Synthesized plan addressing all concerns]
+
+✅ Chain completed successfully!
+Total duration: 45.2s | Total tokens: 7,391
+```
+
+**Custom stages:**
+```bash
+# Run specific agents
+make agent-chain Q="Review security" STAGES="critic closer"
+```
+
+Default flow: builder creates → critic reviews → closer synthesizes + decides
 
 ## 🧠 Memory System
 

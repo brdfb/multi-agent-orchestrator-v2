@@ -5,6 +5,70 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2025-11-05
+
+### Added - Chain Improvements
+- **Progress indicators** for chain execution (`🔄 Stage X/Y: Running AGENT...`)
+- **Full output display** - removed 2000 character truncation limit
+- **Fallback transparency** - shows detailed reasons for model fallbacks
+  - `Missing API key for provider 'X'`
+  - `Authentication failed for provider 'Y'`
+  - `Empty response despite N tokens (possible content filter)`
+- **Chain context optimization** - Closer agent now sees ALL previous stages (builder + critic)
+- **Smart context truncation** - 1500 chars per stage for closer, 600-1000 for others
+- **Progress callback system** in `AgentRuntime.chain()`
+
+### Added - Google/Gemini Integration
+- Complete Google Gemini model support
+- Provider mapping: `gemini/*` models → `google` provider → `GOOGLE_API_KEY`
+- Updated model versions: `gemini-2.5-pro`, `gemini-2.0-flash`, `gemini-flash-latest`
+- Intelligent multi-provider fallback (premium → free)
+- Cost table for all Gemini models
+
+### Added - Error Handling
+- Empty/filtered response detection
+- Content filter detection (`content_filter`, `safety` finish reasons)
+- Detailed error messages with automatic fallback triggering
+- None-safe data masking in logging
+
+### Improved - Agent System Prompts
+- **Builder**: No fluff, concrete code examples required, technical accuracy checks
+- **Critic**: Prioritized issues (Technical > Security > Performance), constructive feedback
+- **Closer**: MUST synthesize all stages, MUST fix technical errors, MUST address critic's concerns
+- **Router**: Clearer routing rules with examples
+
+### Improved - Token Limits
+- Builder: 2000 → 2500 tokens (+25% for detailed code)
+- Critic: 1500 → 2000 tokens (+33% for thorough analysis)
+- Closer: 1000 → 1800 tokens (+80% for comprehensive synthesis)
+
+### Improved - Temperature Settings
+- Builder: 0.3 → 0.2 (more deterministic)
+- Critic: 0.4 → 0.3 (more consistent)
+- Closer: 0.2 (unchanged)
+
+### Fixed
+- Python 3.12 deprecation warnings (`datetime.utcnow()` → `datetime.now(timezone.utc)`)
+- API response validation (None-safe response field)
+- Pydantic validation errors for empty responses
+- Chain runner CLI (now uses `scripts/chain_runner.py` instead of API)
+
+### Changed
+- API version: 0.1.0 → 0.2.0
+- Makefile `agent-chain` target now uses direct script (faster, better formatting)
+- RunResultResponse model includes fallback metadata
+
+## [0.2.0] - 2025-11-04
+
+### Added
+- Modern AI tool UI redesign (ChatGPT/Claude-inspired aesthetic)
+- Persistent memory system with SQLite backend
+- Memory CLI commands (`memory-search`, `memory-recent`, `memory-stats`)
+- Memory REST API endpoints
+- Context injection with relevance scoring
+- Automated installation script (`setup.sh`)
+- Provider status detection and reporting
+
 ## [0.1.0] - 2025-11-03
 
 ### Added
