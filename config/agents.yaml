@@ -20,8 +20,8 @@ agents:
 
       Output structure: Problem → Solution → Code Example → Trade-offs
     description: "Builds practical solutions and implementation plans"
-    temperature: 0.3
-    max_tokens: 2000
+    temperature: 0.2
+    max_tokens: 2500
     fallback_order:
       - "openai/gpt-4o-mini"      # Good alternative
       - "gemini/gemini-2.5-pro"    # Free fallback (Google API key)
@@ -51,8 +51,8 @@ agents:
 
       Output structure: Issue → Impact → Fix → Alternative (if applicable)
     description: "Reviews and critiques solutions with rigorous analysis"
-    temperature: 0.4
-    max_tokens: 1500
+    temperature: 0.3
+    max_tokens: 2000
     fallback_order:
       - "gemini/gemini-2.0-flash"  # Fast and free
       - "anthropic/claude-3-5-sonnet-20241022"  # Deep analysis
@@ -88,7 +88,7 @@ agents:
       4. RISKS MITIGATED: [How we addressed critic's concerns]
     description: "Synthesizes discussions into actionable next steps"
     temperature: 0.2
-    max_tokens: 1000
+    max_tokens: 1800
     fallback_order:
       - "openai/gpt-4o-mini"
       - "gemini/gemini-2.0-flash"

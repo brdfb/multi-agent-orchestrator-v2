@@ -314,31 +314,55 @@ class AgentRuntime:
         for i, agent in enumerate(stages):
             # For stages after the first, add context from previous
             if i > 0:
-                prev_result = results[-1]
-
-                # Smart context truncation based on agent memory settings
                 agent_cfg = self.config["agents"].get(agent, {})
                 has_memory = agent_cfg.get("memory_enabled", False)
 
-                # Memory-enabled agents can handle more context (they have history)
-                # Non-memory agents need fuller immediate context
-                max_chars = 300 if has_memory else 500
+                # Special handling for closer: needs ALL previous stages
+                if agent == "closer":
+                    # Closer sees full conversation history for synthesis
+                    context = f"Original request: {prompt}\n\n"
 
-                # Intelligent truncation: try to end at sentence boundary
-                response_text = prev_result.response
-                if len(response_text) > max_chars:
-                    truncated = response_text[:max_chars]
-                    # Find last sentence end
-                    last_period = max(truncated.rfind('.'), truncated.rfind('!'), truncated.rfind('?'))
-                    if last_period > max_chars * 0.5:  # If sentence end is in second half
-                        response_text = truncated[:last_period + 1]
-                    else:
-                        response_text = truncated + "..."
+                    for prev in results:
+                        # More generous truncation for closer (needs full context)
+                        max_chars = 1500
+                        response_text = prev.response
 
-                summary = f"Previous {prev_result.agent} output:\n{response_text}"
-                context = (
-                    f"Original request: {prompt}\n\n{summary}\n\nYour task as {agent}:"
-                )
+                        if len(response_text) > max_chars:
+                            truncated = response_text[:max_chars]
+                            # Find last sentence end
+                            last_period = max(truncated.rfind('.'), truncated.rfind('!'), truncated.rfind('?'))
+                            if last_period > max_chars * 0.5:
+                                response_text = truncated[:last_period + 1]
+                            else:
+                                response_text = truncated + "..."
+
+                        context += f"=== {prev.agent.upper()} OUTPUT ===\n{response_text}\n\n"
+
+                    context += f"Your task as {agent}: Synthesize all above outputs into a coherent final plan."
+
+                else:
+                    # Standard sequential: critic sees builder, etc.
+                    prev_result = results[-1]
+
+                    # Memory-enabled agents can handle more context (they have history)
+                    # Non-memory agents need fuller immediate context
+                    max_chars = 1000 if not has_memory else 600
+
+                    # Intelligent truncation: try to end at sentence boundary
+                    response_text = prev_result.response
+                    if len(response_text) > max_chars:
+                        truncated = response_text[:max_chars]
+                        # Find last sentence end
+                        last_period = max(truncated.rfind('.'), truncated.rfind('!'), truncated.rfind('?'))
+                        if last_period > max_chars * 0.5:  # If sentence end is in second half
+                            response_text = truncated[:last_period + 1]
+                        else:
+                            response_text = truncated + "..."
+
+                    summary = f"Previous {prev_result.agent} output:\n{response_text}"
+                    context = (
+                        f"Original request: {prompt}\n\n{summary}\n\nYour task as {agent}:"
+                    )
 
             result = self.run(agent=agent, prompt=context)
             results.append(result)
