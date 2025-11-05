@@ -4,6 +4,43 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 🆕 Recent Changes (For Claude Code)
 
+### 2025-11-05: Semantic Search (v0.4.0) - MULTILINGUAL SUPPORT
+**Feature**: Embedding-based semantic search for memory context retrieval
+**Model**: paraphrase-multilingual-MiniLM-L12-v2 (384 dimensions, 50+ languages)
+**Why**: Keyword-based search failed with Turkish prompts (0.25 overlap < 0.3 threshold)
+  - Example: "chart" vs "chart'a" counted as different keywords
+  - Semantic approach: understands meaning despite morphological differences
+
+**Files Changed**:
+- `core/embedding_engine.py` (NEW) - Embedding generation, serialization, cosine similarity
+- `core/memory_engine.py` - Added `_score_semantic()`, `_score_hybrid()`, `_get_or_generate_embedding()`
+- `scripts/migrate_add_embeddings.py` (NEW) - Adds `embedding` BLOB column to conversations table
+- `config/memory.yaml` - Changed `strategy_default: "keywords"` → `"semantic"`
+- `config/agents.yaml` - Builder now uses `strategy: "semantic"`
+- `requirements.txt` - Added `sentence-transformers>=2.2.2` (+1.7GB deps)
+
+**Usage**:
+```bash
+# Test semantic search
+pytest tests/test_memory_engine.py::test_semantic_search -v
+
+# Run migration (if needed)
+python scripts/migrate_add_embeddings.py
+
+# Check model status
+python -c "from core.embedding_engine import get_embedding_engine; print(get_embedding_engine().model_name)"
+```
+
+**Performance**:
+- First load: ~30s (downloads 420MB model)
+- Subsequent: <1s (cached)
+- Embedding: ~50ms per conversation
+- Search: <100ms for 500 candidates
+
+**Strategies**: `semantic` (pure embedding), `hybrid` (70% semantic + 30% keyword), `keywords` (old)
+
+**GOTCHA**: Embeddings generated on-demand for old conversations (NULL → lazy generation)
+
 ### 2025-11-05: Memory System Fix (CRITICAL)
 **Problem**: Memory storage silently failing - conversations not being persisted to database
 **Root Cause**: `LLMResponse` dataclass missing `estimated_cost` field
