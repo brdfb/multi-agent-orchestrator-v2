@@ -79,7 +79,14 @@ mao builder "User authentication için JWT tabanlı sistem oluştur"
 
 ### Senaryo 3: Çoklu Ajan Zinciri
 ```bash
-# Önce oluştur, sonra eleştir, sonra özetle
+# Komut satırından (en kolay)
+mao-chain "Scalable chat sistemi tasarla"
+
+# İnteraktif mod (prompt yazmadan)
+mao-chain
+# Enter your prompt: [buraya yazın]
+
+# API ile
 cd ~/.orchestrator
 curl -X POST http://localhost:5050/chain \
   -H "Content-Type: application/json" \

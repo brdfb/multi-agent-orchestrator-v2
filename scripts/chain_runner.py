@@ -43,18 +43,24 @@ def print_stage_result(result, stage_num: int, total_stages: int):
 
 def main():
     """Main CLI entry point."""
+    # Interactive mode: if no prompt provided, ask for it
     if len(sys.argv) < 2:
-        print("Usage: python scripts/chain_runner.py <prompt> [stages...]")
+        print("🔗 Multi-Agent Chain Runner")
+        print("=" * 80)
         print()
-        print("Examples:")
-        print('  python scripts/chain_runner.py "Design a REST API"')
-        print('  python scripts/chain_runner.py "Review this code" builder critic')
-        print()
-        print("Default stages: builder → critic → closer")
-        sys.exit(1)
+        try:
+            prompt = input("Enter your prompt: ").strip()
+            if not prompt:
+                print("❌ Error: Prompt cannot be empty")
+                sys.exit(1)
+        except (KeyboardInterrupt, EOFError):
+            print("\n\n❌ Cancelled")
+            sys.exit(0)
 
-    prompt = sys.argv[1]
-    stages = sys.argv[2:] if len(sys.argv) > 2 else None
+        stages = None  # Use default stages
+    else:
+        prompt = sys.argv[1]
+        stages = sys.argv[2:] if len(sys.argv) > 2 else None
 
     # Validate stages if provided
     if stages:

@@ -261,6 +261,8 @@ mao-builder "Task"          # Same as: mao builder "Task"
 mao-critic "Code"           # Same as: mao critic "Code"
 mao-closer "Summary"        # Same as: mao closer "Summary"
 mao-auto "Question"         # Same as: mao auto "Question"
+mao-chain "Prompt"          # Multi-agent chain workflow
+mao-chain                   # Interactive mode (prompts you)
 ```
 
 ### Management
