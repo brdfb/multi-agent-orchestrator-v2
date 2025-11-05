@@ -3,7 +3,7 @@
 import json
 import re
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict
 
@@ -40,7 +40,7 @@ def write_json(record: Dict[str, Any]) -> Path:
     CONVERSATIONS_DIR.mkdir(parents=True, exist_ok=True)
 
     # Generate filename
-    timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
     agent = record.get("agent", "unknown")
     unique_id = str(uuid.uuid4())[:8]
     filename = f"{timestamp}-{agent}-{unique_id}.json"

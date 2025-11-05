@@ -37,6 +37,7 @@ def is_provider_enabled(provider: str) -> bool:
 
     Args:
         provider: Provider name (openai, anthropic, google, openrouter)
+                Note: "gemini/*" models are mapped to "google" provider
 
     Returns:
         True if provider is enabled, False otherwise
@@ -233,10 +234,10 @@ COST_TABLE = {
     "anthropic/claude-3-5-sonnet-20241022": {"input": 3.0, "output": 15.0},
     "openai/gpt-4o": {"input": 2.5, "output": 10.0},
     "openai/gpt-4o-mini": {"input": 0.15, "output": 0.6},
-    "google/gemini-1.5-pro": {"input": 1.25, "output": 5.0},
-    "google/gemini-1.5-flash": {"input": 0.075, "output": 0.3},
-    "google/gemini-2.0-flash-exp": {"input": 0.0, "output": 0.0},  # Free tier
-    "google/gemini-2.0-pro-exp": {"input": 0.0, "output": 0.0},  # Experimental
+    "gemini/gemini-2.5-pro": {"input": 1.25, "output": 5.0},
+    "gemini/gemini-2.0-flash": {"input": 0.075, "output": 0.3},
+    "gemini/gemini-flash-latest": {"input": 0.075, "output": 0.3},
+    "gemini/gemini-pro-latest": {"input": 1.25, "output": 5.0},
 }
 
 

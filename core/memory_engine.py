@@ -1,7 +1,7 @@
 """Memory engine for persistent conversation storage and retrieval."""
 
 import math
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Set
 
 from core.memory_backend import SQLiteBackend
@@ -364,7 +364,7 @@ class MemoryEngine:
             age_hours = max(
                 0.0,
                 (
-                    datetime.utcnow() - self._parse_timestamp(rec["timestamp"])
+                    datetime.now(timezone.utc) - self._parse_timestamp(rec["timestamp"])
                 ).total_seconds()
                 / 3600,
             )

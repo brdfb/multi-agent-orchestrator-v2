@@ -203,9 +203,9 @@ class TestChainFallbackE2E:
         result = runtime.run(
             agent="builder",
             prompt="Test",
-            override_model="google/gemini-1.5-pro",
+            override_model="gemini/gemini-2.5-pro",
         )
 
         # Assert: Override used, no fallback metadata
-        assert result.model == "google/gemini-1.5-pro"
+        assert result.model == "gemini/gemini-2.5-pro"
         assert result.original_model is None  # No fallback used

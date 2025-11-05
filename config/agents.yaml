@@ -1,9 +1,9 @@
 # Multi-Agent Orchestrator Configuration
-# Each agent has its own model and fallback_order
+# Intelligent fallback: Premium models → Free alternatives
 
 agents:
   builder:
-    model: "anthropic/claude-3-5-sonnet-20241022"
+    model: "anthropic/claude-3-5-sonnet-20241022"  # Best for building
     system: |
       You are a pragmatic builder agent. Your role is to:
       - Analyze requirements and create actionable implementation plans
@@ -15,8 +15,8 @@ agents:
     temperature: 0.3
     max_tokens: 2000
     fallback_order:
-      - "openai/gpt-4o-mini"
-      - "google/gemini-1.5-pro"
+      - "openai/gpt-4o-mini"      # Good alternative
+      - "gemini/gemini-2.5-pro"    # Free fallback (Google API key)
     memory_enabled: true
     memory:
       max_context_tokens: 600
@@ -26,7 +26,7 @@ agents:
       exclude_same_turn: true
 
   critic:
-    model: "openai/gpt-4o-mini"
+    model: "openai/gpt-4o-mini"    # Fast for code review
     system: |
       You are a ruthless code reviewer and critic. Your role is to:
       - Identify bugs, security vulnerabilities, and edge cases
@@ -38,9 +38,8 @@ agents:
     temperature: 0.4
     max_tokens: 1500
     fallback_order:
-      - "google/gemini-2.0-flash-exp"
-      - "anthropic/claude-3-5-sonnet-20241022"
-      - "openai/gpt-4o"
+      - "gemini/gemini-2.0-flash"  # Fast and free
+      - "anthropic/claude-3-5-sonnet-20241022"  # Deep analysis
     memory_enabled: true
     memory:
       max_context_tokens: 500
@@ -50,7 +49,7 @@ agents:
       exclude_same_turn: true
 
   closer:
-    model: "google/gemini-1.5-pro"
+    model: "gemini/gemini-2.5-pro"  # Good for summaries, free
     system: |
       You are a decisive closer agent. Your role is to:
       - Synthesize discussions into clear action items
@@ -62,13 +61,12 @@ agents:
     temperature: 0.2
     max_tokens: 1000
     fallback_order:
-      - "google/gemini-2.0-flash-exp"
       - "openai/gpt-4o-mini"
-      - "anthropic/claude-3-5-sonnet-20241022"
+      - "gemini/gemini-2.0-flash"
     memory_enabled: false  # Closer doesn't need history context
 
   router:
-    model: "openai/gpt-4o-mini"
+    model: "gemini/gemini-flash-latest"  # Fast routing, free
     system: |
       You are a routing agent. Analyze the user's prompt and return ONLY ONE WORD:
       - "builder" - for implementation, coding, or creation tasks
@@ -80,7 +78,5 @@ agents:
     temperature: 0.1
     max_tokens: 10
     fallback_order:
-      - "google/gemini-2.0-flash-exp"
-      - "anthropic/claude-3-5-sonnet-20241022"
-      - "google/gemini-1.5-flash"
+      - "openai/gpt-4o-mini"
     memory_enabled: false  # Router doesn't need context

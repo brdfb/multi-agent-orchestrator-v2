@@ -34,12 +34,12 @@ def test_override_model_used():
             mock_write.return_value = Path("test.json")
 
             result = runtime.run(
-                "builder", "test", override_model="google/gemini-1.5-flash"
+                "builder", "test", override_model="gemini/gemini-flash-latest"
             )
 
             # Verify override model was used
-            assert model_used == "google/gemini-1.5-flash"
-            assert result.model == "google/gemini-1.5-flash"
+            assert model_used == "gemini/gemini-flash-latest"
+            assert result.model == "gemini/gemini-flash-latest"
 
 
 def test_default_model_used_without_override():

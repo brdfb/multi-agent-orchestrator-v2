@@ -1,7 +1,7 @@
 """Agent runtime orchestration."""
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from config.settings import load_agents_config, load_memory_config
@@ -58,7 +58,7 @@ class AgentRuntime:
         self.connector = LLMConnector(retry_count=1)
         self._memory = None  # Lazy initialization
         # Generate session ID for this runtime instance
-        self.session_id = datetime.utcnow().isoformat()
+        self.session_id = datetime.now(timezone.utc).isoformat()
 
     @property
     def memory(self) -> MemoryEngine:
@@ -216,7 +216,7 @@ class AgentRuntime:
         )
 
         # Create log record
-        timestamp = datetime.utcnow().isoformat()
+        timestamp = datetime.now(timezone.utc).isoformat()
         log_record = {
             "agent": agent,
             "model": llm_response.model,

@@ -370,7 +370,7 @@ builder:
   fallback_order:
     - "openai/gpt-4o"
     - "openai/gpt-4o-mini"
-    - "google/gemini-2.0-flash-exp"
+    - "gemini/gemini-2.0-flash-exp"
 ```
 
 If Anthropic is unavailable, builder automatically tries OpenAI, then Google.
