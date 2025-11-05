@@ -59,7 +59,9 @@ cat >> ~/.bashrc <<'EOF'
 # >>> Multi-Agent Orchestrator Integration >>>
 export ORCHESTRATOR_HOME="$HOME/.orchestrator"
 export PYTHONPATH="$ORCHESTRATOR_HOME:$PYTHONPATH"
-alias mao="python3 $ORCHESTRATOR_HOME/scripts/agent_runner.py"
+
+# Quick access alias (uses venv Python to avoid module errors)
+alias mao="$ORCHESTRATOR_HOME/.venv/bin/python $ORCHESTRATOR_HOME/scripts/agent_runner.py"
 # <<< Multi-Agent Orchestrator Integration <<<
 EOF
 
@@ -432,10 +434,24 @@ echo $PYTHONPATH
 ~/setup_orchestrator_local.sh
 ```
 
-### "ModuleNotFoundError: litellm"
+### "ModuleNotFoundError: dotenv" or "ModuleNotFoundError: litellm"
+
+**Problem:** System Python doesn't have required packages installed.
+
+**Solution:** The `mao` alias must use the virtual environment Python:
 
 ```bash
-# Install dependencies
+# Fix the alias in ~/.bashrc
+# Change this:
+alias mao="python3 $ORCHESTRATOR_HOME/scripts/agent_runner.py"
+
+# To this:
+alias mao="$ORCHESTRATOR_HOME/.venv/bin/python $ORCHESTRATOR_HOME/scripts/agent_runner.py"
+
+# Then reload
+source ~/.bashrc
+
+# Or reinstall dependencies
 cd ~/.orchestrator
 make install
 ```
@@ -549,5 +565,12 @@ nano ~/.bashrc
 
 ---
 
-**Version:** 0.1.0 - Local Integration
-**Updated:** 2025-11-03
+**Version:** 0.3.0 - Local Integration
+**Updated:** 2025-11-05
+
+**Recent Updates:**
+- ✅ Fixed `mao` alias to use venv Python (prevents ModuleNotFoundError)
+- ✅ Added Web UI information (localhost:5050)
+- ✅ Chain workflow support with progress indicators
+- ✅ Google Gemini integration
+- ✅ Enhanced troubleshooting section

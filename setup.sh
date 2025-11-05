@@ -41,7 +41,7 @@ need_cmd() { command -v "$1" >/dev/null 2>&1; }
 
 echo ""
 echo "╔═══════════════════════════════════════════════╗"
-echo "║   Multi-Agent Orchestrator Setup (v0.2.0)    ║"
+echo "║   Multi-Agent Orchestrator Setup (v0.3.0)    ║"
 echo "╚═══════════════════════════════════════════════╝"
 echo ""
 

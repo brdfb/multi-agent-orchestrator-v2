@@ -179,13 +179,35 @@ Detaylı rehberler:
 source ~/.bashrc  # Aliasları yükle
 ```
 
+### "ModuleNotFoundError: No module named 'dotenv'" veya benzeri
+
+**Problem:** `mao` komutu sistem Python'unu kullanıyor, virtual environment'daki paketleri bulamıyor.
+
+**Çözüm:**
+```bash
+# ~/.bashrc dosyasındaki alias'ı düzelt
+nano ~/.bashrc
+
+# Şunu bul:
+alias mao="python3 $ORCHESTRATOR_HOME/scripts/agent_runner.py"
+
+# Şuna değiştir:
+alias mao="$ORCHESTRATOR_HOME/.venv/bin/python $ORCHESTRATOR_HOME/scripts/agent_runner.py"
+
+# Kaydet ve yenile
+source ~/.bashrc
+
+# Test et
+mao auto "test"
+```
+
 ### "No API keys detected"
 ```bash
 echo $OPENAI_API_KEY  # Kontrol et
 cd ~/.orchestrator && cat .env  # veya .env kontrol
 ```
 
-### "Module not found"
+### "Module not found" (paket eksikliği)
 ```bash
 cd ~/.orchestrator
 make install  # Bağımlılıkları yeniden kur
@@ -288,9 +310,19 @@ cd ~/.orchestrator && git pull && make install
 
 ---
 
-**Sistem Versiyonu:** 0.1.0
+**Sistem Versiyonu:** 0.3.0
 **Kurulum Tarihi:** Otomatik tespit edilir
 **Destek:** `~/.orchestrator/docs/` altındaki tüm dokümantasyon
+
+## 🆕 v0.3.0 Yenilikleri
+
+- ✅ **Chain workflows** - Multi-agent zincirleri (builder → critic → closer)
+- ✅ **Google Gemini desteği** - Gemini 2.5 Pro, 2.0 Flash entegrasyonu
+- ✅ **İlerleme göstergeleri** - Gerçek zamanlı stage tracking
+- ✅ **Fallback şeffaflığı** - Model değişim sebepleri gösteriliyor
+- ✅ **Akıllı context** - Closer tüm önceki stage'leri görüyor
+- ✅ **Optimized prompts** - Daha teknik, daha az "fluff"
+- ✅ **Düzeltme:** `mao` alias artık venv Python kullanıyor (ModuleNotFoundError çözüldü)
 
 ```
 ╔══════════════════════════════════════════════════════════════╗
