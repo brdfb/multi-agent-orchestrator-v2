@@ -15,10 +15,40 @@ client = TestClient(app)
 
 
 def test_health_endpoint():
-    """Test health check returns 200."""
+    """Test health check returns 200 with comprehensive metrics."""
     response = client.get("/health")
     assert response.status_code == 200
-    assert response.json()["status"] == "ok"
+
+    data = response.json()
+
+    # Status should be one of the valid health states
+    assert data["status"] in ["healthy", "degraded", "unhealthy"]
+
+    # Core fields
+    assert data["service"] == "multi-agent-orchestrator"
+    assert data["version"] == "0.5.0"
+    assert "timestamp" in data
+
+    # Provider info
+    assert "providers" in data
+    assert "available_providers" in data
+    assert "total_available" in data
+
+    # New monitoring fields
+    assert "memory" in data
+    assert "system" in data
+    assert "stats_24h" in data
+
+    # Memory should have these fields
+    assert "enabled" in data["memory"]
+    assert "database_connected" in data["memory"]
+
+    # System metrics
+    assert "uptime_seconds" in data["system"]
+    assert "data_directory_size_mb" in data["system"]
+
+    # 24h stats
+    assert "total_tokens" in data["stats_24h"]
 
 
 def test_ask_endpoint_empty_prompt():
