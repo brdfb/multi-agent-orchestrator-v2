@@ -34,12 +34,8 @@ def print_stage_result(result, stage_num: int, total_stages: int):
     print("\nResponse:")
     print("-" * 80)
     if result.response:
-        # Truncate very long responses for readability
-        if len(result.response) > 2000:
-            print(result.response[:2000])
-            print(f"\n... [truncated {len(result.response) - 2000} characters] ...")
-        else:
-            print(result.response)
+        # Show full response (no truncation)
+        print(result.response)
     else:
         print("[No response]")
     print("-" * 80)
@@ -81,12 +77,17 @@ def main():
     stage_list = stages or ["builder", "critic", "closer"]
     print(f"🔗 Running chain: {' → '.join(stage_list)}")
     print(f"📝 Prompt: {prompt}")
+    print()
 
-    # Run chain
+    # Progress callback
+    def show_progress(stage_num, total, agent_name):
+        print(f"🔄 Stage {stage_num}/{total}: Running {agent_name.upper()}...", flush=True)
+
+    # Run chain with progress indicators
     runtime = AgentRuntime()
 
     try:
-        results = runtime.chain(prompt=prompt, stages=stages)
+        results = runtime.chain(prompt=prompt, stages=stages, progress_callback=show_progress)
     except Exception as e:
         print(f"\n❌ Chain failed: {str(e)}")
         sys.exit(1)
