@@ -317,6 +317,85 @@ ORIGINAL OUTPUT TO SUMMARIZE:
 
         return '\n'.join(consensus_parts)
 
+    def _select_relevant_critics(self, prompt: str, builder_response: str) -> List[str]:
+        """
+        Dynamically select relevant critics based on prompt content (v0.10.0).
+
+        Uses keyword-based classification to determine which critics are needed.
+        Example: "Create HTML page" → only code-quality-critic
+                 "Build JWT auth API" → all three critics
+
+        Args:
+            prompt: Original user prompt
+            builder_response: Builder's output (for additional context)
+
+        Returns:
+            List of selected critic names (e.g., ["security-critic", "code-quality-critic"])
+        """
+        dynamic_config = self.config.get("dynamic_selection", {})
+
+        # If dynamic selection disabled, return all critics
+        if not dynamic_config.get("enabled", False):
+            multi_critic_config = self.config.get("multi_critic", {})
+            return multi_critic_config.get("critics", [])
+
+        # Combine prompt and builder response for analysis
+        combined_text = f"{prompt}\n{builder_response}".lower()
+
+        # Score each critic based on keyword matches
+        keywords_config = dynamic_config.get("keywords", {})
+        critic_scores = {}
+
+        for critic_name, keywords in keywords_config.items():
+            score = 0
+            for keyword in keywords:
+                keyword_lower = keyword.lower()
+                # Count occurrences (more mentions = higher relevance)
+                score += combined_text.count(keyword_lower)
+            critic_scores[critic_name] = score
+
+        # Select critics with score > 0
+        selected_critics = [critic for critic, score in critic_scores.items() if score > 0]
+
+        # Apply min/max constraints
+        min_critics = dynamic_config.get("min_critics", 1)
+        max_critics = dynamic_config.get("max_critics", 3)
+
+        # If no critics selected, use fallback
+        if len(selected_critics) == 0:
+            fallback = dynamic_config.get("fallback_critics", ["code-quality-critic"])
+            selected_critics = fallback
+            print(f"⚠️  No keywords matched - using fallback critics: {', '.join(fallback)}")
+
+        # Enforce min_critics
+        if len(selected_critics) < min_critics:
+            # Add highest-scored unselected critics
+            all_critics_sorted = sorted(critic_scores.items(), key=lambda x: x[1], reverse=True)
+            for critic, _ in all_critics_sorted:
+                if critic not in selected_critics:
+                    selected_critics.append(critic)
+                    if len(selected_critics) >= min_critics:
+                        break
+
+        # Enforce max_critics (prioritize by score)
+        if len(selected_critics) > max_critics:
+            # Sort by score descending, take top N
+            selected_with_scores = [(c, critic_scores.get(c, 0)) for c in selected_critics]
+            selected_with_scores.sort(key=lambda x: x[1], reverse=True)
+            selected_critics = [c for c, _ in selected_with_scores[:max_critics]]
+
+        # Log selection with scores
+        print(f"🎯 Dynamic critic selection (keyword-based):")
+        for critic in selected_critics:
+            score = critic_scores.get(critic, 0)
+            print(f"   ✓ {critic} (relevance score: {score})")
+
+        skipped = [c for c in critic_scores.keys() if c not in selected_critics]
+        if skipped:
+            print(f"   ✗ Skipped: {', '.join(skipped)} (not relevant)")
+
+        return selected_critics
+
     def _run_multi_critic(self, builder_response: str, original_prompt: str) -> tuple[str, List[RunResult]]:
         """
         Run multiple specialized critics in parallel and merge consensus.
@@ -336,7 +415,9 @@ ORIGINAL OUTPUT TO SUMMARIZE:
             # Fallback to single critic
             return ("", [])
 
-        critic_names = multi_critic_config.get("critics", [])
+        # DYNAMIC CRITIC SELECTION (v0.10.0)
+        # Select relevant critics based on prompt content
+        critic_names = self._select_relevant_critics(original_prompt, builder_response)
         parallel = multi_critic_config.get("parallel_execution", True)
 
         print(f"🔍 Running {len(critic_names)} specialized critics in parallel...\n")

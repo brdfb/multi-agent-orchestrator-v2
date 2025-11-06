@@ -445,6 +445,10 @@ def test_run_multi_critic_with_mock():
     """Test multi-critic execution with mocked LLM calls."""
     runtime = AgentRuntime()
 
+    # Temporarily disable dynamic selection for this test (to test all 3 critics)
+    original_dynamic_enabled = runtime.config.get("dynamic_selection", {}).get("enabled", False)
+    runtime.config["dynamic_selection"]["enabled"] = False
+
     # Mock responses for each critic
     mock_responses = {
         "security-critic": LLMResponse(
@@ -486,20 +490,155 @@ def test_run_multi_critic_with_mock():
             return mock_responses["code-quality-critic"]
         return mock_responses["security-critic"]
 
-    with patch.object(runtime.connector, "call", side_effect=mock_call_side_effect):
-        with patch("core.agent_runtime.write_json") as mock_write:
-            mock_write.return_value = Path("test.json")
+    try:
+        with patch.object(runtime.connector, "call", side_effect=mock_call_side_effect):
+            with patch("core.agent_runtime.write_json") as mock_write:
+                mock_write.return_value = Path("test.json")
 
-            consensus, results = runtime._run_multi_critic("Test builder output", "Test prompt")
+                consensus, results = runtime._run_multi_critic("Test builder output", "Test prompt")
 
-            # Check that all critics ran
-            assert len(results) == 3
+                # Check that all critics ran
+                assert len(results) == 3
 
-            # Check that consensus includes all issues
-            assert "SECURITY ISSUE" in consensus or "Missing authentication" in consensus
-            assert "PERFORMANCE ISSUE" in consensus or "Inefficient algorithm" in consensus
-            assert "QUALITY ISSUE" in consensus or "Poor error handling" in consensus
+                # Check that consensus includes all issues
+                assert "SECURITY ISSUE" in consensus or "Missing authentication" in consensus
+                assert "PERFORMANCE ISSUE" in consensus or "Inefficient algorithm" in consensus
+                assert "QUALITY ISSUE" in consensus or "Poor error handling" in consensus
 
-            # Check token aggregation
-            total_tokens = sum(r.total_tokens for r in results)
-            assert total_tokens == 210  # 70 * 3
+                # Check token aggregation
+                total_tokens = sum(r.total_tokens for r in results)
+                assert total_tokens == 210  # 70 * 3
+    finally:
+        # Restore original state
+        runtime.config["dynamic_selection"]["enabled"] = original_dynamic_enabled
+
+
+def test_dynamic_selection_config_loaded():
+    """Test that dynamic selection configuration is properly loaded."""
+    runtime = AgentRuntime()
+
+    dynamic_config = runtime.config.get("dynamic_selection", {})
+
+    # Check all expected config keys exist
+    assert "enabled" in dynamic_config
+    assert "mode" in dynamic_config
+    assert "min_critics" in dynamic_config
+    assert "max_critics" in dynamic_config
+    assert "keywords" in dynamic_config
+    assert "fallback_critics" in dynamic_config
+
+    # Verify keyword structure
+    keywords = dynamic_config.get("keywords", {})
+    assert "security-critic" in keywords
+    assert "performance-critic" in keywords
+    assert "code-quality-critic" in keywords
+
+    # Verify each critic has keywords
+    assert len(keywords["security-critic"]) > 0
+    assert len(keywords["performance-critic"]) > 0
+    assert len(keywords["code-quality-critic"]) > 0
+
+    # Verify mode
+    assert dynamic_config["mode"] == "keyword"
+
+
+def test_select_relevant_critics_all_critics():
+    """Test critic selection with JWT auth prompt (should select all critics)."""
+    runtime = AgentRuntime()
+
+    prompt = "Build a user authentication API with JWT tokens, password hashing, rate limiting, and database optimization. Ensure clean architecture and testability."
+    builder_response = "Here's a FastAPI implementation with bcrypt for passwords and modular structure..."
+
+    selected = runtime._select_relevant_critics(prompt, builder_response)
+
+    # Should select all 3 critics (auth=security, database=performance, architecture=quality)
+    assert len(selected) == 3
+    assert "security-critic" in selected
+    assert "performance-critic" in selected
+    assert "code-quality-critic" in selected
+
+
+def test_select_relevant_critics_security_only():
+    """Test critic selection with security-focused prompt."""
+    runtime = AgentRuntime()
+
+    prompt = "Review this authentication system for security vulnerabilities. Check for SQL injection, XSS, and CSRF issues."
+    builder_response = "The authentication uses JWT tokens with bcrypt password hashing..."
+
+    selected = runtime._select_relevant_critics(prompt, builder_response)
+
+    # Should heavily favor security-critic
+    assert "security-critic" in selected
+    # May also include quality critic due to fallback/min_critics, but security should be primary
+
+
+def test_select_relevant_critics_performance_focus():
+    """Test critic selection with performance-focused prompt."""
+    runtime = AgentRuntime()
+
+    prompt = "Optimize this database query. It's too slow and has N+1 query issues. Add caching with Redis."
+    builder_response = "Here's the optimized query with indexes..."
+
+    selected = runtime._select_relevant_critics(prompt, builder_response)
+
+    # Should include performance-critic
+    assert "performance-critic" in selected
+
+
+def test_select_relevant_critics_fallback():
+    """Test critic selection with no keyword matches (fallback)."""
+    runtime = AgentRuntime()
+
+    prompt = "Create a simple HTML page with a header and footer"
+    builder_response = "<html><body><h1>Hello</h1></body></html>"
+
+    selected = runtime._select_relevant_critics(prompt, builder_response)
+
+    # Should use fallback (code-quality-critic)
+    assert len(selected) >= 1
+    assert "code-quality-critic" in selected
+
+
+def test_select_relevant_critics_disabled():
+    """Test that dynamic selection returns all critics when disabled."""
+    runtime = AgentRuntime()
+
+    # Temporarily disable dynamic selection
+    original_enabled = runtime.config.get("dynamic_selection", {}).get("enabled", False)
+    runtime.config["dynamic_selection"]["enabled"] = False
+
+    try:
+        prompt = "Create HTML page"
+        builder_response = "..."
+
+        selected = runtime._select_relevant_critics(prompt, builder_response)
+
+        # Should return all critics (from multi_critic.critics config)
+        multi_critic_config = runtime.config.get("multi_critic", {})
+        all_critics = multi_critic_config.get("critics", [])
+        assert selected == all_critics
+    finally:
+        # Restore original state
+        runtime.config["dynamic_selection"]["enabled"] = original_enabled
+
+
+def test_select_relevant_critics_min_max_constraints():
+    """Test that min/max critic constraints are enforced."""
+    runtime = AgentRuntime()
+
+    # Get config constraints
+    dynamic_config = runtime.config.get("dynamic_selection", {})
+    min_critics = dynamic_config.get("min_critics", 1)
+    max_critics = dynamic_config.get("max_critics", 3)
+
+    # Test with various prompts
+    prompts = [
+        "Create HTML page",  # Low relevance
+        "Build JWT auth with database optimization",  # High relevance
+        "Refactor code structure",  # Medium relevance
+    ]
+
+    for prompt in prompts:
+        selected = runtime._select_relevant_critics(prompt, "...")
+        assert len(selected) >= min_critics
+        assert len(selected) <= max_critics

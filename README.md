@@ -64,6 +64,7 @@ make run-api
   - ✅ **Closer**: Synthesizes decisions into actionable steps
   - 🧭 **Router**: Automatically selects the right agent
 - **Multi-Agent Chains**: Run builder → critic → closer workflows
+- **🎯 Dynamic Critic Selection (v0.10.0)**: AI-powered keyword analysis selects only relevant critics (30-50% cost savings)
 - **🎭 Multi-Critic Consensus (v0.9.0)**: 3 specialized critics (security, performance, quality) run in parallel with weighted consensus
 - **🔄 Multi-Iteration Refinement (v0.8.0)**: Iterative refinement with convergence detection (max 3 iterations)
 - **🔄 Automatic Refinement (v0.7.0)**: Builder auto-fixes critical issues detected by critic

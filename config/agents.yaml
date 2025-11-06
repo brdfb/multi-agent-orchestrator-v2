@@ -59,6 +59,87 @@ multi_critic:
       code-quality-critic: 0.8  # Quality issues slightly lower priority
   parallel_execution: true  # Run critics in parallel (no extra latency)
 
+# Dynamic Critic Selection (v0.10.0+)
+# Automatically selects relevant critics based on prompt content
+# Reduces cost by avoiding unnecessary critics (e.g., no security-critic for simple HTML)
+dynamic_selection:
+  enabled: true  # Enable automatic critic selection
+  mode: "keyword"  # Selection strategy: "keyword" or "llm" (future)
+  min_critics: 1  # Minimum critics to run (fallback safety)
+  max_critics: 3  # Maximum critics to run
+
+  # Keyword-based classification
+  keywords:
+    security-critic:
+      - "auth"
+      - "authentication"
+      - "authorization"
+      - "jwt"
+      - "token"
+      - "password"
+      - "encryption"
+      - "security"
+      - "login"
+      - "oauth"
+      - "session"
+      - "credential"
+      - "hash"
+      - "salt"
+      - "vulnerability"
+      - "xss"
+      - "sql injection"
+      - "csrf"
+      - "cors"
+      - "api key"
+      - "secret"
+
+    performance-critic:
+      - "performance"
+      - "optimization"
+      - "optimize"
+      - "scale"
+      - "scalability"
+      - "cache"
+      - "caching"
+      - "database"
+      - "query"
+      - "index"
+      - "redis"
+      - "memcached"
+      - "async"
+      - "concurrent"
+      - "parallel"
+      - "throughput"
+      - "latency"
+      - "speed"
+      - "slow"
+      - "fast"
+      - "load"
+      - "cdn"
+      - "n+1"
+
+    code-quality-critic:
+      - "refactor"
+      - "clean code"
+      - "maintainability"
+      - "testability"
+      - "test"
+      - "solid"
+      - "design pattern"
+      - "architecture"
+      - "structure"
+      - "organize"
+      - "modular"
+      - "coupling"
+      - "cohesion"
+      - "dry"
+      - "documentation"
+      - "readable"
+
+  # Fallback: If no keywords match, use these critics
+  fallback_critics:
+    - "code-quality-critic"  # Always useful for general code review
+
 agents:
   builder:
     model: "anthropic/claude-3-5-sonnet-20241022"  # Best for building
