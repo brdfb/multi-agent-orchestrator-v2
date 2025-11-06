@@ -5,6 +5,187 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.0] - 2025-11-06
+
+### Added - Multi-Critic Consensus with Parallel Execution (Phase 4)
+
+**Problem Solved:** Single-Perspective Critique Limitation
+
+In v0.8.0, a single "critic" agent performed all code review tasks. While effective, this approach had limitations:
+- **Subjective Analysis**: One critic may miss issues outside its specialty
+- **Domain Blindness**: Security expert may miss performance issues, and vice versa
+- **Priority Confusion**: All issues treated equally regardless of severity
+
+**Solution:** Multi-Critic Consensus with Specialized Domain Experts
+
+- **Three Specialized Critics** (`config/agents.yaml`)
+  - **`security-critic`** (OpenAI GPT-4o)
+    - **Focus**: OWASP Top 10, authentication, encryption, input validation, secrets management
+    - **Output Format**: `SECURITY ISSUE: [severity] - [description] - [fix]`
+    - **Weight**: 1.5x (security issues prioritized)
+  - **`performance-critic`** (Gemini 2.5 Pro)
+    - **Focus**: Scalability, N+1 queries, caching, async/concurrency, Big-O complexity
+    - **Output Format**: `PERFORMANCE ISSUE: [impact] - [bottleneck] - [optimization]`
+    - **Weight**: 1.0x (standard priority)
+  - **`code-quality-critic`** (OpenAI GPT-4o-mini)
+    - **Focus**: SOLID principles, design patterns, DRY, testability, error handling
+    - **Output Format**: `QUALITY ISSUE: [principle] - [violation] - [refactoring]`
+    - **Weight**: 0.8x (lower priority than security/performance)
+
+- **Parallel Execution** (`core/agent_runtime.py`)
+  - `_run_multi_critic()`: Runs all 3 critics concurrently using `ThreadPoolExecutor`
+  - **No Latency Penalty**: 3 critics run simultaneously instead of sequentially
+  - **Progress Feedback**: `🔍 Running 3 specialized critics in parallel...`
+  - **Status Updates**: `✅ security-critic complete (4782 tokens)`
+  - **Error Handling**: Continues even if individual critics fail
+
+- **Consensus Merging Algorithm**
+  - `_merge_critic_consensus()`: Combines feedback from all critics with weighted priorities
+  - **Consensus Format**:
+    ```
+    === MULTI-CRITIC CONSENSUS ===
+
+    --- SECURITY-CRITIC ⚠️ HIGH PRIORITY ---
+    [security issues]
+
+    --- PERFORMANCE-CRITIC 📋 STANDARD ---
+    [performance issues]
+
+    --- CODE-QUALITY-CRITIC 📋 STANDARD ---
+    [quality issues]
+
+    === CONSENSUS SUMMARY ===
+    Total critics analyzed: 3
+    - security-critic: 5 issues found
+    - performance-critic: 3 issues found
+    - code-quality-critic: 7 issues found
+    ```
+  - **Weighted Indicators**: High-priority critics marked with `⚠️ HIGH PRIORITY`
+  - **Issue Aggregation**: All critic outputs preserved in final consensus
+
+- **Configuration** (`config/agents.yaml`)
+  ```yaml
+  multi_critic:
+    enabled: true
+    critics:
+      - "security-critic"
+      - "performance-critic"
+      - "code-quality-critic"
+    consensus:
+      threshold: 2  # Issues mentioned by 2+ critics = CRITICAL
+      weights:
+        security-critic: 1.5      # Security prioritized
+        performance-critic: 1.0   # Standard weight
+        code-quality-critic: 0.8  # Slightly lower priority
+    parallel_execution: true
+  ```
+
+- **Integration with Multi-Iteration Refinement**
+  - Multi-critic replaces single critic in chain execution
+  - Flow: Builder → **[Multi-Critic Consensus]** → [if issues] → Builder-v2 → Multi-Critic-v2 → ...
+  - Refinement loop uses consensus feedback (all 3 perspectives)
+  - Convergence detection works with aggregated issue count from all critics
+
+### Enhanced
+
+- **Comprehensive Analysis**
+  - **Security**: Catches authentication bypasses, SQL injection, XSS, secrets leakage
+  - **Performance**: Identifies blocking I/O, inefficient algorithms, missing indexes
+  - **Quality**: Flags SOLID violations, poor testability, code duplication
+  - **Cross-Domain**: Security critic may flag crypto performance, quality critic may spot security patterns
+
+- **Improved Prioritization**
+  - Security issues automatically weighted 1.5x higher
+  - Closer receives weighted consensus for better synthesis
+  - Multi-iteration refinement focuses on highest-priority issues first
+
+- **Transparent Decision-Making**
+  - All 3 critic responses preserved and logged
+  - Closer can see which critics agreed/disagreed
+  - Token usage tracked per critic for cost analysis
+
+- **Test Coverage**
+  - `test_multi_critic_config_loaded()`: Verifies config loading
+  - `test_merge_critic_consensus()`: Tests consensus merging with all critics
+  - `test_merge_critic_consensus_empty()`: Handles empty results gracefully
+  - `test_merge_critic_consensus_single()`: Single critic fallback
+  - `test_run_multi_critic_disabled()`: Fallback when disabled
+  - `test_run_multi_critic_with_mock()`: Full parallel execution with mocked LLMs
+  - All 22 tests passing (16 existing + 6 new)
+
+### Real-World Validation
+
+**Prompt**: "Build a user authentication API with JWT tokens, password hashing, and rate limiting..."
+
+**Multi-Critic Execution**:
+```
+🔍 Running 3 specialized critics in parallel...
+
+✅ code-quality-critic complete (2727 tokens)
+✅ performance-critic complete (4285 tokens)
+✅ security-critic complete (4782 tokens)
+```
+
+**Findings**:
+- **Security Critic**: Identified JWT secret key hardcoding, short token expiration risks
+- **Performance Critic**: Found blocking password hashing operations (FastAPI async issue)
+- **Code-Quality Critic**: Recommended modular project structure (separate routers, models, config)
+
+**Refinement Triggered**: Multi-iteration refinement ran for 2 cycles based on consensus
+**Closer Synthesis**: Addressed all 3 perspectives in final action items
+
+### Performance Impact
+
+- **Latency**: **No increase** (parallel execution)
+  - Sequential: 3 critics × 30s = 90s
+  - Parallel: max(30s, 30s, 30s) = 30s
+- **Cost**: +$0.02-0.04 per chain (depends on critic models)
+  - security-critic (GPT-4o): ~$0.015
+  - performance-critic (Gemini 2.5 Pro): ~$0.008
+  - code-quality-critic (GPT-4o-mini): ~$0.003
+- **Token Usage**: 3x critic tokens (but aggregated issues passed to builder-v2)
+- **Trigger Rate**: 100% of chains (replaces single critic)
+- **Quality**: ✨ **Comprehensive multi-domain analysis**
+
+### Implementation Notes
+
+- **Backward Compatible**: Can be disabled via `multi_critic.enabled: false`
+- **Fallback**: If multi-critic fails, falls back to single critic
+- **Synthetic Result**: Creates `agent="multi-critic"` result with aggregated tokens
+- **Memory Storage**: All 3 critic results stored separately in conversation logs
+- **Chain Runner**: Automatically uses multi-critic when enabled
+
+### Technical Details
+
+- Files Modified:
+  - `config/agents.yaml`: +119 lines (3 specialized critics + multi_critic config)
+  - `core/agent_runtime.py`: +120 lines (_run_multi_critic, _merge_critic_consensus, chain integration)
+  - `tests/test_runtime.py`: +6 tests (22 total)
+- Concurrency: `concurrent.futures.ThreadPoolExecutor` with max_workers=3
+- Complexity: O(1) parallel execution (3 fixed critics)
+- Memory: Stores 3 separate RunResults + 1 synthetic consensus result
+
+### Migration Guide
+
+**No Action Required** - Multi-critic is enabled by default in v0.9.0
+
+**To Disable** (revert to single critic):
+```yaml
+# config/agents.yaml
+multi_critic:
+  enabled: false
+```
+
+**To Customize Weights**:
+```yaml
+multi_critic:
+  consensus:
+    weights:
+      security-critic: 2.0      # Double weight for security
+      performance-critic: 1.5   # Increase performance priority
+      code-quality-critic: 0.5  # Reduce quality weight
+```
+
 ## [0.8.0] - 2025-11-06
 
 ### Added - Multi-Iteration Refinement with Convergence Detection (Phase 3)

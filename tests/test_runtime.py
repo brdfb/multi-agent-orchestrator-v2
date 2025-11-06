@@ -336,3 +336,170 @@ def test_check_convergence_same_count():
     converged, reason = runtime._check_convergence(current_issues, previous_issues)
     assert converged is True
     assert "No progress" in reason
+
+
+def test_multi_critic_config_loaded():
+    """Test that multi-critic configuration is properly loaded."""
+    runtime = AgentRuntime()
+
+    multi_critic_config = runtime.config.get("multi_critic", {})
+
+    # Check all expected config keys exist
+    assert "enabled" in multi_critic_config
+    assert "critics" in multi_critic_config
+    assert "consensus" in multi_critic_config
+    assert "parallel_execution" in multi_critic_config
+
+    # Verify critics list
+    critics = multi_critic_config.get("critics", [])
+    assert isinstance(critics, list)
+    assert len(critics) == 3
+    assert "security-critic" in critics
+    assert "performance-critic" in critics
+    assert "code-quality-critic" in critics
+
+    # Verify consensus config
+    consensus = multi_critic_config.get("consensus", {})
+    assert "threshold" in consensus
+    assert "weights" in consensus
+    assert consensus["threshold"] == 2
+
+    # Verify weights
+    weights = consensus.get("weights", {})
+    assert weights["security-critic"] == 1.5
+    assert weights["performance-critic"] == 1.0
+    assert weights["code-quality-critic"] == 0.8
+
+
+def test_merge_critic_consensus():
+    """Test consensus merging with different weights."""
+    runtime = AgentRuntime()
+
+    critic_results = [
+        ("security-critic", "SECURITY ISSUE: Missing input validation\nSECURITY ISSUE: Hardcoded credentials"),
+        ("performance-critic", "PERFORMANCE ISSUE: N+1 query detected\nPERFORMANCE ISSUE: Missing database index"),
+        ("code-quality-critic", "QUALITY ISSUE: Violation of SRP principle\nQUALITY ISSUE: High cyclomatic complexity"),
+    ]
+
+    consensus = runtime._merge_critic_consensus(critic_results)
+
+    # Check that all critics are included
+    assert "SECURITY-CRITIC" in consensus.upper()
+    assert "PERFORMANCE-CRITIC" in consensus.upper()
+    assert "CODE-QUALITY-CRITIC" in consensus.upper()
+
+    # Check that consensus header exists
+    assert "MULTI-CRITIC CONSENSUS" in consensus
+
+    # Check that security critic is marked as high priority
+    assert "HIGH PRIORITY" in consensus or "⚠️" in consensus
+
+    # Check that all issues are preserved
+    assert "Missing input validation" in consensus or "MISSING INPUT VALIDATION" in consensus
+    assert "N+1 query" in consensus or "N+1 QUERY" in consensus
+    assert "SRP principle" in consensus or "SRP PRINCIPLE" in consensus
+
+
+def test_merge_critic_consensus_empty():
+    """Test consensus merging with no critic results."""
+    runtime = AgentRuntime()
+
+    # Empty results should return empty string
+    consensus = runtime._merge_critic_consensus([])
+    assert consensus == ""
+
+
+def test_merge_critic_consensus_single():
+    """Test consensus merging with single critic."""
+    runtime = AgentRuntime()
+
+    critic_results = [
+        ("security-critic", "SECURITY ISSUE: SQL injection vulnerability"),
+    ]
+
+    consensus = runtime._merge_critic_consensus(critic_results)
+
+    assert "MULTI-CRITIC CONSENSUS" in consensus
+    assert "SECURITY-CRITIC" in consensus.upper()
+    assert "SQL injection" in consensus or "SQL INJECTION" in consensus
+
+
+def test_run_multi_critic_disabled():
+    """Test that multi-critic returns empty when disabled."""
+    runtime = AgentRuntime()
+
+    # Temporarily disable multi-critic
+    original_enabled = runtime.config.get("multi_critic", {}).get("enabled", False)
+    runtime.config["multi_critic"]["enabled"] = False
+
+    try:
+        consensus, results = runtime._run_multi_critic("Test response", "Test prompt")
+        assert consensus == ""
+        assert results == []
+    finally:
+        # Restore original state
+        runtime.config["multi_critic"]["enabled"] = original_enabled
+
+
+def test_run_multi_critic_with_mock():
+    """Test multi-critic execution with mocked LLM calls."""
+    runtime = AgentRuntime()
+
+    # Mock responses for each critic
+    mock_responses = {
+        "security-critic": LLMResponse(
+            text="SECURITY ISSUE: Missing authentication",
+            model="openai/gpt-4o",
+            provider="openai",
+            prompt_tokens=50,
+            completion_tokens=20,
+            total_tokens=70,
+            duration_ms=200.0,
+        ),
+        "performance-critic": LLMResponse(
+            text="PERFORMANCE ISSUE: Inefficient algorithm",
+            model="gemini/gemini-2.5-pro",
+            provider="google",
+            prompt_tokens=50,
+            completion_tokens=20,
+            total_tokens=70,
+            duration_ms=180.0,
+        ),
+        "code-quality-critic": LLMResponse(
+            text="QUALITY ISSUE: Poor error handling",
+            model="openai/gpt-4o-mini",
+            provider="openai",
+            prompt_tokens=50,
+            completion_tokens=20,
+            total_tokens=70,
+            duration_ms=150.0,
+        ),
+    }
+
+    def mock_call_side_effect(model, **kwargs):
+        # Determine which critic based on model
+        if "gpt-4o" in model and "mini" not in model:
+            return mock_responses["security-critic"]
+        elif "gemini-2.5-pro" in model:
+            return mock_responses["performance-critic"]
+        elif "gpt-4o-mini" in model:
+            return mock_responses["code-quality-critic"]
+        return mock_responses["security-critic"]
+
+    with patch.object(runtime.connector, "call", side_effect=mock_call_side_effect):
+        with patch("core.agent_runtime.write_json") as mock_write:
+            mock_write.return_value = Path("test.json")
+
+            consensus, results = runtime._run_multi_critic("Test builder output", "Test prompt")
+
+            # Check that all critics ran
+            assert len(results) == 3
+
+            # Check that consensus includes all issues
+            assert "SECURITY ISSUE" in consensus or "Missing authentication" in consensus
+            assert "PERFORMANCE ISSUE" in consensus or "Inefficient algorithm" in consensus
+            assert "QUALITY ISSUE" in consensus or "Poor error handling" in consensus
+
+            # Check token aggregation
+            total_tokens = sum(r.total_tokens for r in results)
+            assert total_tokens == 210  # 70 * 3

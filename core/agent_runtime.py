@@ -267,6 +267,124 @@ ORIGINAL OUTPUT TO SUMMARIZE:
         # Case 4: Fewer issues - PROGRESS (continue)
         return (False, f"Progress detected ({previous_issue_count} → {current_issue_count} issues) - continuing")
 
+    def _merge_critic_consensus(self, critic_results: List[tuple[str, str]]) -> str:
+        """
+        Merge feedback from multiple critics into weighted consensus.
+
+        Args:
+            critic_results: List of (critic_name, response) tuples
+
+        Returns:
+            Merged consensus feedback with weighted prioritization
+        """
+        if not critic_results:
+            return ""
+
+        # Load consensus config
+        multi_critic_config = self.config.get("multi_critic", {})
+        consensus_config = multi_critic_config.get("consensus", {})
+        threshold = consensus_config.get("threshold", 2)
+        weights = consensus_config.get("weights", {})
+
+        # Extract issues from each critic
+        critic_issues = {}
+        for critic_name, response in critic_results:
+            issues = response.strip().split('\n')
+            critic_issues[critic_name] = [issue.strip() for issue in issues if issue.strip()]
+
+        # Build consensus
+        consensus_parts = []
+        consensus_parts.append("=== MULTI-CRITIC CONSENSUS ===\n")
+
+        # Add each critic's feedback with weight indicator
+        for critic_name, response in critic_results:
+            weight = weights.get(critic_name, 1.0)
+            weight_indicator = "⚠️ HIGH PRIORITY" if weight > 1.0 else "📋 STANDARD"
+
+            consensus_parts.append(f"\n--- {critic_name.upper()} {weight_indicator} ---")
+            consensus_parts.append(response)
+            consensus_parts.append("")
+
+        # Add summary
+        total_critics = len(critic_results)
+        consensus_parts.append(f"\n=== CONSENSUS SUMMARY ===")
+        consensus_parts.append(f"Total critics analyzed: {total_critics}")
+
+        # Count issues per critic
+        for critic_name, issues in critic_issues.items():
+            issue_count = len(issues)
+            consensus_parts.append(f"- {critic_name}: {issue_count} issues found")
+
+        return '\n'.join(consensus_parts)
+
+    def _run_multi_critic(self, builder_response: str, original_prompt: str) -> tuple[str, List[RunResult]]:
+        """
+        Run multiple specialized critics in parallel and merge consensus.
+
+        Args:
+            builder_response: The builder's output to critique
+            original_prompt: Original user prompt for context
+
+        Returns:
+            Tuple of (consensus_feedback, list of critic RunResults)
+        """
+        import concurrent.futures
+
+        # Load multi-critic config
+        multi_critic_config = self.config.get("multi_critic", {})
+        if not multi_critic_config.get("enabled", False):
+            # Fallback to single critic
+            return ("", [])
+
+        critic_names = multi_critic_config.get("critics", [])
+        parallel = multi_critic_config.get("parallel_execution", True)
+
+        print(f"🔍 Running {len(critic_names)} specialized critics in parallel...\n")
+
+        # Prepare critic context
+        compression_threshold = 1200
+        response_text = builder_response
+        if len(response_text) > compression_threshold:
+            compressed = self._compress_semantic(response_text, max_tokens=500)
+            response_text = f"{compressed}\n\n[Note: Above is structured summary preserving all key decisions and specs]"
+
+        critic_context = f"Original request: {original_prompt}\n\nBuilder output:\n{response_text}\n\nYour task as critic:"
+
+        # Run critics
+        critic_results = []
+        run_results = []
+
+        if parallel:
+            # Parallel execution using ThreadPoolExecutor
+            with concurrent.futures.ThreadPoolExecutor(max_workers=len(critic_names)) as executor:
+                future_to_critic = {
+                    executor.submit(self.run, critic_name, critic_context): critic_name
+                    for critic_name in critic_names
+                }
+
+                for future in concurrent.futures.as_completed(future_to_critic):
+                    critic_name = future_to_critic[future]
+                    try:
+                        result = future.result()
+                        critic_results.append((critic_name, result.response))
+                        run_results.append(result)
+                        print(f"✅ {critic_name} complete ({result.total_tokens} tokens)")
+                    except Exception as e:
+                        print(f"❌ {critic_name} failed: {e}")
+        else:
+            # Sequential execution
+            for critic_name in critic_names:
+                print(f"🔍 Running {critic_name}...")
+                result = self.run(critic_name, critic_context)
+                critic_results.append((critic_name, result.response))
+                run_results.append(result)
+                print(f"✅ {critic_name} complete ({result.total_tokens} tokens)")
+
+        # Merge consensus
+        consensus = self._merge_critic_consensus(critic_results)
+
+        return (consensus, run_results)
+
     def route(self, prompt: str) -> str:
         """
         Route prompt to appropriate agent with fallback support.
@@ -568,11 +686,53 @@ ORIGINAL OUTPUT TO SUMMARIZE:
                         f"Original request: {prompt}\n\n{summary}\n\nYour task as {agent}:"
                     )
 
-            result = self.run(agent=agent, prompt=context)
+            # MULTI-CRITIC EXECUTION: Replace single critic with parallel multi-critic consensus
+            if agent == "critic":
+                # Check if multi-critic is enabled
+                multi_critic_config = self.config.get("multi_critic", {})
+                if multi_critic_config.get("enabled", False):
+                    # Find builder result for multi-critic analysis
+                    builder_result = results[-1] if results else None
+                    if builder_result and builder_result.agent == "builder":
+                        # Run multi-critic consensus
+                        consensus, critic_run_results = self._run_multi_critic(builder_result.response, prompt)
+
+                        # Create synthetic result for consensus (for compatibility with existing flow)
+                        # Use the first critic's metadata but with consensus response
+                        if critic_run_results:
+                            first_critic = critic_run_results[0]
+                            result = RunResult(
+                                agent="multi-critic",
+                                model=f"consensus-{len(critic_run_results)}-critics",
+                                provider="multi",
+                                prompt=context,
+                                response=consensus,
+                                duration_ms=sum(r.duration_ms for r in critic_run_results),
+                                prompt_tokens=sum(r.prompt_tokens for r in critic_run_results),
+                                completion_tokens=sum(r.completion_tokens for r in critic_run_results),
+                                total_tokens=sum(r.total_tokens for r in critic_run_results),
+                                timestamp=first_critic.timestamp,
+                                log_file="multi-critic-consensus",
+                            )
+                            # Store all critic results
+                            results.extend(critic_run_results)
+                        else:
+                            # Fallback to single critic if multi-critic failed
+                            result = self.run(agent=agent, prompt=context)
+                    else:
+                        # No builder result, use single critic
+                        result = self.run(agent=agent, prompt=context)
+                else:
+                    # Multi-critic disabled, use single critic
+                    result = self.run(agent=agent, prompt=context)
+            else:
+                # Non-critic agents use standard execution
+                result = self.run(agent=agent, prompt=context)
+
             results.append(result)
 
-            # MULTI-ITERATION REFINEMENT: After critic stage, iteratively refine until convergence
-            if enable_refinement and agent == "critic" and not refinement_triggered:
+            # MULTI-ITERATION REFINEMENT: After critic/multi-critic stage, iteratively refine until convergence
+            if enable_refinement and result.agent in ["critic", "multi-critic"] and not refinement_triggered:
                 critical_issues = self._extract_critical_issues(result.response)
 
                 if critical_issues:

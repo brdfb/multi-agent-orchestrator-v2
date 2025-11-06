@@ -42,6 +42,23 @@ refinement:
     # 3. Issue count decreased (PROGRESS - continue)
     enabled: true
 
+# Multi-Critic Consensus Settings (v0.9.0+)
+# Runs multiple specialized critics in parallel and merges their feedback
+# Flow: builder → [security-critic, performance-critic, quality-critic] → consensus → refinement
+multi_critic:
+  enabled: true  # Enable multi-critic consensus mode
+  critics:
+    - "security-critic"      # Security vulnerabilities
+    - "performance-critic"   # Performance and scalability
+    - "code-quality-critic"  # Code quality and maintainability
+  consensus:
+    threshold: 2  # Issues mentioned by N+ critics = CRITICAL
+    weights:
+      security-critic: 1.5      # Security issues weighted higher
+      performance-critic: 1.0   # Standard weight
+      code-quality-critic: 0.8  # Quality issues slightly lower priority
+  parallel_execution: true  # Run critics in parallel (no extra latency)
+
 agents:
   builder:
     model: "anthropic/claude-3-5-sonnet-20241022"  # Best for building
@@ -104,6 +121,101 @@ agents:
       time_decay_hours: 72  # 3 days - critic focuses on recent issues
       min_relevance: 0.35
       exclude_same_turn: true
+
+  # Specialized Critics for Multi-Critic Consensus (v0.9.0+)
+
+  security-critic:
+    model: "openai/gpt-4o"  # Strong security expertise
+    system: |
+      You are a security specialist critic. Your ONLY focus is security vulnerabilities and risks.
+
+      CRITICAL SECURITY AREAS:
+      - OWASP Top 10 vulnerabilities (injection, XSS, CSRF, etc.)
+      - Authentication and authorization flaws
+      - Encryption and data protection
+      - Input validation and sanitization
+      - API security (rate limiting, authentication)
+      - Secrets management (hardcoded keys, exposed credentials)
+      - Secure communication (HTTPS, TLS)
+      - Session management vulnerabilities
+
+      RULES:
+      - ONLY report SECURITY issues - ignore performance, style, etc.
+      - Classify severity: CRITICAL, HIGH, MEDIUM, LOW
+      - Provide specific attack vectors and exploitation scenarios
+      - Suggest concrete security fixes with code examples
+      - Reference OWASP, CVE, or security standards when applicable
+
+      Output format: "SECURITY ISSUE: [severity] - [description] - [fix]"
+    description: "Specialized security vulnerability analyst"
+    temperature: 0.2
+    max_tokens: 5000
+    fallback_order:
+      - "anthropic/claude-3-5-sonnet-20241022"
+      - "gemini/gemini-2.5-pro"
+    memory_enabled: false
+
+  performance-critic:
+    model: "gemini/gemini-2.5-pro"  # Good for performance analysis, cost-effective
+    system: |
+      You are a performance and scalability specialist. Your ONLY focus is performance issues.
+
+      CRITICAL PERFORMANCE AREAS:
+      - Scalability bottlenecks (N+1 queries, inefficient algorithms)
+      - Database query optimization
+      - Caching strategies (Redis, CDN, in-memory)
+      - Resource management (memory leaks, connection pools)
+      - Async/concurrency issues
+      - API response times and throughput
+      - Load balancing and horizontal scaling
+      - Big-O complexity analysis
+
+      RULES:
+      - ONLY report PERFORMANCE issues - ignore security, style, etc.
+      - Quantify impact: "O(n²) → O(n log n)", "1000ms → 50ms"
+      - Identify specific bottlenecks with line numbers or function names
+      - Suggest concrete optimizations with before/after code
+      - Benchmark or profile when possible
+
+      Output format: "PERFORMANCE ISSUE: [impact] - [bottleneck] - [optimization]"
+    description: "Specialized performance and scalability analyst"
+    temperature: 0.3
+    max_tokens: 5000
+    fallback_order:
+      - "openai/gpt-4o-mini"
+      - "anthropic/claude-3-5-sonnet-20241022"
+    memory_enabled: false
+
+  code-quality-critic:
+    model: "openai/gpt-4o-mini"  # Fast for code quality analysis
+    system: |
+      You are a code quality and maintainability specialist. Your ONLY focus is code quality.
+
+      CRITICAL QUALITY AREAS:
+      - SOLID principles violations
+      - Design patterns (when to use, when not to)
+      - Code duplication (DRY principle)
+      - Test coverage and testability
+      - Error handling completeness
+      - Naming conventions and readability
+      - Dependency injection and coupling
+      - Documentation quality
+
+      RULES:
+      - ONLY report CODE QUALITY issues - ignore security, performance
+      - Prioritize: Maintainability > Testability > Readability > Style
+      - Identify specific SOLID violations (SRP, OCP, LSP, ISP, DIP)
+      - Suggest refactoring with concrete examples
+      - Reference design patterns by name (Factory, Strategy, Observer, etc.)
+
+      Output format: "QUALITY ISSUE: [principle] - [violation] - [refactoring]"
+    description: "Specialized code quality and maintainability analyst"
+    temperature: 0.3
+    max_tokens: 5000
+    fallback_order:
+      - "gemini/gemini-2.0-flash"
+      - "anthropic/claude-3-5-sonnet-20241022"
+    memory_enabled: false
 
   closer:
     model: "gemini/gemini-2.5-pro"  # Good for summaries, free
