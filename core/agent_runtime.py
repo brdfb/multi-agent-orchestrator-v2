@@ -232,6 +232,41 @@ ORIGINAL OUTPUT TO SUMMARIZE:
 
         return None
 
+    def _check_convergence(self, current_issues: Optional[str], previous_issues: Optional[str]) -> tuple[bool, str]:
+        """
+        Check if refinement has converged (no more critical issues or no progress).
+
+        Convergence criteria:
+        1. No critical issues in current response (SUCCESS)
+        2. Same or more issues than previous iteration (NO PROGRESS)
+        3. Issue count decreased (PROGRESS - continue)
+
+        Args:
+            current_issues: Critical issues from current critic response
+            previous_issues: Critical issues from previous critic response
+
+        Returns:
+            Tuple of (converged: bool, reason: str)
+        """
+        # Case 1: No critical issues found - CONVERGED (success)
+        if current_issues is None:
+            return (True, "No critical issues found - refinement successful")
+
+        # Case 2: First iteration - always continue
+        if previous_issues is None:
+            return (False, "First iteration - continuing refinement")
+
+        # Count issues in both responses (simple line count heuristic)
+        current_issue_count = len([line for line in current_issues.split('\n') if line.strip()])
+        previous_issue_count = len([line for line in previous_issues.split('\n') if line.strip()])
+
+        # Case 3: More issues than before - CONVERGED (regression)
+        if current_issue_count >= previous_issue_count:
+            return (True, f"No progress detected ({previous_issue_count} → {current_issue_count} issues) - stopping")
+
+        # Case 4: Fewer issues - PROGRESS (continue)
+        return (False, f"Progress detected ({previous_issue_count} → {current_issue_count} issues) - continuing")
+
     def route(self, prompt: str) -> str:
         """
         Route prompt to appropriate agent with fallback support.
@@ -536,23 +571,44 @@ ORIGINAL OUTPUT TO SUMMARIZE:
             result = self.run(agent=agent, prompt=context)
             results.append(result)
 
-            # REFINEMENT CHECK: After critic stage, check for critical issues
+            # MULTI-ITERATION REFINEMENT: After critic stage, iteratively refine until convergence
             if enable_refinement and agent == "critic" and not refinement_triggered:
                 critical_issues = self._extract_critical_issues(result.response)
 
                 if critical_issues:
-                    print(f"\n🔄 Critical issues detected! Triggering builder refinement...\n")
                     refinement_triggered = True
 
-                    # Find the builder result (should be results[-2] since critic is results[-1])
-                    builder_index = -2
-                    if len(results) >= 2 and results[builder_index].agent == "builder":
-                        builder_result = results[builder_index]
+                    # Load max_iterations from config
+                    refinement_config = self.config.get("refinement", {})
+                    max_iterations = refinement_config.get("max_iterations", 3)
 
-                        # Create refinement prompt for builder
-                        refine_prompt = f"""Original request: {prompt}
+                    # Track iterations
+                    iteration = 1
+                    previous_issues = None
+                    converged = False
+                    convergence_reason = ""
 
-Your previous solution had the following CRITICAL ISSUES identified by the critic:
+                    print(f"\n🔄 Critical issues detected! Starting multi-iteration refinement (max {max_iterations} iterations)...\n")
+
+                    while iteration <= max_iterations and not converged:
+                        # Check convergence
+                        if iteration > 1:  # Skip convergence check on first iteration
+                            converged, convergence_reason = self._check_convergence(critical_issues, previous_issues)
+
+                            if converged:
+                                print(f"✅ Convergence achieved after {iteration-1} iteration(s): {convergence_reason}\n")
+                                break
+
+                        # Store current issues for next iteration
+                        previous_issues = critical_issues
+
+                        # Find the most recent builder result
+                        builder_index = -2 if iteration == 1 else -1  # First iteration: before critic, later: last result
+                        if len(results) >= 2:
+                            # Create refinement prompt for builder
+                            refine_prompt = f"""Original request: {prompt}
+
+Your previous solution had the following CRITICAL ISSUES identified by the critic (iteration {iteration}):
 
 {critical_issues}
 
@@ -565,14 +621,58 @@ Focus on:
 
 Provide a complete, refined solution."""
 
-                        # Report progress if callback provided
-                        if progress_callback:
-                            progress_callback(len(results) + 1, len(stages) + 1, "builder-v2")
+                            # Report progress if callback provided
+                            builder_label = f"builder-v{iteration+1}"
+                            if progress_callback:
+                                progress_callback(len(results) + 1, len(stages) + iteration, builder_label)
 
-                        # Run builder again with refinement prompt
-                        refined_result = self.run(agent="builder", prompt=refine_prompt)
-                        results.append(refined_result)
+                            print(f"🔄 Iteration {iteration}/{max_iterations}: Running {builder_label}...")
 
-                        print(f"✅ Builder refinement complete ({refined_result.total_tokens} tokens)\n")
+                            # Run builder again with refinement prompt
+                            refined_result = self.run(agent="builder", prompt=refine_prompt)
+                            results.append(refined_result)
+
+                            print(f"✅ {builder_label} complete ({refined_result.total_tokens} tokens)\n")
+
+                            # Re-run critic on the refined builder output
+                            critic_label = f"critic-v{iteration+1}"
+
+                            # Get compression threshold for critic
+                            critic_cfg = self.config["agents"].get("critic", {})
+                            has_critic_memory = critic_cfg.get("memory_enabled", False)
+                            compression_threshold = 1200 if not has_critic_memory else 800
+
+                            response_text = refined_result.response
+                            if len(response_text) > compression_threshold:
+                                compressed = self._compress_semantic(response_text, max_tokens=500)
+                                response_text = f"{compressed}\n\n[Note: Above is structured summary preserving all key decisions and specs]"
+
+                            critic_context = f"Original request: {prompt}\n\nPrevious builder output (iteration {iteration+1}):\n{response_text}\n\nYour task as critic:"
+
+                            if progress_callback:
+                                progress_callback(len(results) + 1, len(stages) + iteration, critic_label)
+
+                            print(f"🔄 Iteration {iteration}/{max_iterations}: Running {critic_label}...")
+
+                            # Run critic on refined output
+                            critic_result = self.run(agent="critic", prompt=critic_context)
+                            results.append(critic_result)
+
+                            # Extract issues from new critic response
+                            critical_issues = self._extract_critical_issues(critic_result.response)
+
+                            if critical_issues:
+                                print(f"⚠️  {critic_label} found critical issues ({critic_result.total_tokens} tokens)\n")
+                            else:
+                                print(f"✅ {critic_label} found no critical issues - refinement successful! ({critic_result.total_tokens} tokens)\n")
+                                converged = True
+                                convergence_reason = "No critical issues found"
+                                break
+
+                            iteration += 1
+
+                    # Final convergence message
+                    if iteration > max_iterations and not converged:
+                        print(f"⏹️  Max iterations ({max_iterations}) reached - stopping refinement\n")
 
         return results
