@@ -33,6 +33,12 @@ def main():
         print(f"Valid agents: {', '.join(valid_agents)}")
         sys.exit(1)
 
+    # Validate prompt
+    if not prompt or not prompt.strip():
+        print("Error: Prompt cannot be empty")
+        print("Please provide a valid prompt for the agent to process")
+        sys.exit(1)
+
     # Show environment source
     env_source = get_env_source()
     if env_source == "environment":

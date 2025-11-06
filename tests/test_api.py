@@ -26,7 +26,7 @@ def test_health_endpoint():
 
     # Core fields
     assert data["service"] == "multi-agent-orchestrator"
-    assert data["version"] == "0.6.0"
+    assert data["version"] == "0.10.0"
     assert "timestamp" in data
 
     # Provider info

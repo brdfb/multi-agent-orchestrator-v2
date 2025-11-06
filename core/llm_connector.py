@@ -1,5 +1,6 @@
 """LLM connector using LiteLLM for unified API access."""
 
+import os
 import time
 from dataclasses import dataclass
 from typing import List, Optional
@@ -164,6 +165,25 @@ class LLMConnector:
         start_time = time.perf_counter()
         original_model = model
 
+        # Check for mock mode
+        mock_mode = os.environ.get("LLM_MOCK", "").lower() in ["1", "true", "yes"]
+        if mock_mode:
+            # Return mock response for testing without API keys
+            duration_ms = (time.perf_counter() - start_time) * 1000
+            provider = self._extract_provider(model)
+
+            mock_text = f"[MOCK RESPONSE] This is a simulated response from {model}. The user asked: '{user[:50]}...'. System context: '{system[:50]}...'. In production, this would be a real LLM response."
+
+            return LLMResponse(
+                text=mock_text,
+                model=model,
+                provider=provider,
+                prompt_tokens=len(system.split()) + len(user.split()),
+                completion_tokens=len(mock_text.split()),
+                total_tokens=len(system.split()) + len(user.split()) + len(mock_text.split()),
+                duration_ms=duration_ms + 150,  # Simulate API latency
+            )
+
         messages = [
             {"role": "system", "content": system},
             {"role": "user", "content": user},
@@ -202,9 +222,18 @@ class LLMConnector:
             if idx == 0:
                 first_error = error
 
-        # All models exhausted - return error
+        # All models exhausted - return helpful error message
         duration_ms = (time.perf_counter() - start_time) * 1000
         provider = self._extract_provider(original_model)
+
+        # Build user-friendly error message with actionable steps
+        error_msg = f"❌ All API providers failed. Last error: {last_error}\n\n"
+        error_msg += "Possible solutions:\n"
+        error_msg += "1. Check your API keys in .env file or environment variables\n"
+        error_msg += "2. If rate limited, wait and try again later\n"
+        error_msg += "3. Add API keys for more providers (OpenAI, Anthropic, Google)\n"
+        error_msg += "4. Use mock mode for testing: export LLM_MOCK=1\n"
+        error_msg += "\nFor more help, see TROUBLESHOOTING.md or QUICKSTART.md"
 
         return LLMResponse(
             text="",
@@ -214,5 +243,5 @@ class LLMConnector:
             completion_tokens=0,
             total_tokens=0,
             duration_ms=duration_ms,
-            error=f"All models failed. Last error: {last_error}",
+            error=error_msg,
         )

@@ -29,7 +29,7 @@ LAST_REQUEST_TIME = None
 app = FastAPI(
     title="Multi-Agent Orchestrator",
     description="Multi-LLM agent system with CLI, API, and UI",
-    version="0.6.0",
+    version="0.10.0",
 )
 
 
@@ -369,7 +369,7 @@ async def health():
     return {
         "status": overall_status,
         "service": "multi-agent-orchestrator",
-        "version": "0.6.0",
+        "version": "0.10.0",
         "timestamp": datetime.now(timezone.utc).isoformat(),
 
         "providers": provider_status,
