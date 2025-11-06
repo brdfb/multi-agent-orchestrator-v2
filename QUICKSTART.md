@@ -1,28 +1,66 @@
 # Multi-Agent Orchestrator - Quick Start
 
-## 60-Second Setup
+## ⏱️ Timing Expectations
 
+**First-time installation (fresh system):**
+- System setup (python, git, make): ~2-5 minutes
+- `make install` (dependencies): ~5-10 minutes
+- First `make test` (model download ~400MB): ~10-15 minutes
+- **Total: 15-30 minutes** (depending on internet speed)
+
+**Subsequent runs (everything cached):**
+- `make test`: ~20-30 seconds
+- `make run-api`: instant
+- **Total: under 1 minute**
+
+---
+
+## Quick Setup
+
+### Prerequisites
 ```bash
-# 1. Configure API keys (choose ONE)
+# Ensure you have Python 3.10+ installed
+python3 --version  # Should be 3.10 or higher
+
+# If not, install on Ubuntu/Debian:
+sudo apt update && sudo apt install -y python3 python3-pip python3-venv git make
+```
+
+### Installation
+```bash
+# 1. Clone repository
+git clone https://github.com/brdfb/multi-agent-orchestrator-v2.git
+cd multi-agent-orchestrator-v2
+
+# 2. Configure API keys (choose ONE)
 
 # Option A: Environment variables (if already set in shell)
 echo $OPENAI_API_KEY  # Check if already set
-# If set, skip to step 2!
+# If set, skip to step 3!
 
 # Option B: Create .env file (for local dev)
 cp .env.example .env
 nano .env  # Add your keys
 
-# 2. Install
+# 3. Install dependencies (takes 5-10 minutes first time)
 make install
+# ⏳ This downloads ~30+ Python packages
 
-# 3. Run
+# 4. Run tests (takes 10-15 minutes first time for model download)
+make test
+# ⏳ First run downloads sentence-transformers model (~400MB)
+# Subsequent runs: ~20 seconds
+
+# 5. Start API server
 make run-api
 # System shows: 🔑 API keys loaded from [source]
 # Access UI: http://localhost:5050
 ```
 
-**Note:** If you've already exported API keys in `~/.bashrc` or `~/.zshrc`, you don't need a `.env` file. The system automatically uses environment variables.
+**Note:**
+- If you've already exported API keys in `~/.bashrc` or `~/.zshrc`, you don't need a `.env` file
+- The system automatically uses environment variables
+- First-time model download happens during first test run or first semantic search operation
 
 ## Main Features
 
