@@ -95,27 +95,21 @@ curl -X POST http://localhost:5050/ask \
 
 Run coordinated workflows (builder → critic → closer):
 
-**Option 1: Using mao-chain (Interactive)**
 ```bash
-mao-chain
-# Prompts for input
+# Run a chain workflow
+make agent-chain Q="Design a scalable e-commerce platform"
 
-# Or direct:
-mao-chain "Design a scalable e-commerce platform"
-
-# Save output to file:
-mao-chain "Design a system" --save-to report.md
-```
-
-**Option 2: Using Makefile**
-```bash
-make agent-chain Q="Design a scalable system"
+# Custom stages (optional)
+make agent-chain Q="Review code" STAGES="builder critic"
 ```
 
 **View chain results:**
 ```bash
-mao-last-chain   # View last chain execution details
-mao-logs         # View recent conversations
+# View last conversation log (formatted JSON)
+make agent-last
+
+# View specific log file
+python scripts/view_logs.py data/CONVERSATIONS/<filename>.json
 ```
 
 ## Key Endpoints
