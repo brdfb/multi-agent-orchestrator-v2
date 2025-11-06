@@ -64,6 +64,7 @@ make run-api
   - ✅ **Closer**: Synthesizes decisions into actionable steps
   - 🧭 **Router**: Automatically selects the right agent
 - **Multi-Agent Chains**: Run builder → critic → closer workflows
+- **🔄 Multi-Iteration Refinement (v0.8.0)**: Iterative refinement with convergence detection (max 3 iterations)
 - **🔄 Automatic Refinement (v0.7.0)**: Builder auto-fixes critical issues detected by critic
 - **📦 Semantic Compression (v0.6.0)**: 86% token savings with 100% context preservation
 - **Persistent Memory System**: SQLite-backed conversation memory with context injection

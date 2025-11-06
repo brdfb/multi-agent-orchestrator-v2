@@ -251,5 +251,88 @@ def test_refinement_config_loaded():
     assert isinstance(refinement_config["max_iterations"], int)
     assert isinstance(refinement_config["critical_keywords"], list)
 
-    # Verify expected values
-    assert refinement_config["max_iterations"] == 1  # Single-iteration refinement
+    # Verify expected values (v0.8.0: multi-iteration)
+    assert refinement_config["max_iterations"] == 3  # Multi-iteration refinement
+
+
+def test_check_convergence_no_issues():
+    """Test convergence when no critical issues found."""
+    runtime = AgentRuntime()
+
+    # No current issues = converged (success)
+    converged, reason = runtime._check_convergence(None, "previous issues")
+    assert converged is True
+    assert "No critical issues" in reason
+
+
+def test_check_convergence_first_iteration():
+    """Test that first iteration always continues."""
+    runtime = AgentRuntime()
+
+    # First iteration (previous_issues = None) = always continue
+    converged, reason = runtime._check_convergence("some issues", None)
+    assert converged is False
+    assert "First iteration" in reason
+
+
+def test_check_convergence_progress():
+    """Test convergence detection with progress (fewer issues)."""
+    runtime = AgentRuntime()
+
+    previous_issues = """
+    Issue 1: Problem A
+    Issue 2: Problem B
+    Issue 3: Problem C
+    """
+
+    current_issues = """
+    Issue 1: Problem A
+    """
+
+    # Fewer issues = progress = continue
+    converged, reason = runtime._check_convergence(current_issues, previous_issues)
+    assert converged is False
+    assert "Progress detected" in reason
+    assert "3 → 1" in reason  # Shows issue count reduction
+
+
+def test_check_convergence_no_progress():
+    """Test convergence when no progress is made."""
+    runtime = AgentRuntime()
+
+    previous_issues = """
+    Issue 1: Problem A
+    Issue 2: Problem B
+    """
+
+    current_issues = """
+    Issue 1: Problem X
+    Issue 2: Problem Y
+    Issue 3: Problem Z
+    """
+
+    # More issues = no progress = stop
+    converged, reason = runtime._check_convergence(current_issues, previous_issues)
+    assert converged is True
+    assert "No progress" in reason
+    assert "2 → 3" in reason  # Shows issue count increase
+
+
+def test_check_convergence_same_count():
+    """Test convergence when issue count stays the same."""
+    runtime = AgentRuntime()
+
+    previous_issues = """
+    Issue 1: Problem A
+    Issue 2: Problem B
+    """
+
+    current_issues = """
+    Issue 1: Problem X
+    Issue 2: Problem Y
+    """
+
+    # Same count = no progress = stop
+    converged, reason = runtime._check_convergence(current_issues, previous_issues)
+    assert converged is True
+    assert "No progress" in reason
