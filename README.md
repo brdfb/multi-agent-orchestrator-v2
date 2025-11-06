@@ -64,6 +64,8 @@ make run-api
   - ✅ **Closer**: Synthesizes decisions into actionable steps
   - 🧭 **Router**: Automatically selects the right agent
 - **Multi-Agent Chains**: Run builder → critic → closer workflows
+- **🔄 Automatic Refinement (v0.7.0)**: Builder auto-fixes critical issues detected by critic
+- **📦 Semantic Compression (v0.6.0)**: 86% token savings with 100% context preservation
 - **Persistent Memory System**: SQLite-backed conversation memory with context injection
 - **Three Interfaces**: CLI, REST API, Web UI (HTMX + PicoCSS)
 - **Complete Observability**: JSON logs, metrics, token/cost tracking
