@@ -5,8 +5,30 @@ These are minimal tests for regression protection, not comprehensive coverage.
 Run with: pytest tests/test_semantic_search.py -v
 """
 import pytest
+import tempfile
+from pathlib import Path
 from core.embedding_engine import get_embedding_engine, EmbeddingEngine
 from core.memory_engine import MemoryEngine
+from core.memory_backend import SQLiteBackend
+
+
+@pytest.fixture
+def temp_memory():
+    """Fixture for creating a fresh MemoryEngine with temporary database."""
+    # Create temp database
+    with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as tmp:
+        tmp_path = Path(tmp.name)
+
+    # Create fresh memory engine with temp backend
+    memory = MemoryEngine()
+    memory.backend = SQLiteBackend(tmp_path)
+    memory._initialized = True
+
+    yield memory
+
+    # Cleanup
+    if tmp_path.exists():
+        tmp_path.unlink()
 
 
 def test_embedding_engine_loads():
@@ -56,7 +78,7 @@ def test_embedding_serialization():
     assert (deserialized == original).all()
 
 
-def test_semantic_search_basic():
+def test_semantic_search_basic(temp_memory):
     """
     Smoke test for semantic search integration.
 
@@ -65,10 +87,8 @@ def test_semantic_search_basic():
     2. Search with semantic strategy
     3. Verify context is found
     """
-    memory = MemoryEngine()
-
     # Store a test conversation
-    conv_id = memory.store_conversation(
+    conv_id = temp_memory.store_conversation(
         prompt="Create a Kubernetes Helm chart with Redis",
         response="Here's a Helm chart structure...",
         agent="builder",
@@ -80,7 +100,7 @@ def test_semantic_search_basic():
     assert conv_id > 0
 
     # Search with semantic strategy
-    context = memory.get_context_for_prompt(
+    context = temp_memory.get_context_for_prompt(
         prompt="Helm chart for Kubernetes",
         strategy="semantic",
         max_tokens=500,
@@ -91,20 +111,15 @@ def test_semantic_search_basic():
     assert context != ""
     assert "Redis" in context or "Helm" in context
 
-    # Cleanup
-    memory.delete_conversation(conv_id)
 
-
-def test_turkish_semantic_search():
+def test_turkish_semantic_search(temp_memory):
     """
     Test semantic search with Turkish language prompts.
 
     This was the original use case that motivated semantic search.
     """
-    memory = MemoryEngine()
-
     # Store Turkish conversation
-    conv_id = memory.store_conversation(
+    conv_id = temp_memory.store_conversation(
         prompt="Kubernetes deployment için Helm chart oluştur",
         response="İşte Helm chart yapısı...",
         agent="builder",
@@ -114,7 +129,7 @@ def test_turkish_semantic_search():
     )
 
     # Search with Turkish prompt (different form: "chart" vs "chart'a")
-    context = memory.get_context_for_prompt(
+    context = temp_memory.get_context_for_prompt(
         prompt="Önceki Helm chart'a eklemeler yap",  # Different Turkish suffix
         strategy="semantic",
         max_tokens=500,
@@ -124,15 +139,10 @@ def test_turkish_semantic_search():
     # Semantic search should find it despite morphological differences
     assert context != ""
 
-    # Cleanup
-    memory.delete_conversation(conv_id)
 
-
-def test_hybrid_strategy():
+def test_hybrid_strategy(temp_memory):
     """Verify hybrid strategy doesn't crash."""
-    memory = MemoryEngine()
-
-    conv_id = memory.store_conversation(
+    conv_id = temp_memory.store_conversation(
         prompt="Test hybrid search",
         response="Response content",
         agent="builder",
@@ -142,7 +152,7 @@ def test_hybrid_strategy():
     )
 
     # Hybrid: 70% semantic + 30% keyword
-    context = memory.get_context_for_prompt(
+    context = temp_memory.get_context_for_prompt(
         prompt="hybrid search test",
         strategy="hybrid",
         max_tokens=500
@@ -150,9 +160,6 @@ def test_hybrid_strategy():
 
     # Should not crash
     assert context is not None
-
-    # Cleanup
-    memory.delete_conversation(conv_id)
 
 
 def test_empty_text_handling():

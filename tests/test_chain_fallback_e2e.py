@@ -51,7 +51,8 @@ class TestChainFallbackE2E:
         )
 
         # Assert: Chain completed successfully
-        assert len(results) == 3
+        # v0.9.0+: builder → individual critics → multi-critic consensus → closer (4 results)
+        assert len(results) == 4
         assert all(r.error is None for r in results)
 
         # Assert: Fallbacks were used (builder uses Anthropic by default)
