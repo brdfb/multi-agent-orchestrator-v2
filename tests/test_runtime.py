@@ -163,3 +163,93 @@ def test_compress_semantic_fallback():
         # Should fallback to intelligent truncation
         assert len(result) <= 2100  # 500 tokens * 4 chars + "..."
         assert isinstance(result, str)
+
+
+def test_extract_critical_issues_with_keywords():
+    """Test extraction of critical issues based on keywords."""
+    runtime = AgentRuntime()
+
+    critique_text = """
+    Issue 1: API Gateway - Technology Choice (Kong)
+
+    Problem: While Kong is a valid API Gateway, it's a relatively heavy solution.
+    Impact: Increased operational overhead, potentially higher latency.
+
+    CRITICAL: Missing authentication validation in WebSocket server.
+    This is a SECURITY vulnerability that must be fixed immediately.
+
+    Issue 2: Document Service - CRDT Implementation Details
+
+    ERROR: The code uses the wrong CRDT library. Should use Yjs instead of custom implementation.
+    This is INCORRECT and will cause data corruption.
+    """
+
+    result = runtime._extract_critical_issues(critique_text)
+
+    assert result is not None
+    assert "CRITICAL" in result or "SECURITY" in result
+    assert "ERROR" in result or "INCORRECT" in result
+
+
+def test_extract_critical_issues_no_issues():
+    """Test that no issues are extracted from positive feedback."""
+    runtime = AgentRuntime()
+
+    critique_text = """
+    The implementation looks good overall. The architecture is sound,
+    and the code follows best practices. I have no major concerns.
+
+    Some minor suggestions:
+    - Consider adding more comments
+    - Could add more unit tests
+    """
+
+    result = runtime._extract_critical_issues(critique_text)
+    assert result is None
+
+
+def test_extract_critical_issues_with_config():
+    """Test that critical issue extraction uses config keywords."""
+    runtime = AgentRuntime()
+
+    # Verify config is loaded
+    refinement_config = runtime.config.get("refinement", {})
+    assert "critical_keywords" in refinement_config
+    assert "CRITICAL" in refinement_config["critical_keywords"]
+    assert "ERROR" in refinement_config["critical_keywords"]
+
+
+def test_extract_critical_issues_edge_cases():
+    """Test edge cases for critical issue extraction."""
+    runtime = AgentRuntime()
+
+    # Empty text
+    assert runtime._extract_critical_issues("") is None
+    assert runtime._extract_critical_issues(None) is None
+
+    # Text with lowercase keywords (should still match via uppercase conversion)
+    text_lowercase = "This is a critical bug that needs fixing."
+    result = runtime._extract_critical_issues(text_lowercase)
+    assert result is not None
+    assert "critical" in result.lower()
+
+
+def test_refinement_config_loaded():
+    """Test that refinement configuration is properly loaded."""
+    runtime = AgentRuntime()
+
+    refinement_config = runtime.config.get("refinement", {})
+
+    # Check all expected config keys exist
+    assert "enabled" in refinement_config
+    assert "max_iterations" in refinement_config
+    assert "min_critical_issues" in refinement_config
+    assert "critical_keywords" in refinement_config
+
+    # Verify types
+    assert isinstance(refinement_config["enabled"], bool)
+    assert isinstance(refinement_config["max_iterations"], int)
+    assert isinstance(refinement_config["critical_keywords"], list)
+
+    # Verify expected values
+    assert refinement_config["max_iterations"] == 1  # Single-iteration refinement

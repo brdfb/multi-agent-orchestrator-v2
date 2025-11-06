@@ -14,6 +14,28 @@ compression:
   target_tokens: 500  # Target size for compressed summaries
   temperature: 0.1  # Low temperature for consistent compression
 
+# Single-Iteration Refinement Settings (v0.7.0+)
+# Automatically triggers builder refinement when critic finds critical issues
+# Flow: builder → critic → [if critical issues] → builder-v2 → closer
+refinement:
+  enabled: true  # Enable automatic refinement in chains
+  max_iterations: 1  # Single refinement iteration to control cost
+  min_critical_issues: 1  # Minimum number of critical issues to trigger refinement
+  critical_keywords:
+    - "CRITICAL"
+    - "ERROR"
+    - "BUG"
+    - "SECURITY"
+    - "VULNERABILITY"
+    - "INCORRECT"
+    - "WRONG"
+    - "MISSING"
+    - "BROKEN"
+    - "FAILED"
+  issue_patterns:
+    - "Issue \\d+:"  # Regex pattern for "Issue 1:", "Issue 2:", etc.
+    - "Problem \\d+:"  # Regex pattern for "Problem 1:", etc.
+
 agents:
   builder:
     model: "anthropic/claude-3-5-sonnet-20241022"  # Best for building

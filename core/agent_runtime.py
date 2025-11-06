@@ -151,6 +151,87 @@ ORIGINAL OUTPUT TO SUMMARIZE:
         else:
             return truncated + "..."
 
+    def _extract_critical_issues(self, critique_text: str) -> Optional[str]:
+        """
+        Extract critical issues from critic's response that require builder refinement.
+
+        Looks for issues marked as:
+        - CRITICAL, ERROR, SECURITY, BUG keywords (from config)
+        - "Issue N:" patterns with severity indicators
+        - Technical errors that must be fixed
+
+        Args:
+            critique_text: Full text from critic agent
+
+        Returns:
+            Formatted string of critical issues, or None if no critical issues found
+        """
+        import re
+
+        if not critique_text:
+            return None
+
+        # Load keywords from config
+        refinement_config = self.config.get("refinement", {})
+        critical_keywords = refinement_config.get("critical_keywords", [
+            "CRITICAL", "ERROR", "BUG", "SECURITY", "VULNERABILITY",
+            "INCORRECT", "WRONG", "MISSING", "BROKEN", "FAILED"
+        ])
+
+        # Split into lines for analysis
+        lines = critique_text.split('\n')
+        critical_lines = []
+        issue_blocks = []
+        current_block = []
+        in_critical_section = False
+
+        for i, line in enumerate(lines):
+            line_upper = line.upper()
+
+            # Check if line contains critical keywords
+            has_critical = any(keyword in line_upper for keyword in critical_keywords)
+
+            # Check for issue patterns with severity
+            issue_pattern = re.match(r'^\s*(?:Issue|Problem)\s+\d+:', line, re.IGNORECASE)
+
+            if has_critical or issue_pattern:
+                in_critical_section = True
+                current_block = [line]
+            elif in_critical_section:
+                # Continue collecting lines for this issue block
+                if line.strip() and not line.startswith('**'):
+                    current_block.append(line)
+                else:
+                    # End of current block
+                    if current_block:
+                        issue_blocks.append('\n'.join(current_block))
+                        current_block = []
+                    in_critical_section = False
+
+        # Add last block if exists
+        if current_block:
+            issue_blocks.append('\n'.join(current_block))
+
+        # If no structured blocks found, fall back to line-by-line extraction
+        if not issue_blocks:
+            for line in lines:
+                line_upper = line.upper()
+                if any(keyword in line_upper for keyword in critical_keywords):
+                    critical_lines.append(line.strip())
+
+            if critical_lines:
+                return '\n'.join(critical_lines)
+            return None
+
+        # Format the extracted issues
+        if issue_blocks:
+            formatted = "CRITICAL ISSUES REQUIRING FIXES:\n\n"
+            for i, block in enumerate(issue_blocks, 1):
+                formatted += f"{i}. {block}\n\n"
+            return formatted.strip()
+
+        return None
+
     def route(self, prompt: str) -> str:
         """
         Route prompt to appropriate agent with fallback support.
@@ -377,14 +458,15 @@ ORIGINAL OUTPUT TO SUMMARIZE:
 
         return result
 
-    def chain(self, prompt: str, stages: Optional[List[str]] = None, progress_callback=None) -> List[RunResult]:
+    def chain(self, prompt: str, stages: Optional[List[str]] = None, progress_callback=None, enable_refinement: Optional[bool] = None) -> List[RunResult]:
         """
-        Execute multi-agent chain.
+        Execute multi-agent chain with optional single-iteration refinement.
 
         Args:
             prompt: Initial user prompt
             stages: List of agent names (default: builder -> critic -> closer)
             progress_callback: Optional function(stage_num, total, agent_name) to report progress
+            enable_refinement: If True, allows builder to refine based on critical issues (default: from config)
 
         Returns:
             List of RunResults from each stage
@@ -392,13 +474,20 @@ ORIGINAL OUTPUT TO SUMMARIZE:
         if stages is None:
             stages = ["builder", "critic", "closer"]
 
+        # Load refinement setting from config if not explicitly provided
+        if enable_refinement is None:
+            refinement_config = self.config.get("refinement", {})
+            enable_refinement = refinement_config.get("enabled", True)
+
         results = []
         context = prompt
+        refinement_triggered = False
 
         for i, agent in enumerate(stages):
             # Report progress if callback provided
             if progress_callback:
                 progress_callback(i + 1, len(stages), agent)
+
             # For stages after the first, add context from previous
             if i > 0:
                 agent_cfg = self.config["agents"].get(agent, {})
@@ -446,5 +535,44 @@ ORIGINAL OUTPUT TO SUMMARIZE:
 
             result = self.run(agent=agent, prompt=context)
             results.append(result)
+
+            # REFINEMENT CHECK: After critic stage, check for critical issues
+            if enable_refinement and agent == "critic" and not refinement_triggered:
+                critical_issues = self._extract_critical_issues(result.response)
+
+                if critical_issues:
+                    print(f"\n🔄 Critical issues detected! Triggering builder refinement...\n")
+                    refinement_triggered = True
+
+                    # Find the builder result (should be results[-2] since critic is results[-1])
+                    builder_index = -2
+                    if len(results) >= 2 and results[builder_index].agent == "builder":
+                        builder_result = results[builder_index]
+
+                        # Create refinement prompt for builder
+                        refine_prompt = f"""Original request: {prompt}
+
+Your previous solution had the following CRITICAL ISSUES identified by the critic:
+
+{critical_issues}
+
+Please provide an IMPROVED version of your solution that addresses these critical issues.
+Focus on:
+1. Fixing technical errors
+2. Addressing security concerns
+3. Resolving missing components
+4. Correcting incorrect implementations
+
+Provide a complete, refined solution."""
+
+                        # Report progress if callback provided
+                        if progress_callback:
+                            progress_callback(len(results) + 1, len(stages) + 1, "builder-v2")
+
+                        # Run builder again with refinement prompt
+                        refined_result = self.run(agent="builder", prompt=refine_prompt)
+                        results.append(refined_result)
+
+                        print(f"✅ Builder refinement complete ({refined_result.total_tokens} tokens)\n")
 
         return results
