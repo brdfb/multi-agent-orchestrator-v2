@@ -507,7 +507,7 @@ ORIGINAL OUTPUT TO SUMMARIZE:
         return agent
 
     def run(
-        self, agent: str, prompt: str, override_model: Optional[str] = None
+        self, agent: str, prompt: str, override_model: Optional[str] = None, mock_mode: Optional[bool] = None
     ) -> RunResult:
         """
         Run agent with prompt and fallback support.
@@ -516,6 +516,7 @@ ORIGINAL OUTPUT TO SUMMARIZE:
             agent: Agent name (auto, builder, critic, closer)
             prompt: User prompt
             override_model: Optional model override
+            mock_mode: Optional mock mode override (defaults to LLM_MOCK env var)
 
         Returns:
             RunResult with response and metadata
@@ -612,6 +613,7 @@ ORIGINAL OUTPUT TO SUMMARIZE:
             temperature=agent_config.get("temperature", 0.2),
             max_tokens=agent_config.get("max_tokens", 1500),
             fallback_order=fallback_order,
+            mock_mode=mock_mode,
         )
 
         # Create log record
@@ -692,7 +694,7 @@ ORIGINAL OUTPUT TO SUMMARIZE:
 
         return result
 
-    def chain(self, prompt: str, stages: Optional[List[str]] = None, progress_callback=None, enable_refinement: Optional[bool] = None) -> List[RunResult]:
+    def chain(self, prompt: str, stages: Optional[List[str]] = None, progress_callback=None, enable_refinement: Optional[bool] = None, mock_mode: Optional[bool] = None) -> List[RunResult]:
         """
         Execute multi-agent chain with optional single-iteration refinement.
 
@@ -701,6 +703,7 @@ ORIGINAL OUTPUT TO SUMMARIZE:
             stages: List of agent names (default: builder -> critic -> closer)
             progress_callback: Optional function(stage_num, total, agent_name) to report progress
             enable_refinement: If True, allows builder to refine based on critical issues (default: from config)
+            mock_mode: Optional mock mode override (defaults to LLM_MOCK env var)
 
         Returns:
             List of RunResults from each stage
@@ -799,16 +802,16 @@ ORIGINAL OUTPUT TO SUMMARIZE:
                             results.extend(critic_run_results)
                         else:
                             # Fallback to single critic if multi-critic failed
-                            result = self.run(agent=agent, prompt=context)
+                            result = self.run(agent=agent, prompt=context, mock_mode=mock_mode)
                     else:
                         # No builder result, use single critic
-                        result = self.run(agent=agent, prompt=context)
+                        result = self.run(agent=agent, prompt=context, mock_mode=mock_mode)
                 else:
                     # Multi-critic disabled, use single critic
-                    result = self.run(agent=agent, prompt=context)
+                    result = self.run(agent=agent, prompt=context, mock_mode=mock_mode)
             else:
                 # Non-critic agents use standard execution
-                result = self.run(agent=agent, prompt=context)
+                result = self.run(agent=agent, prompt=context, mock_mode=mock_mode)
 
             results.append(result)
 

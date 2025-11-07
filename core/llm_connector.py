@@ -147,6 +147,7 @@ class LLMConnector:
         temperature: float = 0.2,
         max_tokens: int = 1500,
         fallback_order: Optional[List[str]] = None,
+        mock_mode: Optional[bool] = None,
     ) -> LLMResponse:
         """
         Call LLM with retry logic and fallback support.
@@ -158,6 +159,7 @@ class LLMConnector:
             temperature: Sampling temperature
             max_tokens: Maximum tokens to generate
             fallback_order: List of fallback models to try if primary fails
+            mock_mode: Override to enable/disable mock mode (defaults to LLM_MOCK env var)
 
         Returns:
             LLMResponse with text and metadata
@@ -165,8 +167,10 @@ class LLMConnector:
         start_time = time.perf_counter()
         original_model = model
 
-        # Check for mock mode
-        mock_mode = os.environ.get("LLM_MOCK", "").lower() in ["1", "true", "yes"]
+        # Check for mock mode (parameter overrides environment variable)
+        if mock_mode is None:
+            mock_mode = os.environ.get("LLM_MOCK", "").lower() in ["1", "true", "yes"]
+
         if mock_mode:
             # Return mock response for testing without API keys
             duration_ms = (time.perf_counter() - start_time) * 1000
