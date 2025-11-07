@@ -3,6 +3,7 @@
 import os
 import sys
 import time
+from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Optional
@@ -25,27 +26,11 @@ from core.memory_engine import MemoryEngine
 SERVER_START_TIME = time.time()
 LAST_REQUEST_TIME = None
 
-# Initialize FastAPI
-app = FastAPI(
-    title="Multi-Agent Orchestrator",
-    description="Multi-LLM agent system with CLI, API, and UI",
-    version="0.10.0",
-)
 
-
-# Middleware to track last request time
-@app.middleware("http")
-async def track_request_time(request: Request, call_next):
-    """Track last request timestamp for health monitoring."""
-    global LAST_REQUEST_TIME
-    LAST_REQUEST_TIME = time.time()
-    response = await call_next(request)
-    return response
-
-
-@app.on_event("startup")
-async def startup_event():
-    """Log environment source and provider status on startup."""
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Lifespan event handler for startup and shutdown."""
+    # Startup logic
     env_source = get_env_source()
     if env_source == "environment":
         print("🔑 API keys loaded from environment variables (shell/CI)")
@@ -66,6 +51,30 @@ async def startup_event():
     disabled = [p for p in all_providers if p not in available]
     if disabled:
         print(f"✗ Disabled providers: {', '.join(disabled)}")
+
+    yield  # Application runs here
+
+    # Shutdown logic (if needed in future)
+    # print("🛑 Server shutting down...")
+
+
+# Initialize FastAPI with lifespan
+app = FastAPI(
+    title="Multi-Agent Orchestrator",
+    description="Multi-LLM agent system with CLI, API, and UI",
+    version="0.10.0",
+    lifespan=lifespan,
+)
+
+
+# Middleware to track last request time
+@app.middleware("http")
+async def track_request_time(request: Request, call_next):
+    """Track last request timestamp for health monitoring."""
+    global LAST_REQUEST_TIME
+    LAST_REQUEST_TIME = time.time()
+    response = await call_next(request)
+    return response
 
 
 # Setup templates and static files

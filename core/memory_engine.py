@@ -415,10 +415,11 @@ class MemoryEngine:
         Returns:
             Estimated token count
         """
-        # Simple heuristic: 4 chars ≈ 1 token
+        from config.settings import count_tokens
+
         # Format: "[Past conversation]\nQ: {prompt}\nA: {response}"
         text = f"[Past conversation]\nQ: {rec['prompt']}\nA: {rec['response']}"
-        return len(text) // 4
+        return count_tokens(text)
 
     def _format_context(self, conversations: List[Dict[str, Any]]) -> str:
         """

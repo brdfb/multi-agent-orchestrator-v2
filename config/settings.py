@@ -249,3 +249,33 @@ def estimate_cost(model: str, prompt_tokens: int, completion_tokens: int) -> flo
     output_cost = (completion_tokens / 1_000_000) * costs["output"]
 
     return input_cost + output_cost
+
+
+# Token counting utility (standardized across codebase)
+_tiktoken_encoding = None
+
+
+def count_tokens(text: str) -> int:
+    """
+    Count tokens in text using tiktoken (OpenAI's tokenizer).
+
+    Uses cl100k_base encoding (GPT-4, GPT-3.5-turbo) as standard.
+    This is more accurate than the old heuristic (len(text) // 4).
+
+    Args:
+        text: Text to count tokens for
+
+    Returns:
+        Token count
+    """
+    global _tiktoken_encoding
+
+    if _tiktoken_encoding is None:
+        try:
+            import tiktoken
+            _tiktoken_encoding = tiktoken.get_encoding("cl100k_base")
+        except ImportError:
+            # Fallback to old heuristic if tiktoken not installed
+            return len(text) // 4
+
+    return len(_tiktoken_encoding.encode(text))

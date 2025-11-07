@@ -573,8 +573,9 @@ class TestMemoryEngine:
             "Python function", max_tokens=100, min_relevance=0.0
         )
 
-        # Estimate tokens in result
-        estimated_tokens = len(context) // 4
+        # Estimate tokens in result using standardized counting
+        from config.settings import count_tokens
+        estimated_tokens = count_tokens(context)
 
         # Should not exceed budget (allow small margin)
         assert estimated_tokens <= 120, f"Token budget exceeded: {estimated_tokens}"

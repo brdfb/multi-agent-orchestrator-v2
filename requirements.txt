@@ -11,6 +11,9 @@ google-generativeai>=0.3.0
 # Semantic search & embeddings
 sentence-transformers>=2.2.2  # Multilingual semantic search (50+ languages)
 
+# Token counting
+tiktoken>=0.5.0  # Accurate token counting for OpenAI models
+
 # Development dependencies
 pytest>=8.0.0
 httpx>=0.26.0

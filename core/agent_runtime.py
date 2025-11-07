@@ -598,8 +598,9 @@ ORIGINAL OUTPUT TO SUMMARIZE:
                     # Inject into system prompt
                     system_prompt = f"{agent_config['system']}\n\n{context_block}"
 
-                    # Estimate injected tokens (4 chars ≈ 1 token)
-                    injected_context_tokens = len(context_block) // 4
+                    # Estimate injected tokens using standardized counting
+                    from config.settings import count_tokens
+                    injected_context_tokens = count_tokens(context_block)
             except Exception:
                 # If memory retrieval fails (e.g., database not available), continue without context
                 # This ensures graceful degradation in test/development environments
