@@ -16,7 +16,7 @@ def test_override_model_used():
 
     model_used = None
 
-    def mock_call(model, system, user, temperature, max_tokens, fallback_order=None):
+    def mock_call(model, system, user, temperature, max_tokens, fallback_order=None, mock_mode=None):
         nonlocal model_used
         model_used = model
         return LLMResponse(
@@ -48,7 +48,7 @@ def test_default_model_used_without_override():
 
     model_used = None
 
-    def mock_call(model, system, user, temperature, max_tokens, fallback_order=None):
+    def mock_call(model, system, user, temperature, max_tokens, fallback_order=None, mock_mode=None):
         nonlocal model_used
         model_used = model
         return LLMResponse(

@@ -87,11 +87,13 @@ class AskRequest(BaseModel):
     agent: str
     prompt: str
     override_model: Optional[str] = None
+    mock_mode: Optional[bool] = None
 
 
 class ChainRequest(BaseModel):
     prompt: str
     stages: Optional[List[str]] = None
+    mock_mode: Optional[bool] = None
 
 
 class RunResultResponse(BaseModel):
@@ -145,6 +147,7 @@ async def ask(request: AskRequest):
             agent=request.agent,
             prompt=request.prompt,
             override_model=request.override_model,
+            mock_mode=request.mock_mode,
         )
 
         if result.error:
@@ -173,7 +176,7 @@ async def chain(request: ChainRequest):
         raise HTTPException(status_code=422, detail="Prompt cannot be empty")
 
     try:
-        results = runtime.chain(prompt=request.prompt, stages=request.stages)
+        results = runtime.chain(prompt=request.prompt, stages=request.stages, mock_mode=request.mock_mode)
 
         # Check for errors
         errors = [r for r in results if r.error]
