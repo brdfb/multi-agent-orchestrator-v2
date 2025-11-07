@@ -45,6 +45,180 @@ cd multi-agent-orchestrator-v2
 
 ---
 
+## 🪟 Windows Kullanıcıları: WSL Kurulumu (Adım 0)
+
+**Windows kullanıcısıysan bu bölümü oku! macOS/Linux kullanıcıları [Adım 1'e](#adım-1-hızlı-kurulum-60-saniye) geçebilir.**
+
+### Adım 0.1: WSL2 Kurulumu (İlk Kez İse)
+
+**Windows PowerShell'i Administrator Olarak Aç:**
+```
+Windows tuşu + X → "Windows PowerShell (Admin)" veya "Terminal (Admin)"
+```
+
+**WSL2 Kur:**
+```powershell
+# WSL'i yükle (Windows 10 version 2004+ veya Windows 11)
+wsl --install
+
+# Bilgisayarı yeniden başlat
+# (Gerekli - WSL çalışmaya başlamak için restart şart)
+```
+
+**Yeniden başlatma sonrası:**
+- Ubuntu otomatik açılacak
+- Kullanıcı adı iste: **küçük harf kullan** (örn: `ahmet`, `mehmet`)
+- Şifre iste: **şifre yazarken ekranda görünmez** (normal)
+- Şifreyi tekrar iste: Aynı şifreyi yaz
+
+**✅ Kontrol Et:**
+```powershell
+# PowerShell'de (herhangi bir pencere, admin olmasına gerek yok)
+wsl --list --verbose
+
+# Görmek istediğin:
+#   NAME      STATE           VERSION
+# * Ubuntu    Running         2        ← VERSION: 2 olmalı!
+```
+
+### Adım 0.2: Git ve Python Kurulumu (WSL Ubuntu İçinde)
+
+**Ubuntu terminalini aç:**
+```
+Windows tuşu → "Ubuntu" yaz → Enter
+```
+
+**Sistem paketlerini güncelle:**
+```bash
+# İlk komut (biraz zaman alır - 2-3 dk)
+sudo apt update && sudo apt upgrade -y
+
+# Şifre iste → Ubuntu şifreni yaz (Adım 0.1'de oluşturduğun)
+```
+
+**Git ve Python kur:**
+```bash
+# Tek komutla hepsini kur
+sudo apt install -y git python3 python3-pip python3-venv make curl
+
+# ✅ Kontrol et
+python3 --version   # Python 3.10+ olmalı
+git --version       # git version 2.x.x olmalı
+```
+
+**Git yapılandırması (önemli!):**
+```bash
+# Kendi bilgilerini yaz
+git config --global user.name "Senin Adın"
+git config --global user.email "senin@email.com"
+
+# ✅ Kontrol et
+git config --list | grep user
+# user.name=Senin Adın
+# user.email=senin@email.com
+```
+
+### Adım 0.3: SSH Key Oluştur (GitHub İçin)
+
+**Neden SSH key?**
+- ✅ GitHub'dan private repo clone edebilirsin
+- ✅ Her seferinde şifre yazmana gerek yok
+- ✅ Daha güvenli (şifre yerine key kullanır)
+
+**SSH key oluştur:**
+```bash
+# Email'ini kendi email'inle değiştir
+ssh-keygen -t ed25519 -C "senin@email.com"
+
+# Soracaklar:
+# "Enter file in which to save the key": [Enter'a bas - varsayılan yeri kullan]
+# "Enter passphrase": [Enter'a bas - şifresiz (test için), veya şifre koy]
+# "Enter same passphrase again": [Enter'a bas veya aynı şifreyi tekrar yaz]
+```
+
+**✅ Key oluşturuldu! Şimdi kopyala:**
+```bash
+# Public key'i göster
+cat ~/.ssh/id_ed25519.pub
+
+# Çıktı şuna benzer:
+# ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIHx... senin@email.com
+#
+# ← Bu TÜMÜNÜ kopyala (ssh-ed25519'den başlayıp email'e kadar)
+```
+
+### Adım 0.4: SSH Key'i GitHub'a Ekle
+
+**GitHub'a git:**
+```
+https://github.com/settings/keys
+```
+
+**Key ekle:**
+1. Sağ üstte "New SSH key" butonuna bas
+2. **Title:** "WSL Ubuntu" (veya istediğin isim)
+3. **Key:** Kopyaladığın key'i yapıştır (cat komutu çıktısı)
+4. "Add SSH key" butonuna bas
+5. GitHub şifreni iste → Yaz
+
+**✅ Test et:**
+```bash
+# GitHub bağlantısını test et
+ssh -T git@github.com
+
+# Görmek istediğin:
+# Hi KULLANICI-ADIN! You've successfully authenticated...
+```
+
+**❌ Hata aldıysan:**
+```bash
+# "Permission denied (publickey)" → SSH key eklenMEmiş
+# → Adım 0.3 ve 0.4'ü tekrar kontrol et
+
+# "Could not resolve hostname" → İnternet bağlantısı yok
+# → WiFi/Ethernet bağlantını kontrol et
+```
+
+### Adım 0.5: Repository Clone (Fork Kullan!)
+
+**GitHub'da fork yap:**
+```
+1. https://github.com/brdfb/multi-agent-orchestrator-v2 adresine git
+2. Sağ üstte "Fork" butonuna bas
+3. "Create fork" butonuna bas
+4. Fork oluşturuldu! → Senin URL'in: https://github.com/SENIN-KULLANICI-ADIN/multi-agent-orchestrator-v2
+```
+
+**WSL Ubuntu'da clone et:**
+```bash
+# NOT: SENIN-KULLANICI-ADIN yerine kendi GitHub kullanıcı adını yaz!
+git clone git@github.com:SENIN-KULLANICI-ADIN/multi-agent-orchestrator-v2.git
+
+# Çıktı:
+# Cloning into 'multi-agent-orchestrator-v2'...
+# remote: Enumerating objects: ...
+# ✅ Clone başarılı!
+
+# Klasöre gir
+cd multi-agent-orchestrator-v2
+
+# ✅ Kontrol et
+pwd
+# /home/kullanici-adin/multi-agent-orchestrator-v2
+```
+
+### 🎯 WSL Kurulum Tamamlandı!
+
+**Artık [Adım 1: Hızlı Kurulum](#adım-1-hızlı-kurulum-60-saniye)'a geçebilirsin.**
+
+**WSL ile ilgili bilgiler:**
+- 📁 Windows dosyalarına erişim: `/mnt/c/Users/SenınAdın/`
+- 💻 WSL terminaline hızlı erişim: `Windows tuşu → "Ubuntu" → Enter`
+- 🔄 WSL'i yeniden başlatma: `wsl --shutdown` (PowerShell'de)
+- 📂 WSL dosyalarını Windows'tan görmek: `\\wsl$\Ubuntu\home\kullanici-adin\`
+
+---
+
 ## 📦 Kurulum Talimatları
 
 ### Adım 1: Hızlı Kurulum (60 Saniye)
@@ -230,6 +404,189 @@ mao-chain "E-ticaret sistemi tasarla"
 
 ---
 
+## 🪟 WSL Sorun Giderme (Yaygın Hatalar)
+
+### Sorun 1: "wsl --install" Çalışmıyor
+
+**Hata:** `wsl: command not found` veya `The term 'wsl' is not recognized`
+
+**Sebep:** Windows versiyonu eski (Windows 10 build 19041'den eski)
+
+**Çözüm:**
+```powershell
+# Windows versiyonu kontrol et
+winver
+# Build number 19041 veya üstü olmalı
+
+# Eğer eski ise:
+# 1. Windows Update → En son güncellemeleri yükle
+# 2. Tekrar dene: wsl --install
+```
+
+**Alternatif (Eski Windows):**
+```powershell
+# Manuel WSL kurulumu (Windows 10 build 19041 öncesi)
+dism.exe /online /enable-feature /featurename:Microsoft-Windows-Subsystem-Linux /all /norestart
+dism.exe /online /enable-feature /featurename:VirtualMachinePlatform /all /norestart
+
+# Bilgisayarı yeniden başlat
+# Sonra: wsl --set-default-version 2
+```
+
+### Sorun 2: WSL2 Yerine WSL1 Kuruldu
+
+**Hata:** `wsl --list --verbose` çıktısında `VERSION: 1`
+
+**Çözüm:**
+```powershell
+# WSL2'ye geçiş yap
+wsl --set-version Ubuntu 2
+
+# Varsayılanı WSL2 yap (gelecekteki kurulumlar için)
+wsl --set-default-version 2
+```
+
+### Sorun 3: "Permission denied" (SSH Key)
+
+**Hata:** `git clone` yaparken `Permission denied (publickey)`
+
+**Çözüm:**
+```bash
+# 1. SSH key oluşturuldu mu kontrol et
+ls -la ~/.ssh/id_ed25519.pub
+
+# Eğer dosya yoksa → Adım 0.3'ü tekrar yap
+ssh-keygen -t ed25519 -C "senin@email.com"
+
+# 2. Public key'i kopyala
+cat ~/.ssh/id_ed25519.pub
+# Çıktıyı TAMAMEN kopyala
+
+# 3. GitHub'a ekle (Adım 0.4)
+# https://github.com/settings/keys
+
+# 4. Test et
+ssh -T git@github.com
+# "Hi KULLANICI-ADIN!" görmelisin
+```
+
+### Sorun 4: Python Versiyonu Eski
+
+**Hata:** `python3 --version` → Python 3.8 veya daha eski
+
+**Çözüm:**
+```bash
+# Ubuntu 22.04+ için (Python 3.10+ içerir)
+# Sistem güncellendi mi?
+sudo apt update
+sudo apt upgrade -y
+
+# Python 3.11 kurulumu (Ubuntu 20.04 için)
+sudo apt install -y software-properties-common
+sudo add-apt-repository ppa:deadsnakes/ppa -y
+sudo apt update
+sudo apt install -y python3.11 python3.11-venv python3.11-dev
+
+# python3 → python3.11 alias
+sudo update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.11 1
+```
+
+### Sorun 5: "make: command not found"
+
+**Hata:** `make install` → `make: command not found`
+
+**Çözüm:**
+```bash
+# make yükle
+sudo apt install -y make
+
+# Kontrol et
+make --version
+```
+
+### Sorun 6: WSL İnternet Bağlantısı Yok
+
+**Hata:** `sudo apt update` → `Could not resolve 'archive.ubuntu.com'`
+
+**Çözüm 1 (En kolay):**
+```powershell
+# PowerShell'de WSL'i yeniden başlat
+wsl --shutdown
+
+# Ubuntu'yu tekrar aç
+# Windows tuşu → "Ubuntu" → Enter
+```
+
+**Çözüm 2 (DNS değiştir):**
+```bash
+# WSL içinde
+sudo nano /etc/resolv.conf
+
+# Dosya içeriğini şununla değiştir:
+# nameserver 8.8.8.8
+# nameserver 8.8.4.4
+
+# Kaydet: Ctrl+X → Y → Enter
+
+# Test et
+ping google.com
+```
+
+**Çözüm 3 (Windows Firewall):**
+```
+Windows Defender Firewall → Advanced Settings
+→ Inbound Rules → New Rule
+→ Program: %SystemRoot%\system32\wsl.exe
+→ Allow the connection
+```
+
+### Sorun 7: Windows'tan WSL Dosyalarına Erişemiyorum
+
+**Çözüm:**
+```
+# Windows Explorer'da adres çubuğuna yaz:
+\\wsl$\Ubuntu\home\kullanici-adin\
+
+# Veya File Explorer'da:
+# Network → \\wsl$ → Ubuntu → home → kullanici-adin
+```
+
+**Not:** WSL kapalıysa `\\wsl$` görünmez! Ubuntu terminalini önce aç.
+
+### Sorun 8: "venv/bin/activate" Çalışmıyor
+
+**Hata:** `.venv/bin/activate: No such file or directory`
+
+**Çözüm:**
+```bash
+# venv oluşturuldu mu kontrol et
+ls -la .venv/
+
+# Eğer .venv yoksa:
+python3 -m venv .venv
+
+# Tekrar dene
+source .venv/bin/activate
+```
+
+### Sorun 9: Windows ve WSL Arasında Kopyala-Yapıştır Çalışmıyor
+
+**Çözüm:**
+```bash
+# WSL içinde Windows clipboard'a kopyala
+cat dosya.txt | clip.exe
+
+# Windows clipboard'dan WSL'e yapıştır
+# → Sağ tık yeterli (WSL terminal'de)
+```
+
+**Windows Terminal kullanıyorsan:**
+```
+Settings → Defaults → Copy on select: ✅ AÇIK
+```
+
+---
+
 ## 🆘 Acil Yardım
 
 ### Tamamen Takıldım!
@@ -252,9 +609,22 @@ Issues: [Yukarıdaki link]/issues
 
 ## 🎉 Test Tamamlandı mı?
 
-**Checklist:**
+**Checklist (Windows/WSL Kullanıcıları):**
+- [ ] WSL2 kurdum (Adım 0.1)
+- [ ] Git ve Python kurdum (Adım 0.2)
+- [ ] SSH key oluşturdum (Adım 0.3)
+- [ ] SSH key'i GitHub'a ekledim (Adım 0.4)
+- [ ] Fork yaptım ve clone ettim (Adım 0.5)
+- [ ] Kurulumu tamamladım (make install)
+- [ ] Testler geçti (make test)
+- [ ] API server başladı (make run-api)
+- [ ] UI açıldı (http://localhost:5050)
+- [ ] En az 1 komut test ettim (mao auto "test")
+- [ ] Feedback gönderdim
+
+**Checklist (macOS/Linux Kullanıcıları):**
 - [ ] Fork yaptım
-- [ ] Clone ettim
+- [ ] Clone ettim (SSH key varsa)
 - [ ] Kurulumu tamamladım (make install)
 - [ ] Testler geçti (make test)
 - [ ] API server başladı (make run-api)

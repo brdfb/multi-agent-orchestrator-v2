@@ -9,3 +9,14 @@ data/MEMORY/*.db
 *.db-journal
 *.log
 nohup.out
+
+# Windows Zone.Identifier files
+*:Zone.Identifier
+
+# Personal documentation notes
+Reading_Progress_Tracker.md
+executive_summary.md
+reading_summary.md
+
+# Claude Code conversation history (personal backup)
+docs/claude-history/

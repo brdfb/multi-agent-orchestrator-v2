@@ -525,3 +525,281 @@ make agent-last | jq '.fallback_used'
 - **Fallback is automatic**: If Claude unavailable, falls back to Gemini/GPT seamlessly
 - **Chains are saved**: Use `--save-to` to export full chain output for documentation
 - **Logs are local**: All data in `~/.orchestrator/data/` - never sent to cloud
+
+## Historical Context & Development Decisions
+
+This section documents important architectural decisions and lessons learned during development. For full development history, see `docs/claude-history/CONVERSATION_SUMMARY.md` and `docs/DEVELOPMENT_HISTORY.md`.
+
+### Critical Decisions & Rationale
+
+#### 1. Virtual Environment in CLI Aliases (2025-11-05)
+**Problem:** Initial `mao` alias used system Python, causing `ModuleNotFoundError: litellm`
+**Root Cause:** System Python doesn't have project dependencies installed
+**Solution:** Alias points directly to `.venv/bin/python`
+```bash
+# ❌ Original (broken):
+alias mao="python3 $ORCHESTRATOR_HOME/scripts/agent_runner.py"
+
+# ✅ Fixed:
+alias mao="$ORCHESTRATOR_HOME/.venv/bin/python $ORCHESTRATOR_HOME/scripts/agent_runner.py"
+```
+**Why This Matters:** Users must always use venv Python for any orchestrator script execution. Makefile handles this automatically with `. .venv/bin/activate`.
+
+#### 2. Chain Context Passing Strategy (v0.3.0)
+**Problem:** Original 200-char truncation lost 96% of builder output, causing critic/closer to make uninformed decisions
+**Evolution:**
+- v0.1.0: 200 chars (too little context)
+- v0.2.0: Full output (token explosion, >10K tokens per chain)
+- v0.3.0: Smart truncation - 1500 chars to closer (builder + critic), 600-1000 for others
+
+**Trade-off Decision:**
+- **Option A:** Pass full outputs (comprehensive but 3x cost)
+- **Option B:** Minimal truncation (cheap but quality loss)
+- **Chosen:** Hybrid approach with role-specific limits
+
+**Why This Works:** Closer needs synthesis (gets more context), intermediate agents need less (just enough for next step). See `agent_runtime.py:300-350`.
+
+#### 3. Token Limit Optimization (v0.5.0)
+**Problem:** Responses cut off mid-sentence (builder hit 2496/2500 tokens)
+**Progression:**
+- Initial: Builder 2500, Critic 2000, Closer 1800
+- v0.4.0: Builder 4096, Critic 3072, Closer 2560
+- v0.5.0: Builder 9000, Critic 7000, Closer 9000
+
+**Why 9K instead of 32K max?**
+- 4x cost savings ($0.003 vs $0.012 per response)
+- 3x speed improvement (~15s vs ~45s)
+- 1K buffer for complex responses (8K actual + 1K safety)
+
+**When to Increase:** If you see truncated responses in logs, increase agent-specific `max_tokens` in `config/agents.yaml`. No restart needed.
+
+#### 4. Memory System Silent Failure (2025-11-05 - CRITICAL BUG)
+**Problem:** Conversations not persisting to database despite memory enabled
+**Root Cause:** `LLMResponse` dataclass missing `estimated_cost` field, causing exception in `agent_runtime.py:271`
+**Hidden by:** Bare `except: pass` silencing all errors
+**Fix:** Added `estimated_cost: float = 0.0` to `LLMResponse` + debug logging
+
+**LESSON LEARNED:** Never use bare `except: pass` - always log exceptions at minimum. This bug went undetected for days because errors were silently swallowed.
+
+**Verification:** After any memory system change, test with:
+```bash
+mao auto "test"
+sqlite3 data/MEMORY/conversations.db "SELECT COUNT(*) FROM conversations"
+```
+
+#### 5. Multi-Provider Fallback Architecture (v0.2.0)
+**Problem:** Single API key failure = entire system down
+**Design Choice:** Automatic fallback with transparency
+
+**Fallback Order (per agent):**
+```yaml
+builder:
+  model: "anthropic/claude-3-5-sonnet-20241022"
+  fallback_order:
+    - "openai/gpt-4o"           # Premium fallback
+    - "openai/gpt-4o-mini"      # Budget fallback
+    - "gemini/gemini-2.0-flash" # Free fallback
+```
+
+**Why This Order?**
+1. Claude Sonnet: Best for creative building (primary)
+2. GPT-4o: High quality, fast (first fallback)
+3. GPT-4o-mini: Cheap, fast enough (budget fallback)
+4. Gemini Flash: Free tier available (last resort)
+
+**Logging:** All fallbacks logged with `original_model`, `fallback_reason`, `fallback_used` metadata. Check `/health` endpoint for provider status.
+
+#### 6. Semantic Search for Turkish (v0.4.0)
+**Problem:** Keyword-based memory failed with Turkish: "chart" vs "chart'a" counted as different (0.25 overlap < 0.3 threshold)
+**Root Cause:** Turkish morphology - agglutinative language adds suffixes to root words
+**Solution:** Semantic embeddings (`paraphrase-multilingual-MiniLM-L12-v2`)
+
+**Performance:**
+- First model load: ~30s (420MB download, one-time)
+- Subsequent: <1s (cached)
+- Search: <100ms for 500 conversations
+
+**Strategy Comparison:**
+- `keywords`: Fast, fails with morphology
+- `semantic`: Understands meaning, handles 50+ languages
+- `hybrid`: 70% semantic + 30% keywords (best of both)
+
+**Default:** `semantic` for builder (configured in `config/agents.yaml`)
+
+### Common Pitfalls (From Development History)
+
+#### Pitfall 1: Running Scripts Without venv
+```bash
+# ❌ WRONG - Uses system Python
+python3 scripts/agent_runner.py auto "test"
+
+# ✅ CORRECT - Uses venv
+.venv/bin/python scripts/agent_runner.py auto "test"
+
+# ✅ BEST - Use aliases (handle venv automatically)
+mao auto "test"
+```
+
+#### Pitfall 2: Expecting Immediate Memory Context
+**Issue:** User: "Add to previous chart"
+**Result:** "What chart?" (memory didn't find context)
+
+**Why?**
+- Relevance threshold too high (min_relevance: 0.35)
+- Keywords didn't match (morphology issue)
+- Time decay (conversation >96 hours old)
+
+**Fix:**
+```yaml
+# config/agents.yaml - builder.memory section
+min_relevance: 0.25  # Lower threshold
+time_decay_hours: 168  # 7 days instead of 4
+strategy: "semantic"  # Instead of keywords
+```
+
+#### Pitfall 3: Chain Not Using Latest Agent Configs
+**Issue:** Changed `max_tokens` in `config/agents.yaml`, but chains still truncate
+
+**Why?** You might be running cached chain runner or old server instance.
+
+**Fix:**
+```bash
+# 1. Kill old server
+pkill -f "uvicorn api.server:app"
+
+# 2. Restart (auto-reloads on config change)
+make run-api
+
+# 3. Or use direct chain (no server needed)
+make agent-chain Q="Your prompt"
+```
+
+**Note:** Config changes apply immediately to new requests - no restart needed for CLI (`mao` commands).
+
+#### Pitfall 4: Testing Without API Keys
+```bash
+# ❌ WRONG - Real LLM calls fail
+mao auto "test"  # Error: Missing API key
+
+# ✅ CORRECT - Use mock mode for testing
+export LLM_MOCK=1
+make test  # All tests pass with mocked responses
+
+# ✅ BEST - Check key detection first
+python3 -c "from config.settings import get_env_source; print(get_env_source())"
+# Should print: "environment variables" or ".env file"
+```
+
+### Development Timeline Highlights
+
+**v0.1.0 (2025-11-03)** - Initial Release
+- Core orchestration engine
+- 4 agent roles (builder, critic, closer, router)
+- CLI + REST API + Web UI
+
+**v0.2.0 (2025-11-04)** - Memory System
+- SQLite-backed conversation storage
+- Context injection with relevance scoring
+- Memory CLI and API endpoints
+
+**v0.3.0 (2025-11-05)** - Chain Optimization
+- Smart context truncation (1500 chars per stage)
+- Progress indicators for chains
+- Fallback transparency
+- `mao` alias fix (venv Python)
+
+**v0.4.0 (2025-11-05)** - Semantic Search
+- Multilingual embeddings (50+ languages)
+- Turkish morphology support
+- Semantic/hybrid/keyword strategies
+
+**v0.5.0 (2025-11-05)** - Token Optimization
+- Builder: 9000 tokens (3.6x increase)
+- Critic: 7000 tokens (3.5x increase)
+- Closer: 9000 tokens (5x increase)
+- Memory system critical bug fix
+
+**v0.6.0 (2025-11-06)** - Semantic Compression
+- 90% token reduction with 100% context preservation
+- Structured JSON compression for chain context
+- Gemini Flash for compression (fast & cheap)
+
+**v0.7.0 (2025-11-06)** - Auto-Refinement
+- Single-iteration builder refinement when critic finds critical issues
+- Critical keyword detection (SECURITY, BUG, ERROR, etc.)
+- Automatic fix attempt before closer synthesis
+
+**v0.8.0 (2025-11-06)** - Multi-Iteration Refinement
+- Up to 3 refinement cycles with convergence detection
+- Progress tracking per iteration
+- Automatic stopping on no progress or success
+
+**v0.9.0 (2025-11-06)** - Multi-Critic Consensus
+- 3 specialized critics (security, performance, code-quality)
+- Parallel execution (no latency penalty)
+- Weighted consensus merging
+
+**v0.10.0 (2025-11-06)** - Dynamic Critic Selection
+- Keyword-based critic relevance scoring
+- 30-50% cost savings (only relevant critics run)
+- 1-3 critics selected dynamically per prompt
+
+### Key Files Modified (Historical Reference)
+
+**Most Frequently Modified:**
+1. `config/agents.yaml` - 15+ updates (token limits, memory config, agent prompts)
+2. `core/agent_runtime.py` - 10+ updates (chain logic, memory integration, refinement)
+3. `core/llm_connector.py` - 5+ updates (fallback logic, cost estimation)
+4. `CLAUDE.md` - This file (continuous documentation updates)
+
+**Critical Files for Understanding:**
+- `config/agents.yaml` - Agent definitions, all customizable parameters
+- `core/agent_runtime.py` - Chain execution, memory injection, refinement loop
+- `core/memory_engine.py` - Conversation storage, context retrieval, semantic search
+- `api/server.py` - REST API, health monitoring, memory endpoints
+
+### Quick Reference: Where to Find Answers
+
+**"Why was X designed this way?"**
+→ Check this Historical Context section or `docs/DEVELOPMENT_HISTORY.md`
+
+**"How do I customize Y?"**
+→ See main sections above (Development Commands, Common Patterns)
+
+**"What changed in version Z?"**
+→ See `CHANGELOG.md` for detailed version history
+
+**"System isn't working as expected"**
+→ Check Common Pitfalls above, then `TROUBLESHOOTING.md`
+
+**"Want to see full development conversation?"**
+→ `docs/claude-history/` (14.7 MB, 4,985 events across 2 major sessions)
+
+### Future Claude Code Instances: Start Here
+
+If you're a new Claude Code instance working on this project:
+
+1. **Read this entire file first** - Understand architecture and decisions
+2. **Check recent changes** - See top of file for latest features
+3. **Review common pitfalls** - Avoid repeating known issues
+4. **Test your environment** - Run `make test` to verify setup
+5. **Check provider status** - `curl http://localhost:5050/health | jq`
+6. **Understand constraints** - See "Important Constraints" section
+7. **When in doubt** - Check `docs/` directory for specialized guides
+
+**Remember:**
+- Config changes in `agents.yaml` apply immediately (no restart)
+- Always use venv Python for scripts (`.venv/bin/python`)
+- Memory system requires valid database (check with `make memory-stats`)
+- Fallback is automatic and logged (check logs for `fallback_used`)
+
+---
+
+**Documentation Maintenance:**
+- Update this file when making architectural decisions
+- Document "why" not just "what" (code shows "what")
+- Add to CHANGELOG.md for version-specific changes
+- Keep TROUBLESHOOTING.md updated with new issues/solutions
+
+**Last Updated:** 2025-11-07 (v0.10.0 - Dynamic Critic Selection)
+**Maintained By:** Claude Code conversations + Human review
