@@ -6,7 +6,7 @@
 # while reducing token usage between chain stages
 compression:
   enabled: true  # Use semantic compression in chains
-  model: "gemini/gemini-flash-latest"  # Fast, cheap model for compression
+  model: "gemini/gemini-2.5-flash"  # Fast, cheap model for compression (Gemini 2.5)
   threshold_chars:
     standard: 1200  # Non-memory agents (need more immediate context)
     memory_enabled: 800  # Memory agents (have historical context)
@@ -193,7 +193,7 @@ agents:
     temperature: 0.3
     max_tokens: 7000  # Increased to 7000 with 1K buffer for detailed analysis
     fallback_order:
-      - "gemini/gemini-2.0-flash"  # Fast and free
+      - "gemini/gemini-2.5-flash"  # Fast and free
       - "anthropic/claude-sonnet-4-5"  # Deep analysis (Sonnet 4.5)
     memory_enabled: true
     memory:
@@ -294,7 +294,7 @@ agents:
     temperature: 0.3
     max_tokens: 5000
     fallback_order:
-      - "gemini/gemini-2.0-flash"
+      - "gemini/gemini-2.5-flash"
       - "anthropic/claude-sonnet-4-5"
     memory_enabled: false
 
@@ -325,11 +325,11 @@ agents:
     max_tokens: 9000  # Increased to 9000 with 1K buffer for comprehensive synthesis
     fallback_order:
       - "openai/gpt-4o-mini"
-      - "gemini/gemini-2.0-flash"
+      - "gemini/gemini-2.5-flash"
     memory_enabled: false  # Closer doesn't need history context
 
   router:
-    model: "gemini/gemini-flash-latest"  # Fast routing, free
+    model: "gemini/gemini-2.5-flash"  # Fast routing, free (Gemini 2.5)
     system: |
       You are a routing agent. Analyze the user's prompt and return ONLY ONE WORD:
       - "builder" - for: "implement X", "write code", "create Y", "how to build Z"
