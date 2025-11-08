@@ -5,6 +5,37 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.2] - 2025-11-08
+
+### Fixed - Model Updates & Token Budget Fix
+
+**Bug #11: Anthropic Model Deprecated**
+- **Problem**: Using `claude-3-5-sonnet-20241022` which was removed by Anthropic
+- **Symptom**: "All API providers failed" error despite valid authentication
+- **Fix**: Updated all 5 references to `claude-sonnet-4-5` (Sonnet 4.5 - latest 2025 model)
+- **Impact**: Anthropic provider working again
+
+**Bug #12: Google Gemini Model Outdated**
+- **Problem**: Using `gemini-2.0-flash` (old generation) causing rate limit issues
+- **Symptom**: 503 Overloaded errors, slow fallback
+- **Fix**: Updated all 5 references to `gemini-2.5-flash` (Gemini 2.5 - latest 2025 model)
+- **Impact**: Gemini provider using latest generation models
+
+**Bug #13: Token Budget Overflow (CRITICAL - Real Root Cause)**
+- **Problem**: Memory context injection returning 0 tokens despite high similarity scores
+- **Root Cause**: `_estimate_tokens()` counted full responses (2000-4000 tokens) but budget only 600 tokens
+- **Debug Evidence**:
+  - Top conversation: similarity 0.655 (excellent!), estimated 3389 tokens ❌ Exceeds budget
+  - 10 conversations pass min_relevance filter, but 9 rejected due to budget
+  - Only 1 tiny conversation (21 tokens) gets picked
+- **Fix**: Truncate responses to first 300 chars in both `_estimate_tokens()` and `_format_context()`
+- **Files Changed**:
+  - `core/memory_engine.py:420-426` - Truncate in token estimation
+  - `core/memory_engine.py:446-447` - Truncate in context formatting
+- **Impact**: Memory context injection now fits multiple high-relevance conversations within budget
+
+**Note**: Bug #10 fix in v0.10.1 solved embedding persistence, but Bug #13 was preventing context injection from working even after embeddings were fixed.
+
 ## [0.10.1] - 2025-11-08
 
 ### Fixed - Critical Bug Fixes (Tester-Reported Issues)

@@ -417,8 +417,12 @@ class MemoryEngine:
         """
         from config.settings import count_tokens
 
-        # Format: "[Past conversation]\nQ: {prompt}\nA: {response}"
-        text = f"[Past conversation]\nQ: {rec['prompt']}\nA: {rec['response']}"
+        # Truncate response to first 300 chars to fit budget
+        # (Full responses are 2000-4000 tokens, budget is only 600)
+        response_snippet = rec['response'][:300] + "..." if len(rec['response']) > 300 else rec['response']
+
+        # Format: "[Past conversation]\nQ: {prompt}\nA: {response_snippet}"
+        text = f"[Past conversation]\nQ: {rec['prompt']}\nA: {response_snippet}"
         return count_tokens(text)
 
     def _format_context(self, conversations: List[Dict[str, Any]]) -> str:
@@ -438,10 +442,14 @@ class MemoryEngine:
         for conv in conversations:
             # Format: [Past conversation (score: X.XX)]
             score = conv.get("_score", 0.0)
+
+            # Truncate response to first 300 chars (matches token estimation)
+            response_snippet = conv['response'][:300] + "..." if len(conv['response']) > 300 else conv['response']
+
             context_parts.append(
                 f"[Past conversation (relevance: {score:.2f})]\n"
                 f"Q: {conv['prompt']}\n"
-                f"A: {conv['response']}"
+                f"A: {response_snippet}"
             )
 
         return "\n\n".join(context_parts)

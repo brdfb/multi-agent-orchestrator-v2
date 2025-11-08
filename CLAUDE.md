@@ -4,6 +4,28 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 🆕 Recent Changes (For Claude Code)
 
+### 2025-11-08: Token Budget Overflow Fix (v0.10.2) - ACTUAL ROOT CAUSE
+**Problem**: Memory context injection still returning 0 tokens even after v0.10.1 fixes
+**Discovery**: Friend's builder analysis + detailed debugging revealed token budget overflow
+**Root Cause**: `_estimate_tokens()` counted full responses (2000-4000 tokens) but budget only 600
+**Debug Evidence**:
+- 10 conversations passed min_relevance filter (similarity 0.151-0.655)
+- Top conversation: similarity 0.655 (excellent!), estimated 3389 tokens → ❌ Exceeds 600 budget
+- 9/10 high-scoring conversations rejected due to budget overflow
+- Only 1 tiny conversation (21 tokens) picked → explains why injected_context_tokens still 0
+
+**Fix**: Truncate responses to first 300 chars in memory context
+- `core/memory_engine.py:420-426` - Truncate in `_estimate_tokens()`
+- `core/memory_engine.py:446-447` - Truncate in `_format_context()`
+
+**Impact**: Now multiple high-relevance conversations fit within 600 token budget
+
+**Also Fixed**:
+- Bug #11: Updated Anthropic models to `claude-sonnet-4-5` (was `claude-3-5-sonnet-20241022` - deprecated)
+- Bug #12: Updated Gemini models to `gemini-2.5-flash` (was `gemini-2.0-flash` - outdated)
+
+**Why This Matters**: v0.10.1 fixed embedding persistence, but context was still empty due to budget overflow. v0.10.2 actually makes memory injection work end-to-end.
+
 ### 2025-11-08: Memory Context Injection Fix (v0.10.1) - CRITICAL BUG
 **Problem**: Memory system completely non-functional - 0 tokens injected despite 100+ conversations
 **Discovered By**: External tester during "idiot testing" session
