@@ -374,6 +374,32 @@ class SQLiteBackend:
 
         return deleted_count
 
+    def update_embedding(self, conversation_id: int, embedding_blob: bytes) -> bool:
+        """
+        Update embedding for a conversation.
+
+        Args:
+            conversation_id: ID of conversation to update
+            embedding_blob: Serialized embedding (BLOB)
+
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            conn = self._get_connection()
+            cursor = conn.cursor()
+
+            cursor.execute(
+                "UPDATE conversations SET embedding = ? WHERE id = ?",
+                (embedding_blob, conversation_id),
+            )
+
+            conn.commit()
+            conn.close()
+            return True
+        except Exception:
+            return False
+
     def query_candidates(
         self,
         agent: Optional[str] = None,
@@ -443,4 +469,5 @@ class SQLiteBackend:
             "session_id": row["session_id"],
             "tags": json.loads(row["tags"]) if row["tags"] else [],
             "error": row["error"],
+            "embedding": row["embedding"] if "embedding" in row.keys() else None,
         }

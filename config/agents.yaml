@@ -169,7 +169,7 @@ agents:
       max_context_tokens: 600
       strategy: "semantic"  # Using multilingual semantic search for better context retrieval
       time_decay_hours: 168
-      min_relevance: 0.3
+      min_relevance: 0.15  # Lowered from 0.3 - semantic similarity can be lower than keyword overlap
       exclude_same_turn: true
 
   critic:

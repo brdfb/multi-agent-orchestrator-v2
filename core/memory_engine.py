@@ -584,14 +584,10 @@ class MemoryEngine:
             text = f"{record['prompt']}\n{record['response'][:200]}"
             embedding = self.embedding_engine.encode(text)
 
-            # Update database with new embedding (async, fire-and-forget)
+            # Update database with new embedding (fire-and-forget)
             try:
                 serialized = EmbeddingEngine.serialize_embedding(embedding)
-                self.backend._conn.execute(
-                    "UPDATE conversations SET embedding = ? WHERE id = ?",
-                    (serialized, record["id"]),
-                )
-                self.backend._conn.commit()
+                self.backend.update_embedding(record["id"], serialized)
             except Exception:
                 pass  # Continue even if update fails
 
