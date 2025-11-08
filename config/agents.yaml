@@ -142,7 +142,7 @@ dynamic_selection:
 
 agents:
   builder:
-    model: "anthropic/claude-3-5-sonnet-20241022"  # Best for building
+    model: "anthropic/claude-sonnet-4-5"  # Best for building (Sonnet 4.5 - latest)
     system: |
       You are a technical builder agent. Your role is to:
       - Provide concrete, working code examples (not just explanations)
@@ -194,7 +194,7 @@ agents:
     max_tokens: 7000  # Increased to 7000 with 1K buffer for detailed analysis
     fallback_order:
       - "gemini/gemini-2.0-flash"  # Fast and free
-      - "anthropic/claude-3-5-sonnet-20241022"  # Deep analysis
+      - "anthropic/claude-sonnet-4-5"  # Deep analysis (Sonnet 4.5)
     memory_enabled: true
     memory:
       max_context_tokens: 500
@@ -232,7 +232,7 @@ agents:
     temperature: 0.2
     max_tokens: 5000
     fallback_order:
-      - "anthropic/claude-3-5-sonnet-20241022"
+      - "anthropic/claude-sonnet-4-5"
       - "gemini/gemini-2.5-pro"
     memory_enabled: false
 
@@ -264,7 +264,7 @@ agents:
     max_tokens: 5000
     fallback_order:
       - "openai/gpt-4o-mini"
-      - "anthropic/claude-3-5-sonnet-20241022"
+      - "anthropic/claude-sonnet-4-5"
     memory_enabled: false
 
   code-quality-critic:
@@ -295,7 +295,7 @@ agents:
     max_tokens: 5000
     fallback_order:
       - "gemini/gemini-2.0-flash"
-      - "anthropic/claude-3-5-sonnet-20241022"
+      - "anthropic/claude-sonnet-4-5"
     memory_enabled: false
 
   closer:
