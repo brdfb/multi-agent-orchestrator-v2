@@ -5,6 +5,47 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.1] - 2025-11-08
+
+### Fixed - Critical Bug Fixes (Tester-Reported Issues)
+
+**Bug #8: FastAPI Deprecation Warning**
+- **Problem**: `@app.on_event("startup")` deprecated in FastAPI 0.109+
+- **Symptom**: Warning during test runs, future compatibility risk
+- **Fix**: Migrated to `lifespan` context manager pattern (api/server.py)
+- **Impact**: Eliminates deprecation warning, future-proof for FastAPI 1.0
+
+**Bug #9: Token Count Inconsistency**
+- **Problem**: Inconsistent token counting using `len(text) // 4` heuristic
+- **Symptom**: Up to 44.4% error rate in token estimation
+- **Fix**: Standardized on `tiktoken` (cl100k_base encoding) across codebase
+- **Changes**:
+  - Added `config/settings.py::count_tokens()` utility
+  - Updated `core/memory_engine.py::_estimate_tokens()`
+  - Updated `core/agent_runtime.py` context injection
+  - Updated `tests/test_memory_engine.py` assertions
+- **Impact**: Accurate token budgets for memory context injection
+
+**Bug #10: Memory Context Injection Not Working (CRITICAL)**
+- **Problem**: Memory system completely non-functional - 0 tokens injected despite 100+ conversations
+- **Root Causes**:
+  1. Backend `_row_to_dict()` missing `embedding` column → embeddings never retrieved
+  2. Lazy generation using non-existent `self.backend._conn` → embeddings never persisted
+  3. `min_relevance: 0.3` too strict for semantic search (top score: 0.194)
+- **Fixes**:
+  - Added `embedding` field to `_row_to_dict()` (memory_backend.py:446)
+  - Created `update_embedding()` method in SQLiteBackend (memory_backend.py:377-401)
+  - Updated lazy generation to use proper method (memory_engine.py:590)
+  - Lowered `min_relevance` from 0.3 to 0.15 (agents.yaml:172)
+- **Rationale**: Semantic similarity scores naturally lower than keyword overlap
+- **Test Results**:
+  - Before: `injected_context_tokens: 0` (all conversations)
+  - After: `injected_context_tokens: 269` (working!)
+  - Embeddings: 5+ conversations generated via lazy loading
+- **Impact**: Builder agent now has fully functional conversation memory
+
+**Testing Credits**: All bugs discovered by external tester during "idiot testing" session
+
 ## [0.10.0] - 2025-11-06
 
 ### Added - Dynamic Critic Selection (Phase 5)

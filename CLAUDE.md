@@ -4,6 +4,47 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 🆕 Recent Changes (For Claude Code)
 
+### 2025-11-08: Memory Context Injection Fix (v0.10.1) - CRITICAL BUG
+**Problem**: Memory system completely non-functional - 0 tokens injected despite 100+ conversations
+**Discovered By**: External tester during "idiot testing" session
+**Root Causes**:
+  1. Backend `_row_to_dict()` missing `embedding` column → embeddings never retrieved
+  2. Lazy generation using non-existent `self.backend._conn` → embeddings never persisted
+  3. `min_relevance: 0.3` too strict for semantic search (top score: 0.194)
+
+**Fixes**:
+- Added `embedding` field to `_row_to_dict()` (core/memory_backend.py:446)
+- Created `update_embedding()` method in SQLiteBackend (core/memory_backend.py:377-401)
+- Updated lazy generation to use proper method (core/memory_engine.py:590)
+- Lowered `min_relevance` from 0.3 to 0.15 (config/agents.yaml:172)
+
+**Why 0.15?** Semantic similarity scores are naturally lower than keyword overlap. Cosine similarity of 0.15-0.20 can still represent meaningful semantic connections.
+
+**Test Results**:
+```bash
+# Before fix:
+"injected_context_tokens": 0  # Every conversation
+
+# After fix:
+"injected_context_tokens": 269  # Context working!
+```
+
+**Verification**:
+```bash
+# Test memory injection
+make agent-ask AGENT=builder Q="Implement JWT auth"
+sleep 5
+make agent-ask AGENT=builder Q="How to refresh tokens?"
+
+# Check last log
+cat data/CONVERSATIONS/*.json | tail -1 | jq '.injected_context_tokens'
+# Should be > 0
+```
+
+### 2025-11-08: Quick Wins (v0.10.1)
+**Bug #8 - FastAPI Deprecation**: Migrated from `@app.on_event()` to `lifespan` context manager
+**Bug #9 - Token Standardization**: Replaced `len(text) // 4` heuristic with `tiktoken` (44% more accurate)
+
 ### 2025-11-05: Semantic Search (v0.4.0) - MULTILINGUAL SUPPORT
 **Feature**: Embedding-based semantic search for memory context retrieval
 **Model**: paraphrase-multilingual-MiniLM-L12-v2 (384 dimensions, 50+ languages)
