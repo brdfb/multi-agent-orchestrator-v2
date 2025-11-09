@@ -21,6 +21,7 @@ from config.settings import get_env_source, get_provider_status, get_available_p
 from core.agent_runtime import AgentRuntime
 from core.logging_utils import get_metrics, read_logs
 from core.memory_engine import MemoryEngine
+from core.session_manager import get_session_manager
 
 # Server state tracking
 SERVER_START_TIME = time.time()
@@ -62,7 +63,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="Multi-Agent Orchestrator",
     description="Multi-LLM agent system with CLI, API, and UI",
-    version="0.10.3",
+    version="0.11.0",
     lifespan=lifespan,
 )
 
@@ -97,12 +98,14 @@ class AskRequest(BaseModel):
     prompt: str
     override_model: Optional[str] = None
     mock_mode: Optional[bool] = None
+    session_id: Optional[str] = None  # v0.11.0: Session tracking
 
 
 class ChainRequest(BaseModel):
     prompt: str
     stages: Optional[List[str]] = None
     mock_mode: Optional[bool] = None
+    session_id: Optional[str] = None  # v0.11.0: Session tracking
 
 
 class RunResultResponse(BaseModel):
@@ -152,11 +155,26 @@ async def ask(request: AskRequest):
         )
 
     try:
+        # Get or create session (v0.11.0)
+        session_id = request.session_id
+        if session_id:
+            # Validate user-provided session_id
+            session_manager = get_session_manager()
+            session_manager.validate_session_id(session_id)
+            # Save/update session
+            session_manager.save_session(
+                session_id=session_id,
+                source="api",
+                metadata={"user_agent": request.headers.get("User-Agent", "unknown") if hasattr(request, 'headers') else "unknown"}
+            )
+        # If no session_id provided, system works in stateless mode (backward compatible)
+
         result = runtime.run(
             agent=request.agent,
             prompt=request.prompt,
             override_model=request.override_model,
             mock_mode=request.mock_mode,
+            session_id=session_id,  # v0.11.0
         )
 
         if result.error:
@@ -185,7 +203,26 @@ async def chain(request: ChainRequest):
         raise HTTPException(status_code=422, detail="Prompt cannot be empty")
 
     try:
-        results = runtime.chain(prompt=request.prompt, stages=request.stages, mock_mode=request.mock_mode)
+        # Get or create session (v0.11.0)
+        session_id = request.session_id
+        if session_id:
+            # Validate user-provided session_id
+            session_manager = get_session_manager()
+            session_manager.validate_session_id(session_id)
+            # Save/update session
+            session_manager.save_session(
+                session_id=session_id,
+                source="api",
+                metadata={"user_agent": request.headers.get("User-Agent", "unknown") if hasattr(request, 'headers') else "unknown"}
+            )
+        # If no session_id provided, system works in stateless mode (backward compatible)
+
+        results = runtime.chain(
+            prompt=request.prompt,
+            stages=request.stages,
+            mock_mode=request.mock_mode,
+            session_id=session_id,  # v0.11.0
+        )
 
         # Check for errors
         errors = [r for r in results if r.error]
