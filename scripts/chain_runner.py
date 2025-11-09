@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """CLI tool for running multi-agent chains."""
+import os
 import sys
 import argparse
 from pathlib import Path
@@ -9,6 +10,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from config.settings import get_env_source
 from core.agent_runtime import AgentRuntime
+from core.session_manager import get_session_manager
 
 
 def format_stage_result(result, stage_num: int, total_stages: int) -> str:
@@ -120,11 +122,23 @@ Examples:
     def show_progress(stage_num, total, agent_name):
         print(f"🔄 Stage {stage_num}/{total}: Running {agent_name.upper()}...", flush=True)
 
+    # Auto-generate CLI session (v0.11.0)
+    session_manager = get_session_manager()
+    session_id = session_manager.get_or_create_session(
+        source="cli",
+        metadata={"pid": os.getpid()}
+    )
+
     # Run chain with progress indicators
     runtime = AgentRuntime()
 
     try:
-        results = runtime.chain(prompt=prompt, stages=stages, progress_callback=show_progress)
+        results = runtime.chain(
+            prompt=prompt,
+            stages=stages,
+            progress_callback=show_progress,
+            session_id=session_id  # v0.11.0
+        )
     except Exception as e:
         print(f"\n❌ Chain failed: {str(e)}")
         sys.exit(1)

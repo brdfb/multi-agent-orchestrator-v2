@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """CLI tool for running agents."""
+import os
 import sys
 from pathlib import Path
 
@@ -8,6 +9,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from config.settings import get_env_source
 from core.agent_runtime import AgentRuntime
+from core.session_manager import get_session_manager
 
 
 def main():
@@ -52,9 +54,16 @@ def main():
     print(f"Prompt: {prompt}")
     print("-" * 80)
 
+    # Auto-generate CLI session (v0.11.0)
+    session_manager = get_session_manager()
+    session_id = session_manager.get_or_create_session(
+        source="cli",
+        metadata={"pid": os.getpid()}
+    )
+
     # Run agent
     runtime = AgentRuntime()
-    result = runtime.run(agent=agent, prompt=prompt)
+    result = runtime.run(agent=agent, prompt=prompt, session_id=session_id)
 
     # Display result
     if result.error:
