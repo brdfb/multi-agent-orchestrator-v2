@@ -472,14 +472,13 @@
                 </div>
 
                 <div class="form-group">
-                    <label>Model Override (Optional)</label>
+                    <label title="Override the agent's default model (useful for testing different LLMs)">Model Override (Optional) ⓘ</label>
                     <select name="override_model">
                         <option value="">Use agent default</option>
-                        <option value="anthropic/claude-3-5-sonnet-20241022">Claude 3.5 Sonnet</option>
+                        <option value="anthropic/claude-sonnet-4-5">Claude Sonnet 4.5</option>
                         <option value="openai/gpt-4o">GPT-4o</option>
                         <option value="openai/gpt-4o-mini">GPT-4o Mini</option>
-                        <option value="google/gemini-1.5-pro">Gemini 1.5 Pro</option>
-                        <option value="google/gemini-1.5-flash">Gemini 1.5 Flash</option>
+                        <option value="google/gemini-2.5-flash">Gemini 2.5 Flash</option>
                     </select>
                 </div>
 
@@ -489,8 +488,8 @@
                 </div>
 
                 <div class="button-group">
-                    <button type="submit">Send</button>
-                    <button type="button" class="secondary" onclick="runChain()">Run Chain</button>
+                    <button type="submit" title="Send to selected agent">Send</button>
+                    <button type="button" class="secondary" onclick="runChain()" title="Run multi-agent pipeline: builder → critic → closer (thorough analysis)">Run Chain ⓘ</button>
                     <span class="loading-indicator htmx-indicator">Processing...</span>
                 </div>
             </form>
@@ -516,7 +515,7 @@
                 </div>
                 <div class="search-box">
                     <form hx-get="/memory/search" hx-target="#memory-search-results" hx-trigger="submit">
-                        <input type="search" name="q" placeholder="Search by keyword..." required />
+                        <input type="search" name="q" placeholder="Search conversations (semantic)..." required />
                     </form>
                 </div>
                 <div id="memory-search-results"></div>
@@ -583,6 +582,45 @@
             document.getElementById('session_id').value = sessionId;
         });
 
+        // Copy to clipboard
+        function copyToClipboard(text, buttonElement) {
+            navigator.clipboard.writeText(text).then(() => {
+                // Visual feedback
+                const originalText = buttonElement.textContent;
+                buttonElement.textContent = '✓ Copied!';
+                buttonElement.style.backgroundColor = 'var(--success)';
+
+                setTimeout(() => {
+                    buttonElement.textContent = originalText;
+                    buttonElement.style.backgroundColor = '';
+                }, 2000);
+            }).catch(err => {
+                alert('Failed to copy: ' + err);
+            });
+        }
+
+        // Show memory context details
+        function showMemoryDetails(totalTokens, sessionTokens, knowledgeTokens, sessionMsgs, knowledgeMsgs) {
+            const parts = [];
+
+            if (sessionTokens > 0) {
+                parts.push(`📝 Session Context: ${sessionTokens} tokens (${sessionMsgs} messages)`);
+            }
+
+            if (knowledgeTokens > 0) {
+                parts.push(`🔍 Knowledge Context: ${knowledgeTokens} tokens (${knowledgeMsgs} messages)`);
+            }
+
+            if (parts.length === 0) {
+                parts.push('No memory context was injected for this response.');
+            }
+
+            parts.push('\n💡 Tip: Session context = recent messages from this session');
+            parts.push('💡 Tip: Knowledge context = relevant past conversations');
+
+            alert('Memory Context Breakdown\n\n' + parts.join('\n'));
+        }
+
         // Run chain
         function runChain() {
             const prompt = document.querySelector('textarea[name="prompt"]').value;
@@ -606,13 +644,20 @@
             .then(results => {
                 let html = '';
                 results.forEach((result, idx) => {
+                    const responseText = result.response;
+                    const copyId = `copy-btn-${idx}`;
                     html += `
                         <div class="response-section">
                             <div class="response-header">
                                 <div class="response-title">${idx + 1}. ${result.agent.toUpperCase()}</div>
-                                <div class="badge">${result.model}</div>
+                                <div style="display: flex; gap: 8px;">
+                                    <div class="badge">${result.model}</div>
+                                    <button class="icon-btn" id="${copyId}" title="Copy response">
+                                        📋 Copy
+                                    </button>
+                                </div>
                             </div>
-                            <div class="response-content">${result.response}</div>
+                            <div class="response-content">${responseText}</div>
                             <div class="meta-info">
                                 <div class="meta-item">
                                     <span class="meta-label">Duration:</span>
@@ -627,6 +672,16 @@
                     `;
                 });
                 output.innerHTML = html;
+
+                // Attach copy handlers after rendering
+                results.forEach((result, idx) => {
+                    const copyBtn = document.getElementById(`copy-btn-${idx}`);
+                    if (copyBtn) {
+                        copyBtn.addEventListener('click', function() {
+                            copyToClipboard(result.response, this);
+                        });
+                    }
+                });
             })
             .catch(err => {
                 output.innerHTML = `
@@ -649,20 +704,31 @@
                 let badges = `<div class="badge">${result.provider} • ${result.model}</div>`;
 
                 if (result.injected_context_tokens > 0) {
-                    badges += `<div class="badge accent">🧠 Memory: ${result.injected_context_tokens} tokens</div>`;
+                    const sessionTokens = result.session_context_tokens || 0;
+                    const knowledgeTokens = result.knowledge_context_tokens || 0;
+                    const sessionMsgs = result.session_messages || 0;
+                    const knowledgeMsgs = result.knowledge_messages || 0;
+
+                    badges += `<div class="badge accent" onclick="showMemoryDetails(${result.injected_context_tokens}, ${sessionTokens}, ${knowledgeTokens}, ${sessionMsgs}, ${knowledgeMsgs})" style="cursor: pointer;" title="Click for memory details">🧠 Memory: ${result.injected_context_tokens} tokens ⓘ</div>`;
                 }
 
                 if (result.fallback_used) {
                     badges += `<div class="badge warning">⚠️ Fallback: ${result.original_model}</div>`;
                 }
 
+                const responseText = result.response;
                 evt.detail.target.innerHTML = `
                     <div class="response-section">
                         <div class="response-header">
                             <div class="response-title">${result.agent.toUpperCase()} Response</div>
-                            <div style="display: flex; gap: 8px;">${badges}</div>
+                            <div style="display: flex; gap: 8px;">
+                                ${badges}
+                                <button class="icon-btn" onclick="copyToClipboard(\`${responseText.replace(/`/g, '\\`').replace(/\$/g, '\\$')}\`, this)" title="Copy response">
+                                    📋 Copy
+                                </button>
+                            </div>
                         </div>
-                        <div class="response-content">${result.response}</div>
+                        <div class="response-content">${responseText}</div>
                         <div class="meta-info">
                             <div class="meta-item">
                                 <span class="meta-label">Duration:</span>
