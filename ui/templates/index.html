@@ -458,6 +458,9 @@
         <!-- Main Prompt Section -->
         <section class="prompt-section">
             <form hx-post="/ask" hx-target="#output" hx-indicator=".loading-indicator">
+                <!-- Session ID (v0.11.0) -->
+                <input type="hidden" name="session_id" id="session_id" value="">
+
                 <div class="form-group">
                     <label>Agent</label>
                     <select name="agent" required>
@@ -563,6 +566,23 @@
         document.documentElement.setAttribute('data-theme', saved);
         document.getElementById('theme-icon').textContent = saved === 'light' ? '☀️' : '🌙';
 
+        // Session management (v0.11.0)
+        function getOrCreateSessionId() {
+            let sessionId = sessionStorage.getItem('agent_session_id');
+            if (!sessionId) {
+                // Generate UUID-like ID
+                sessionId = 'ui-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+                sessionStorage.setItem('agent_session_id', sessionId);
+            }
+            return sessionId;
+        }
+
+        // Initialize session ID on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            const sessionId = getOrCreateSessionId();
+            document.getElementById('session_id').value = sessionId;
+        });
+
         // Run chain
         function runChain() {
             const prompt = document.querySelector('textarea[name="prompt"]').value;
@@ -577,7 +597,10 @@
             fetch('/chain', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({prompt: prompt})
+                body: JSON.stringify({
+                    prompt: prompt,
+                    session_id: getOrCreateSessionId()  // v0.11.0
+                })
             })
             .then(res => res.json())
             .then(results => {
