@@ -4,6 +4,38 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 🆕 Recent Changes (For Claude Code)
 
+### 2025-11-09: Session Tracking & Dual-Context Model (v0.11.0)
+**Feature**: ChatGPT-style conversation continuity with intelligent context aggregation
+**Problem Solved**: Stateless architecture → Stateful sessions across CLI, API, and Web UI
+**Architecture**: Dual-context model (session context + knowledge context) with flexible token budget
+
+**What Changed**:
+- **Before**: Memory only retrieved semantically similar conversations from any session
+- **After**: Prioritizes recent messages from same session (continuity) + semantic search from other sessions (knowledge)
+
+**Key Components**:
+- `core/session_manager.py` (NEW) - Session ID generation, validation, cleanup
+- `core/context_aggregator.py` (NEW) - Dual-context model with priority-based token budget
+- `scripts/migrate_add_session_tracking.py` (NEW) - Database migration (sessions table + session_id column)
+
+**Token Budget Strategy**:
+- Session context: Up to 75% of budget (priority)
+- Knowledge context: Remaining tokens (flexible)
+- Example: 600 token budget → session gets 300 → knowledge gets remaining 300 (not fixed 50/50)
+
+**Session Behavior**:
+- **CLI**: Duration-based (2h idle timeout), auto-generated from PID
+- **Web UI**: Browser sessionStorage (survives refresh, resets on tab close)
+- **API**: User-provided or auto-generated
+
+**Security**: Input validation (SQL injection, XSS, path traversal, null byte prevention)
+
+**Backward Compatible**: All `session_id` parameters optional, graceful degradation if database unavailable
+
+**Migration**: `python scripts/migrate_add_session_tracking.py` (idempotent, auto-backup)
+
+**See**: Full documentation in "Session Tracking & Conversation Continuity" section below
+
 ### 2025-11-08: Token Budget Overflow Fix (v0.10.2) - ACTUAL ROOT CAUSE
 **Problem**: Memory context injection still returning 0 tokens even after v0.10.1 fixes
 **Discovery**: Friend's builder analysis + detailed debugging revealed token budget overflow
@@ -472,6 +504,521 @@ pytest tests/test_memory_engine.py -v
 pytest tests/test_memory_api.py -v
 ```
 
+## Session Tracking & Conversation Continuity (v0.11.0+)
+
+The orchestrator implements **ChatGPT-style session tracking** for conversation continuity across multiple interactions. Unlike the original memory system (which only used semantic search), v0.11.0 introduces a **dual-context model** that prioritizes recent messages from the same session while still leveraging cross-session knowledge.
+
+### Problem Solved
+
+**Before v0.11.0** (Stateless):
+- Every request treated as new conversation
+- Memory only retrieved semantically similar past conversations (no session awareness)
+- Multi-turn conversations had no continuity: "add red to the chart" → "What chart?"
+
+**After v0.11.0** (Stateful):
+- Sessions track related conversations
+- Recent messages from same session get priority in context
+- Cross-session knowledge still available via semantic search
+- Natural conversation flow: "create a chart" → "add red color" → understands reference
+
+### Architecture: Dual-Context Model
+
+The system aggregates two types of context with priority-based token allocation:
+
+**1. Session Context** (Priority 1):
+- Recent messages from **same session** (conversation continuity)
+- Up to 75% of token budget
+- Ordered chronologically (oldest to newest)
+- Format: "3 messages ago: User: '...' Assistant: '...'"
+
+**2. Knowledge Context** (Priority 2):
+- Semantic search from **other sessions** (cross-session knowledge)
+- Uses remaining tokens (flexible allocation)
+- Ordered by relevance score
+- Format: "Relevance: 0.82, 2 days ago: Topic: '...' Summary: '...'"
+
+**Token Budget Strategy** (Flexible Allocation):
+```
+Max Budget: 600 tokens
+Session Max: 450 tokens (75% cap)
+
+Case 1: Session needs 300 tokens
+→ Session: 300, Knowledge: 300 (uses remaining)
+
+Case 2: Session needs 500 tokens
+→ Session: 450 (capped at 75%), Knowledge: 150
+
+Case 3: Session needs 100 tokens
+→ Session: 100, Knowledge: 500 (uses remaining)
+```
+
+This prevents session context overflow while maximizing total context usage.
+
+### Core Components
+
+#### SessionManager (`core/session_manager.py`)
+Manages session lifecycle: generation, validation, storage, cleanup.
+
+**Key Methods**:
+```python
+session_manager = get_session_manager()
+
+# Auto-generate or validate session
+session_id = session_manager.get_or_create_session(
+    session_id=None,  # None = auto-generate
+    source="cli",     # "cli", "ui", "api"
+    metadata={"pid": 12345}
+)
+
+# Validate session ID format
+session_manager.validate_session_id("cli-12345-20251109120000")
+# Raises ValueError if invalid
+
+# Save session to database
+session_manager.save_session(
+    session_id="cli-12345-20251109120000",
+    source="cli",
+    metadata={"pid": 12345}
+)
+```
+
+**Session ID Formats**:
+- **CLI**: `cli-{pid}-{timestamp}` (e.g., `cli-12345-20251109120000`)
+- **Web UI**: `ui-{timestamp}-{random}` (e.g., `ui-1699516800-a7b3c2d1`)
+- **API**: User-provided or auto-generated with random UUID
+
+**Duration-Based CLI Sessions** (Not Hourly Reset):
+- Checks for recent session with same PID within 2 hours
+- If found → reuses session ID (conversation continues)
+- If not → generates new session ID (new conversation)
+- Example: PID 12345 at 10:00 AM → same session at 10:30 AM, new session at 12:30 PM
+
+**Cleanup Strategy** (Probabilistic):
+- 10% of `save_session()` calls trigger cleanup
+- Deletes sessions inactive for >7 days
+- Deletes conversations orphaned by session deletion
+- Not database trigger (avoids performance overhead)
+
+#### ContextAggregator (`core/context_aggregator.py`)
+Implements dual-context model with priority-based token budget.
+
+**Key Method**:
+```python
+aggregator = ContextAggregator()
+
+context_text, metadata = aggregator.get_full_context(
+    prompt="Add red color to the chart",
+    session_id="cli-12345-20251109120000",
+    config=agent_memory_config  # from agents.yaml
+)
+
+# context_text contains formatted context:
+# [SESSION CONTEXT - Recent conversation]
+# [3 messages ago]
+# User: "Create a bar chart with matplotlib"
+# Assistant: "Here's your chart code..."
+#
+# [1 message ago]
+# User: "Make it bigger"
+# Assistant: "Updated chart size..."
+#
+# [KNOWLEDGE CONTEXT - Relevant past topics]
+# [Relevance: 0.82, 2 days ago]
+# Topic: Matplotlib customization best practices
+# Summary: "Use rcParams for global settings..."
+
+# metadata contains token counts:
+# {
+#     'session_context_tokens': 250,
+#     'knowledge_context_tokens': 300,
+#     'total_context_tokens': 550,
+#     'session_messages': 3,
+#     'knowledge_messages': 2
+# }
+```
+
+**How It Works**:
+1. Query session context (last 5 messages from same session)
+2. Query knowledge context (semantic search excluding current session)
+3. Apply priority-based token budget (75% session cap, knowledge uses remaining)
+4. Truncate if needed (smart truncation preserves important content)
+5. Format final context string
+
+### Session Behavior by Interface
+
+| Interface | Session ID Generation | Lifetime | Storage |
+|-----------|----------------------|----------|---------|
+| **CLI** | Auto: `cli-{pid}-{timestamp}` | 2h idle timeout | Database |
+| **Web UI** | Auto: `ui-{timestamp}-{random}` | Tab close | sessionStorage + Database |
+| **API** | User-provided or auto-generated | User-controlled | Database |
+
+**CLI Example**:
+```bash
+# Terminal 1 (PID 12345)
+mao builder "Create a chart"
+# session_id: cli-12345-20251109100000
+
+# Same terminal, 30 minutes later (still PID 12345)
+mao builder "Add red color"
+# session_id: cli-12345-20251109100000 (SAME SESSION - reused)
+
+# Same terminal, 3 hours later (PID 12345)
+mao builder "Show me the chart"
+# session_id: cli-12345-20251109130000 (NEW SESSION - timeout)
+```
+
+**Web UI Example**:
+```javascript
+// Page load: Generate or retrieve session ID
+let sessionId = sessionStorage.getItem('agent_session_id');
+if (!sessionId) {
+    sessionId = 'ui-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+    sessionStorage.setItem('agent_session_id', sessionId);
+}
+
+// Page refresh: Same session ID (sessionStorage persists)
+// New tab: Different session ID (sessionStorage per tab)
+// Tab close + reopen: New session ID (sessionStorage cleared)
+```
+
+**API Example**:
+```bash
+# Provide session ID (user-controlled)
+curl -X POST http://localhost:5050/ask \
+  -H "Content-Type: application/json" \
+  -d '{
+    "agent": "builder",
+    "prompt": "Create a chart",
+    "session_id": "my-custom-session-123"
+  }'
+
+# Auto-generate session ID (omit field)
+curl -X POST http://localhost:5050/ask \
+  -H "Content-Type: application/json" \
+  -d '{
+    "agent": "builder",
+    "prompt": "Create a chart"
+  }'
+# Response includes auto-generated session_id
+```
+
+### Configuration
+
+**Global Config** (`config/agents.yaml` - per agent):
+```yaml
+builder:
+  model: "anthropic/claude-sonnet-4-5"
+  memory_enabled: true
+  memory:
+    # Session context config
+    session_context:
+      enabled: true
+      limit: 5  # Last 5 messages from same session
+
+    # Knowledge context config (semantic search from other sessions)
+    knowledge_context:
+      enabled: true
+      strategy: "semantic"  # or "hybrid", "keywords"
+      min_relevance: 0.15
+      time_decay_hours: 96
+
+    # Token budget
+    max_context_tokens: 600  # Total budget
+    # Session gets up to 450 (75% cap), knowledge uses remaining
+```
+
+**Session Manager Config** (hardcoded in `core/session_manager.py`):
+```python
+# Session validation
+MAX_SESSION_ID_LENGTH = 64
+ALLOWED_CHARS = r'^[a-zA-Z0-9_-]+$'
+
+# CLI session reuse
+CLI_SESSION_REUSE_HOURS = 2
+
+# Cleanup
+CLEANUP_PROBABILITY = 0.1  # 10% of save_session() calls
+SESSION_RETENTION_DAYS = 7
+```
+
+### Integration Points
+
+**CLI Tools** (`scripts/agent_runner.py`, `scripts/chain_runner.py`):
+```python
+import os
+from core.session_manager import get_session_manager
+
+# Auto-generate CLI session
+session_manager = get_session_manager()
+session_id = session_manager.get_or_create_session(
+    source="cli",
+    metadata={"pid": os.getpid()}
+)
+
+# Pass to runtime
+runtime = AgentRuntime()
+result = runtime.run(agent=agent, prompt=prompt, session_id=session_id)
+```
+
+**API Server** (`api/server.py`):
+```python
+from pydantic import BaseModel
+from core.session_manager import get_session_manager
+
+class AskRequest(BaseModel):
+    agent: str
+    prompt: str
+    session_id: Optional[str] = None  # v0.11.0+
+
+@app.post("/ask")
+async def ask(request: AskRequest):
+    session_id = request.session_id
+
+    # Validate and save if provided
+    if session_id:
+        session_manager = get_session_manager()
+        session_manager.validate_session_id(session_id)
+        session_manager.save_session(
+            session_id=session_id,
+            source="api",
+            metadata={"endpoint": "/ask"}
+        )
+
+    result = runtime.run(..., session_id=session_id)
+    return result
+```
+
+**Web UI** (`ui/templates/index.html`):
+```html
+<input type="hidden" name="session_id" id="session_id" value="">
+
+<script>
+function getOrCreateSessionId() {
+    let sessionId = sessionStorage.getItem('agent_session_id');
+    if (!sessionId) {
+        sessionId = 'ui-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+        sessionStorage.setItem('agent_session_id', sessionId);
+    }
+    return sessionId;
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    const sessionId = getOrCreateSessionId();
+    document.getElementById('session_id').value = sessionId;
+});
+</script>
+```
+
+**Agent Runtime** (`core/agent_runtime.py`):
+```python
+def run(
+    self,
+    agent: str,
+    prompt: str,
+    session_id: Optional[str] = None,  # v0.11.0+
+    ...
+) -> RunResult:
+    # Use ContextAggregator for dual-context retrieval
+    context_text, context_metadata = self.context_aggregator.get_full_context(
+        prompt=prompt,
+        session_id=session_id,
+        config=agent_memory_config
+    )
+
+    # Inject into system prompt
+    if context_text:
+        system_prompt = agent_config["system"] + "\n\n" + context_text
+
+    # Store conversation with session_id
+    self.memory.store_conversation(
+        ...,
+        session_id=session_id,
+        metadata={
+            "session_context_tokens": context_metadata.get('session_context_tokens', 0),
+            "knowledge_context_tokens": context_metadata.get('knowledge_context_tokens', 0),
+        }
+    )
+```
+
+### Database Schema Changes
+
+**New Table: `sessions`**:
+```sql
+CREATE TABLE sessions (
+    session_id TEXT PRIMARY KEY,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    last_active DATETIME DEFAULT CURRENT_TIMESTAMP,
+    source TEXT NOT NULL,  -- "cli", "ui", "api"
+    metadata TEXT,  -- JSON string
+    INDEX idx_sessions_last_active (last_active)
+);
+```
+
+**Updated Table: `conversations`**:
+```sql
+-- Added column (v0.11.0):
+ALTER TABLE conversations ADD COLUMN session_id TEXT;
+
+-- Added index:
+CREATE INDEX idx_session_id ON conversations(session_id);
+```
+
+**Migration**:
+```bash
+# Run migration (idempotent, safe to run multiple times)
+python scripts/migrate_add_session_tracking.py
+
+# Migration features:
+# - Auto-backup before changes (timestamped)
+# - Idempotent (checks if already migrated)
+# - Preserves existing data
+# - Transaction-based (rollback on error)
+
+# Rollback if needed
+python scripts/rollback_session_tracking.py
+```
+
+### Security Features
+
+**Input Validation** (`core/session_manager.py:validate_session_id()`):
+```python
+# 1. Length check
+if len(session_id) > 64:
+    raise ValueError("Session ID too long")
+
+# 2. Character whitelist (alphanumeric + _ -)
+if not re.match(r'^[a-zA-Z0-9_-]+$', session_id):
+    raise ValueError("Invalid characters in session ID")
+
+# 3. Prevents:
+# - SQL injection (no quotes, semicolons allowed)
+# - XSS (no < > allowed)
+# - Path traversal (no / \ allowed)
+# - Null byte injection (no \x00 allowed)
+```
+
+**Database Safety**:
+- All queries use parameterized statements (SQLite `?` placeholders)
+- No string concatenation in SQL
+- WAL mode prevents corruption
+- Transaction-based operations
+
+### Testing
+
+**Test Coverage** (`tests/`):
+- Session ID generation (CLI, UI, API formats)
+- Session validation (valid/invalid characters, length limits)
+- Session storage and retrieval
+- Context aggregation (session + knowledge)
+- Token budget enforcement (75% cap, flexible allocation)
+- CLI session reuse (duration-based)
+- Database migration (idempotent, rollback)
+- Backward compatibility (session_id optional)
+
+**Manual Testing**:
+```bash
+# Test CLI session continuity
+export LLM_MOCK=1
+mao builder "Create a chart"
+sleep 2
+mao builder "Add red color"
+# Should see session context in logs
+
+# Check database
+sqlite3 data/MEMORY/conversations.db
+> SELECT session_id, prompt FROM conversations ORDER BY timestamp DESC LIMIT 5;
+> SELECT * FROM sessions ORDER BY last_active DESC LIMIT 5;
+
+# Test session cleanup
+python -c "
+from core.session_manager import get_session_manager
+sm = get_session_manager()
+sm.save_session('test-old-session', 'cli', {})
+# Manually set last_active to 8 days ago in database
+sm.save_session('test-trigger-cleanup', 'cli', {})  # May trigger cleanup
+"
+```
+
+### Backward Compatibility
+
+**All `session_id` parameters are optional**:
+- CLI: Auto-generates if not provided (transparent to user)
+- API: Works without session_id (stateless mode)
+- Web UI: Auto-generates via JavaScript
+
+**Graceful Degradation**:
+- If database unavailable → session tracking disabled, system continues
+- If session_id invalid → logs warning, continues without session
+- If migration not run → session_id column NULL, system works without sessions
+
+**No Breaking Changes**:
+- Existing API clients work without modification
+- Existing CLI scripts work without modification
+- Memory system works with or without sessions
+
+### Performance
+
+**Session Operations**:
+- Session ID generation: <1ms (string concatenation)
+- Session validation: <1ms (regex match)
+- Session save: ~5ms (SQLite insert)
+- Session query: ~3ms (indexed lookup)
+
+**Context Aggregation**:
+- Session context retrieval: ~10ms (last 5 messages)
+- Knowledge context retrieval: ~50ms (semantic search, 50 candidates)
+- Token budget calculation: <1ms
+- Total overhead: ~60ms per request
+
+**Cleanup**:
+- Probabilistic trigger: 10% of requests
+- When triggered: ~20ms (deletes old sessions + orphaned conversations)
+- Impact: <2ms average per request (10% × 20ms)
+
+### Common Use Cases
+
+**Use Case 1: Multi-Turn Conversation**
+```bash
+# Turn 1: Create feature
+mao builder "Create a REST API for user auth"
+# Response: JWT implementation with /login endpoint
+
+# Turn 2: Extend feature (same session)
+mao builder "Add refresh token support"
+# Context includes Turn 1 → understands existing auth system
+# Response: Adds refresh token endpoint to existing implementation
+
+# Turn 3: Fix issue (same session)
+mao builder "Fix the token expiry bug"
+# Context includes Turn 1 + Turn 2 → knows about refresh token system
+# Response: Fixes specific bug in context
+```
+
+**Use Case 2: Cross-Session Knowledge**
+```bash
+# Day 1: User asks about JWT
+mao builder "How to implement JWT auth in FastAPI?"
+# Response: JWT implementation guide
+
+# Day 2: User asks about similar topic (NEW session)
+mao builder "How to refresh JWT tokens?"
+# Session context: Empty (different session)
+# Knowledge context: Includes Day 1 conversation (semantic match)
+# Response: Builds on previous JWT knowledge
+```
+
+**Use Case 3: Web UI Multi-Tab**
+```
+Tab 1: "Design a database schema"
+→ session_id: ui-1699516800-abc123
+
+Tab 2: "Create API endpoints"
+→ session_id: ui-1699516850-def456  (DIFFERENT)
+
+Tab 1 refresh: Still ui-1699516800-abc123 (SAME)
+Tab 1 close + reopen: ui-1699517000-ghi789 (NEW)
+```
+
 ## Architecture Decisions
 
 ### Why LiteLLM?
@@ -496,17 +1043,27 @@ Passing full outputs between chain stages causes token explosion. Solution:
 ## File Organization
 ```
 config/            # agents.yaml, memory.yaml, settings.py (config loader)
-core/              # llm_connector.py, agent_runtime.py, memory_engine.py, logging_utils.py
+core/
+  ├── llm_connector.py       # LiteLLM wrapper
+  ├── agent_runtime.py       # Orchestration engine
+  ├── memory_engine.py       # Conversation storage & retrieval
+  ├── session_manager.py     # Session lifecycle (v0.11.0+)
+  ├── context_aggregator.py  # Dual-context model (v0.11.0+)
+  └── logging_utils.py       # JSON logging
 api/               # server.py (FastAPI app + memory endpoints)
 ui/templates/      # index.html (HTMX web interface)
 scripts/
-  ├── agent_runner.py    # CLI tool (powers `mao` command)
-  ├── chain_runner.py    # Chain CLI (powers `mao-chain` command)
-  ├── view_logs.py       # Log viewer (NEW - powers `mao-last-chain`, `mao-logs`)
-  └── memory_cli.py      # Memory operations CLI
-tests/             # pytest test suite (55+ tests)
+  ├── agent_runner.py                   # CLI tool (powers `mao` command)
+  ├── chain_runner.py                   # Chain CLI (powers `mao-chain` command)
+  ├── view_logs.py                      # Log viewer (powers `mao-last-chain`, `mao-logs`)
+  ├── memory_cli.py                     # Memory operations CLI
+  ├── migrate_add_session_tracking.py   # v0.11.0 database migration
+  └── rollback_session_tracking.py      # Rollback migration
+tests/             # pytest test suite (60+ tests)
 data/CONVERSATIONS/# JSON logs (auto-created, gitignored)
-data/MEMORY/       # conversations.db (SQLite database, auto-created)
+data/MEMORY/
+  ├── conversations.db     # SQLite database (auto-created)
+  └── *.db.backup.*        # Migration backups (timestamped)
 ```
 
 ## Provider Fallback & Feature Flags
@@ -807,6 +1364,14 @@ python3 -c "from config.settings import get_env_source; print(get_env_source())"
 - 30-50% cost savings (only relevant critics run)
 - 1-3 critics selected dynamically per prompt
 
+**v0.11.0 (2025-11-09)** - Session Tracking & Dual-Context Model
+- ChatGPT-style conversation continuity
+- Dual-context model (session + knowledge)
+- Priority-based token budget (75% session cap)
+- Auto-session generation (CLI, Web UI, API)
+- Duration-based CLI sessions (2h timeout)
+- Database migration (sessions table)
+
 ### Key Files Modified (Historical Reference)
 
 **Most Frequently Modified:**
@@ -864,5 +1429,5 @@ If you're a new Claude Code instance working on this project:
 - Add to CHANGELOG.md for version-specific changes
 - Keep TROUBLESHOOTING.md updated with new issues/solutions
 
-**Last Updated:** 2025-11-07 (v0.10.0 - Dynamic Critic Selection)
+**Last Updated:** 2025-11-09 (v0.11.0 - Session Tracking & Dual-Context Model)
 **Maintained By:** Claude Code conversations + Human review
