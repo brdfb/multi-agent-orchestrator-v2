@@ -11,45 +11,95 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from config.settings import get_env_source
 from core.agent_runtime import AgentRuntime
 from core.session_manager import get_session_manager
+from rich.console import Console
+from rich.syntax import Syntax
+from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn
+import re
+
+console = Console()
 
 
-def format_stage_result(result, stage_num: int, total_stages: int) -> str:
-    """Format a single stage result."""
-    lines = []
-    lines.append("\n" + "=" * 80)
-    lines.append(f"STAGE {stage_num}/{total_stages}: {result.agent.upper()}")
-    lines.append("=" * 80)
+def show_error_with_solution(error_msg: str):
+    """Display error with context-aware solution."""
+    console.print(f"\n[bold red]❌ Error:[/bold red] {error_msg}")
 
-    if result.error:
-        lines.append(f"\n❌ Error: {result.error}")
-        return "\n".join(lines)
+    error_lower = error_msg.lower()
 
-    lines.append(f"\n📊 Model: {result.model}")
-
-    # Show fallback information if used
-    if result.fallback_used:
-        lines.append(f"⚠️  Fallback: {result.original_model} → {result.model}")
-        lines.append(f"   Reason: {result.fallback_reason}")
-
-    lines.append(f"⏱️  Duration: {result.duration_ms:.0f}ms")
-    lines.append(f"🔢 Tokens: {result.total_tokens} (prompt: {result.prompt_tokens}, completion: {result.completion_tokens})")
-    lines.append(f"📁 Log: {result.log_file}")
-
-    lines.append("\nResponse:")
-    lines.append("-" * 80)
-    if result.response:
-        # Show full response (no truncation)
-        lines.append(result.response)
+    if "api key" in error_lower or "authentication" in error_lower:
+        console.print("\n[bold cyan]💡 Solution:[/bold cyan]")
+        console.print("Add API key to your [yellow].env[/yellow] file:")
+        console.print("  [green]ANTHROPIC_API_KEY[/green]=sk-ant-...")
+        console.print("  [green]OPENAI_API_KEY[/green]=sk-...")
+    elif "model" in error_lower and "not found" in error_lower:
+        console.print("\n[bold cyan]💡 Solution:[/bold cyan]")
+        console.print("Try current models: [green]claude-sonnet-4-5[/green], [green]gpt-4o[/green]")
+    elif "rate limit" in error_lower:
+        console.print("\n[bold cyan]💡 Solution:[/bold cyan]")
+        console.print("Wait 30-60 seconds or try a different provider")
     else:
-        lines.append("[No response]")
-    lines.append("-" * 80)
+        console.print("\n[bold cyan]💡 Need Help?[/bold cyan]")
+        console.print("Check logs or report: [blue]https://github.com/brdfb/multi-agent-orchestrator-v2/issues[/blue]")
 
-    return "\n".join(lines)
+
+def display_response(response: str):
+    """Display response with syntax highlighting."""
+    if '```' in response:
+        parts = re.split(r'(```\w*\n.*?```)', response, flags=re.DOTALL)
+        for part in parts:
+            if part.startswith('```'):
+                match = re.match(r'```(\w+)?\n(.*?)```', part, re.DOTALL)
+                if match:
+                    lang = match.group(1) or 'python'
+                    code = match.group(2).strip()
+                    syntax = Syntax(code, lang, theme="monokai", line_numbers=True)
+                    console.print(syntax)
+            elif part.strip():
+                console.print(part.strip())
+    else:
+        console.print(response)
 
 
 def print_stage_result(result, stage_num: int, total_stages: int):
-    """Print formatted result for a single stage."""
-    print(format_stage_result(result, stage_num, total_stages))
+    """Print formatted result for a single stage with rich formatting."""
+    console.print(f"\n[bold cyan]{'='*80}[/bold cyan]")
+    console.print(f"[bold white]STAGE {stage_num}/{total_stages}:[/bold white] [bold green]{result.agent.upper()}[/bold green]")
+    console.print(f"[bold cyan]{'='*80}[/bold cyan]")
+
+    if result.error:
+        show_error_with_solution(result.error)
+        return
+
+    console.print(f"\n[bold]📊 Model:[/bold] [yellow]{result.model}[/yellow]")
+
+    # Show fallback information if used
+    if result.fallback_used:
+        console.print(f"[bold yellow]⚠️  Fallback:[/bold yellow] {result.original_model} → {result.model}")
+        console.print(f"   [dim]Reason: {result.fallback_reason}[/dim]")
+
+    # Show memory context if injected
+    if hasattr(result, 'injected_context_tokens') and result.injected_context_tokens > 0:
+        session_tokens = getattr(result, 'session_context_tokens', 0)
+        knowledge_tokens = getattr(result, 'knowledge_context_tokens', 0)
+        session_msgs = getattr(result, 'session_messages', 0)
+        knowledge_msgs = getattr(result, 'knowledge_messages', 0)
+
+        console.print(f"[bold magenta]🧠 Memory:[/bold magenta] {result.injected_context_tokens} tokens")
+        if session_tokens > 0:
+            console.print(f"   [dim]├─ Session: {session_tokens} tokens ({session_msgs} msgs)[/dim]")
+        if knowledge_tokens > 0:
+            console.print(f"   [dim]└─ Knowledge: {knowledge_tokens} tokens ({knowledge_msgs} msgs)[/dim]")
+
+    console.print(f"[bold]⏱️  Duration:[/bold] {result.duration_ms:.0f}ms")
+    console.print(f"[bold]🔢 Tokens:[/bold] {result.total_tokens} [dim](prompt: {result.prompt_tokens}, completion: {result.completion_tokens})[/dim]")
+    console.print(f"[bold]📁 Log:[/bold] [dim]{result.log_file}[/dim]")
+
+    console.print("\n[bold]Response:[/bold]")
+    console.print("─" * console.width)
+    if result.response:
+        display_response(result.response)
+    else:
+        console.print("[dim][No response][/dim]")
+    console.print("─" * console.width)
 
 
 def main():
@@ -72,16 +122,16 @@ Examples:
 
     # If no args, go interactive
     if len(sys.argv) == 1:
-        print("🔗 Multi-Agent Chain Runner")
-        print("=" * 80)
-        print()
+        console.print("\n[bold cyan]🔗 Multi-Agent Chain Runner[/bold cyan]")
+        console.print("[cyan]" + "=" * 80 + "[/cyan]")
+        console.print()
         try:
             prompt = input("Enter your prompt: ").strip()
             if not prompt:
-                print("❌ Error: Prompt cannot be empty")
+                console.print("[bold red]❌ Error:[/bold red] Prompt cannot be empty")
                 sys.exit(1)
         except (KeyboardInterrupt, EOFError):
-            print("\n\n❌ Cancelled")
+            console.print("\n\n[yellow]❌ Cancelled[/yellow]")
             sys.exit(0)
         stages = None
         save_to = None
@@ -100,27 +150,27 @@ Examples:
         valid_agents = ["builder", "critic", "closer"]
         for stage in stages:
             if stage not in valid_agents:
-                print(f"Error: Invalid agent '{stage}'")
-                print(f"Valid agents: {', '.join(valid_agents)}")
+                console.print(f"[bold red]Error:[/bold red] Invalid agent '{stage}'")
+                console.print(f"Valid agents: {', '.join(valid_agents)}")
                 sys.exit(1)
 
     # Show environment source
     env_source = get_env_source()
     if env_source == "environment":
-        print("🔑 API keys: environment variables")
+        console.print("🔑 API keys: environment variables")
     elif env_source == "dotenv":
-        print("📁 API keys: .env file")
+        console.print("📁 API keys: .env file")
     else:
-        print("⚠️  Warning: No API keys detected")
+        console.print("[yellow]⚠️  Warning: No API keys detected[/yellow]")
 
     stage_list = stages or ["builder", "critic", "closer"]
-    print(f"🔗 Running chain: {' → '.join(stage_list)}")
-    print(f"📝 Prompt: {prompt}")
-    print()
+    console.print(f"[bold]🔗 Running chain:[/bold] [cyan]{' → '.join(stage_list)}[/cyan]")
+    console.print(f"[bold]📝 Prompt:[/bold] {prompt}")
+    console.print()
 
-    # Progress callback
+    # Progress callback with rich formatting
     def show_progress(stage_num, total, agent_name):
-        print(f"🔄 Stage {stage_num}/{total}: Running {agent_name.upper()}...", flush=True)
+        console.print(f"[bold yellow]🔄 Stage {stage_num}/{total}:[/bold yellow] Running [cyan]{agent_name.upper()}[/cyan]...")
 
     # Auto-generate CLI session (v0.11.0)
     session_manager = get_session_manager()
@@ -140,46 +190,33 @@ Examples:
             session_id=session_id  # v0.11.0
         )
     except Exception as e:
-        print(f"\n❌ Chain failed: {str(e)}")
+        console.print(f"\n[bold red]❌ Chain failed:[/bold red] {str(e)}")
         sys.exit(1)
 
-    # Collect output for saving
-    output_lines = []
-
-    # Display results (and collect if saving)
+    # Display results
     total = len(results)
     for idx, result in enumerate(results, 1):
-        stage_output = format_stage_result(result, idx, total)
-        print(stage_output)
-        if save_to:
-            output_lines.append(stage_output)
+        print_stage_result(result, idx, total)
 
-    # Summary
-    summary_lines = []
-    summary_lines.append("\n" + "=" * 80)
-    summary_lines.append("CHAIN SUMMARY")
-    summary_lines.append("=" * 80)
+    # Summary with rich formatting
+    console.print(f"\n[bold cyan]{'='*80}[/bold cyan]")
+    console.print("[bold white]CHAIN SUMMARY[/bold white]")
+    console.print(f"[bold cyan]{'='*80}[/bold cyan]")
 
     total_duration = sum(r.duration_ms for r in results)
     total_tokens = sum(r.total_tokens for r in results)
     errors = [r for r in results if r.error]
 
-    summary_lines.append(f"\n✅ Stages completed: {len(results) - len(errors)}/{total}")
-    summary_lines.append(f"⏱️  Total duration: {total_duration:.0f}ms ({total_duration/1000:.1f}s)")
-    summary_lines.append(f"🔢 Total tokens: {total_tokens}")
+    console.print(f"\n[bold green]✅ Stages completed:[/bold green] {len(results) - len(errors)}/{total}")
+    console.print(f"[bold]⏱️  Total duration:[/bold] {total_duration:.0f}ms ({total_duration/1000:.1f}s)")
+    console.print(f"[bold]🔢 Total tokens:[/bold] {total_tokens}")
 
     if errors:
-        summary_lines.append(f"\n❌ Errors: {len(errors)}")
+        console.print(f"\n[bold red]❌ Errors:[/bold red] {len(errors)}")
         for err_result in errors:
-            summary_lines.append(f"   - {err_result.agent}: {err_result.error}")
-
-    summary_lines.append("\n✅ Chain completed successfully!")
-
-    # Print summary
-    summary = "\n".join(summary_lines)
-    print(summary)
-    if save_to:
-        output_lines.append(summary)
+            console.print(f"   [dim]- {err_result.agent}: {err_result.error}[/dim]")
+    else:
+        console.print("\n[bold green]✅ Chain completed successfully![/bold green]")
 
     # Save to file if requested
     if save_to:
@@ -191,11 +228,35 @@ Examples:
                 f.write(f"**Prompt:** {prompt}\n\n")
                 f.write(f"**Stages:** {' → '.join(stages or ['builder', 'critic', 'closer'])}\n\n")
                 f.write("---\n\n")
-                # Write all collected output
-                f.write("\n\n".join(output_lines))
-            print(f"\n💾 Output saved to: {output_path.absolute()}")
+
+                # Write each stage result
+                for idx, result in enumerate(results, 1):
+                    f.write(f"\n## Stage {idx}/{total}: {result.agent.upper()}\n\n")
+                    if result.error:
+                        f.write(f"**Error:** {result.error}\n\n")
+                    else:
+                        f.write(f"**Model:** {result.model}\n")
+                        f.write(f"**Duration:** {result.duration_ms:.0f}ms\n")
+                        f.write(f"**Tokens:** {result.total_tokens} (prompt: {result.prompt_tokens}, completion: {result.completion_tokens})\n\n")
+                        if result.fallback_used:
+                            f.write(f"**Fallback:** {result.original_model} → {result.model} ({result.fallback_reason})\n\n")
+                        f.write("**Response:**\n\n")
+                        f.write(result.response)
+                        f.write("\n\n---\n")
+
+                # Summary
+                f.write(f"\n## Summary\n\n")
+                f.write(f"- Stages completed: {len(results) - len(errors)}/{total}\n")
+                f.write(f"- Total duration: {total_duration:.0f}ms ({total_duration/1000:.1f}s)\n")
+                f.write(f"- Total tokens: {total_tokens}\n")
+                if errors:
+                    f.write(f"\n### Errors\n\n")
+                    for err_result in errors:
+                        f.write(f"- {err_result.agent}: {err_result.error}\n")
+
+            console.print(f"\n[bold green]💾 Output saved to:[/bold green] [dim]{output_path.absolute()}[/dim]")
         except Exception as e:
-            print(f"\n⚠️  Failed to save output: {e}")
+            console.print(f"\n[bold yellow]⚠️  Failed to save output:[/bold yellow] {e}")
 
     if errors:
         sys.exit(1)
