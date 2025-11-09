@@ -1,11 +1,14 @@
 """Memory engine for persistent conversation storage and retrieval."""
 
+import logging
 import math
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Set
 
 from core.memory_backend import SQLiteBackend
 from core.embedding_engine import get_embedding_engine, EmbeddingEngine
+
+logger = logging.getLogger(__name__)
 
 
 class MemoryEngine:
@@ -94,8 +97,9 @@ class MemoryEngine:
                 text_for_embedding = f"{prompt}\n{response[:200]}"
                 embedding = self.embedding_engine.encode(text_for_embedding)
                 conversation["embedding"] = EmbeddingEngine.serialize_embedding(embedding)
-            except Exception:
+            except Exception as e:
                 # If embedding fails, continue without it (graceful degradation)
+                logger.warning(f"Failed to generate embedding during conversation storage: {e}")
                 pass
 
         # Store to backend
@@ -590,7 +594,8 @@ class MemoryEngine:
         if record.get("embedding"):
             try:
                 return EmbeddingEngine.deserialize_embedding(record["embedding"])
-            except Exception:
+            except Exception as e:
+                logger.warning(f"Failed to deserialize existing embedding for record {record.get('id')}: {e}")
                 pass  # Fall through to generation
 
         # Generate on-demand if missing
@@ -602,11 +607,13 @@ class MemoryEngine:
             try:
                 serialized = EmbeddingEngine.serialize_embedding(embedding)
                 self.backend.update_embedding(record["id"], serialized)
-            except Exception:
+            except Exception as e:
+                logger.warning(f"Failed to update embedding in database for record {record.get('id')}: {e}")
                 pass  # Continue even if update fails
 
             return embedding
-        except Exception:
+        except Exception as e:
+            logger.warning(f"Failed to generate embedding on-demand for record {record.get('id')}: {e}")
             return None  # Embedding unavailable
 
 

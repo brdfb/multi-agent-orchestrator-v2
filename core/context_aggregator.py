@@ -11,11 +11,14 @@ Features:
 - Smart truncation (preserves important content)
 """
 
+import logging
 from datetime import datetime
 from typing import List, Dict, Any, Optional
 
 from config.settings import count_tokens
 from core.memory_engine import MemoryEngine
+
+logger = logging.getLogger(__name__)
 
 
 class ContextAggregator:
@@ -219,10 +222,26 @@ class ContextAggregator:
             # Sort by score
             filtered.sort(key=lambda x: x.get('_score', 0), reverse=True)
 
+            # Check if we found any relevant conversations
+            if not filtered:
+                logger.info(f"No knowledge conversations found above threshold 0.1 for prompt: '{prompt[:50]}...'")
+
+                # Fallback: return top 1 most recent conversation (regardless of score)
+                if recent and len(recent) > 0:
+                    # Filter out current session
+                    fallback_candidates = [conv for conv in recent if not (exclude_session_id and conv.get('session_id') == exclude_session_id)]
+
+                    if fallback_candidates:
+                        fallback = fallback_candidates[0]
+                        fallback['_score'] = 0.05  # Low score to indicate fallback
+                        logger.info(f"Using fallback: most recent conversation (id={fallback.get('id')})")
+                        return [fallback]
+
             return filtered[:10]
 
-        except Exception:
+        except Exception as e:
             # Graceful degradation - return empty list
+            logger.warning(f"Failed to retrieve knowledge conversations: {e}")
             return []
 
     def _format_session_context(self, conversations: List[Dict[str, Any]]) -> str:
@@ -415,9 +434,9 @@ class ContextAggregator:
 
     def _truncate_to_tokens(self, text: str, target_tokens: int) -> str:
         """
-        Truncate text to fit target token count.
+        Truncate text to fit target token count using accurate tiktoken counting.
 
-        Simple approximation: ~4 chars per token for English/Turkish.
+        Uses tiktoken for precise token counting (handles Chinese/emoji correctly).
 
         Args:
             text: Text to truncate
@@ -426,11 +445,28 @@ class ContextAggregator:
         Returns:
             Truncated text
         """
-        estimated_chars = target_tokens * 4
-        if len(text) <= estimated_chars:
+        # Check if already within budget
+        current_tokens = count_tokens(text)
+        if current_tokens <= target_tokens:
             return text
 
-        return text[:estimated_chars] + "...\n[Context truncated to fit budget]"
+        # Binary search for optimal truncation point
+        words = text.split()
+        left, right = 0, len(words)
+        best_truncation = ""
+
+        while left <= right:
+            mid = (left + right) // 2
+            candidate = " ".join(words[:mid])
+            candidate_tokens = count_tokens(candidate)
+
+            if candidate_tokens <= target_tokens:
+                best_truncation = candidate
+                left = mid + 1
+            else:
+                right = mid - 1
+
+        return best_truncation + "...\n[Context truncated to fit budget]"
 
     def _format_final_context(self, contexts: List[Dict[str, Any]]) -> str:
         """

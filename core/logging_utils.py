@@ -1,6 +1,7 @@
 """Logging utilities for conversation tracking."""
 
 import json
+import logging
 import re
 import uuid
 from datetime import datetime, timezone
@@ -8,6 +9,8 @@ from pathlib import Path
 from typing import Any, Dict
 
 from config.settings import CONVERSATIONS_DIR, estimate_cost
+
+logger = logging.getLogger(__name__)
 
 
 def mask_sensitive_data(text: str) -> str:
@@ -98,7 +101,8 @@ def read_logs(limit: int = 20) -> list[Dict[str, Any]]:
                 log = json.load(f)
                 log["filename"] = filepath.name
                 logs.append(log)
-        except Exception:
+        except Exception as e:
+            logger.warning(f"Failed to parse log file {filepath.name}: {e}")
             continue
 
     return logs
