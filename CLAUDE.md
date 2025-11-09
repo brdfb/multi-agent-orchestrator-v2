@@ -36,6 +36,132 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **See**: Full documentation in "Session Tracking & Conversation Continuity" section below
 
+### 2025-11-09: UI/UX Improvements (v0.11.2)
+**Context**: Friend's comprehensive UI analysis identified 10 issues (overall score: 6/10)
+**Work Done**: Fixed 2 P0 critical issues + 3 Phase 1 quick wins (1 hour total)
+
+**P0 Critical Fixes**:
+1. **Outdated Model List** (ui/templates/index.html:476-482)
+   - Problem: UI showed deprecated models causing API errors
+   - Fix: `claude-3-5-sonnet-20241022` → `claude-sonnet-4-5`, `gemini-1.5-pro` → `gemini-2.5-flash`
+   - Impact: Model override now works without 404 errors
+
+2. **Memory Context Invisibility** (ui/templates/index.html:602-712)
+   - Problem: "🧠 320 tokens" badge with no explanation
+   - Fix: Clickable badge with popup showing session vs knowledge breakdown
+   - Display: "📝 Session: 150 tokens (3 msgs)" + "🔍 Knowledge: 170 tokens (2 msgs)"
+   - Implementation: `showMemoryDetails()` function with alert (simple, 30 min implementation)
+
+**Phase 1 Quick Wins**:
+3. **Copy Button** (ui/templates/index.html:585-662)
+   - Added 📋 button to all responses (single agent + chain)
+   - Visual feedback: "✓ Copied!" with green highlight for 2s
+   - Uses Clipboard API with error handling
+
+4. **Search Placeholder** (ui/templates/index.html:518)
+   - Changed: "Search by keyword..." → "Search conversations (semantic)..."
+   - Clarifies semantic search behavior
+
+5. **Button Tooltips** (ui/templates/index.html:475, 491-492)
+   - Send: "Send to selected agent"
+   - Run Chain: "Run multi-agent pipeline: builder → critic → closer (thorough analysis)" + ⓘ
+   - Model Override: "Override the agent's default model (useful for testing different LLMs)" + ⓘ
+
+**Files Changed**: ui/templates/index.html (+78 lines, -12 lines)
+
+**Remaining Work** (not requested yet):
+- P1: Code syntax highlighting (1 hour)
+- P1: Chain progress indicator (3 hours)
+- P2: Keyboard shortcuts (2 hours)
+- P2: Conversation threading UI (2 days)
+
+### 2025-11-09: Code Quality Fixes (v0.11.1)
+**Context**: Friend's detailed code review (45 min analysis) identified 11 issues
+**Status**: 5 already fixed, 4 valid bugs fixed now, 2 design choices (not bugs)
+
+**P0 Critical: Token Budget Overflow** (core/context_aggregator.py:416-450)
+- Problem: Regression of Bug #13 - used 4 chars/token approximation (inaccurate for Chinese/emoji)
+- Impact: Chinese/emoji text exceeds budget by 2x
+- Fix: Binary search with tiktoken for precise token counting
+- Before:
+  ```python
+  words = text.split()
+  truncated = " ".join(words[:target_tokens])  # ❌ Assumes 1 word = 1 token
+  ```
+- After:
+  ```python
+  # Binary search for optimal truncation point
+  while left <= right:
+      mid = (left + right) // 2
+      candidate = " ".join(words[:mid])
+      candidate_tokens = count_tokens(candidate)  # ✅ Accurate tiktoken
+      if candidate_tokens <= target_tokens:
+          best_truncation = candidate
+          left = mid + 1
+      else:
+          right = mid - 1
+  ```
+
+**P1 High: Silent Exception Handling** (core/memory_engine.py, core/logging_utils.py)
+- Problem: 6 `except Exception:` blocks with no logging
+- Impact: Debugging nightmare when errors occur
+- Fix: Added `logger.warning()` to all silent handlers
+- Example:
+  ```python
+  # Before
+  except Exception:
+      pass  # ❌ Silent failure
+
+  # After
+  except Exception as e:
+      logger.warning(f"Failed to generate embedding: {e}")  # ✅ Logged
+      pass
+  ```
+
+**P2 Medium: Empty Context Fallback** (core/context_aggregator.py:225-244)
+- Problem: Returns empty list when no semantic matches above threshold
+- Fix: Fallback to most recent conversation (score 0.05) with logging
+- Ensures users always get some context, even if not highly relevant
+
+**P2 Medium: Database Connection Leaks** (core/memory_backend.py)
+- Problem: `conn.close()` not in `try/finally` (10 methods)
+- Fix: Wrapped all DB operations in try/finally
+- Example:
+  ```python
+  # Before
+  def get_recent(self, limit):
+      conn = self._get_connection()
+      cursor = conn.cursor()
+      cursor.execute("SELECT ...")
+      rows = cursor.fetchall()
+      conn.close()  # ❌ Not in finally - leaks on error
+      return rows
+
+  # After
+  def get_recent(self, limit):
+      conn = self._get_connection()
+      cursor = conn.cursor()
+      try:
+          cursor.execute("SELECT ...")
+          rows = cursor.fetchall()
+          return rows
+      finally:
+          conn.close()  # ✅ Always closes
+  ```
+
+**Issues Already Fixed** (v0.10.0-v0.11.0):
+- Multi-critic parallel execution (v0.9.0)
+- Convergence detection (v0.8.0)
+- No-progress detection (v0.8.0)
+- Zero-critic fallback (v0.10.0)
+- Null value checks (v0.10.1)
+
+**Files Changed**:
+- core/context_aggregator.py (+35 lines)
+- core/memory_engine.py (+5 lines)
+- core/logging_utils.py (+2 lines)
+- core/memory_backend.py (10 methods refactored)
+
 ### 2025-11-08: Token Budget Overflow Fix (v0.10.2) - ACTUAL ROOT CAUSE
 **Problem**: Memory context injection still returning 0 tokens even after v0.10.1 fixes
 **Discovery**: Friend's builder analysis + detailed debugging revealed token budget overflow

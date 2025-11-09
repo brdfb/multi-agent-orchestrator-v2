@@ -5,6 +5,89 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.2] - 2025-11-09
+
+### Fixed - UI/UX Improvements (Friend Code Review Response)
+
+**P0 Critical Issues:**
+1. **Outdated Model List** (`ui/templates/index.html`)
+   - Problem: UI showed deprecated models (`claude-3-5-sonnet-20241022`, `gemini-1.5-pro`)
+   - Symptom: Model override causing API errors (404 model not found)
+   - Fix: Updated to current models (`claude-sonnet-4-5`, `gemini-2.5-flash`)
+   - Impact: Users can successfully override agent models
+
+2. **Memory Context Invisibility** (`ui/templates/index.html`)
+   - Problem: Memory badge showed "🧠 320 tokens" with no explanation
+   - Symptom: Users couldn't understand where context came from
+   - Fix: Added clickable memory badge with breakdown popup
+   - Display: "📝 Session: 150 tokens (3 msgs)" + "🔍 Knowledge: 170 tokens (2 msgs)"
+   - Impact: Users can understand and debug memory injection
+
+**Phase 1 Quick Wins:**
+3. **Copy Button** (`ui/templates/index.html`)
+   - Added `copyToClipboard()` function with 📋 button on all responses
+   - Works for both `/ask` single agent and `/chain` multi-stage responses
+   - Visual feedback: "✓ Copied!" with green highlight for 2s
+   - Uses Clipboard API with fallback error handling
+
+4. **Search Placeholder Fix** (`ui/templates/index.html`)
+   - Changed: "Search by keyword..." → "Search conversations (semantic)..."
+   - Clarifies that search uses semantic similarity, not just keywords
+
+5. **Button Tooltips** (`ui/templates/index.html`)
+   - Send button: "Send to selected agent"
+   - Run Chain: "Run multi-agent pipeline: builder → critic → closer (thorough analysis)" with ⓘ
+   - Model Override: "Override the agent's default model (useful for testing different LLMs)" with ⓘ
+
+**Files Changed:**
+- `ui/templates/index.html` (+78 lines, -12 lines)
+
+**Context:** These fixes address issues from external code review (UI_UX_ANALYSIS.md)
+
+## [0.11.1] - 2025-11-09
+
+### Fixed - Code Quality Issues (Friend Code Review Response)
+
+**P0 Critical: Token Budget Overflow (Regression of Bug #13)**
+- File: `core/context_aggregator.py`
+- Problem: `_truncate_to_tokens()` used 4 chars/token approximation (inaccurate)
+- Impact: Chinese/emoji text exceeds budget by 2x
+- Fix: Binary search with tiktoken for precise token counting
+- Code: Replaced character-based estimation with accurate `count_tokens()` calls
+
+**P1 High: Silent Exception Handling**
+- Files: `core/memory_engine.py`, `core/logging_utils.py`
+- Problem: 6 `except Exception:` blocks with no logging
+- Impact: Debugging nightmare when errors occur
+- Fix: Added `logger.warning()` to all silent exception handlers
+- Examples:
+  - Embedding generation failures now logged
+  - Log file parsing errors now visible
+  - Database operations log errors
+
+**P2 Medium: Empty Context Fallback**
+- File: `core/context_aggregator.py`
+- Problem: Returns empty list when no knowledge matches threshold
+- Impact: Users lose context when semantic search finds nothing
+- Fix: Fallback to most recent conversation (score 0.05) with logging
+- Ensures users always get some context, even if not highly relevant
+
+**P2 Medium: Database Connection Leaks**
+- File: `core/memory_backend.py`
+- Problem: `conn.close()` not in `try/finally` blocks (10 methods)
+- Impact: Connection leaks on exceptions → resource exhaustion
+- Fix: Wrapped all DB operations in `try/finally`
+- Methods fixed: `_init_database`, `store`, `get_recent`, `search`, `get_by_id`, `delete`, `get_stats`, `cleanup`, `update_embedding`, `query_candidates`
+
+**Files Changed:**
+- `core/context_aggregator.py` (+35 lines)
+- `core/memory_engine.py` (+5 lines)
+- `core/logging_utils.py` (+2 lines)
+- `core/memory_backend.py` (10 methods refactored)
+
+**Context:** Response to `docs/FRIEND_CODE_REVIEW_RESPONSE.md`
+**Status:** 5 issues already fixed (v0.10.0-v0.11.0), 4 issues fixed now, 2 design choices (not bugs)
+
 ## [0.11.0] - 2025-11-09
 
 ### Added - Session Tracking for Conversation Continuity 🎯
