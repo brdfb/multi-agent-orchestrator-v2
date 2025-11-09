@@ -1,9 +1,11 @@
 # RFC: Session-Based Conversation Tracking
 
-**Status:** Proposed
-**Version:** 0.11.0 (Future)
+**Status:** Proposed (Revised)
+**RFC Version:** v1.1
+**Target Version:** 0.11.0 (Future)
 **Author:** System Design Team
 **Date:** 2025-11-08
+**Last Revised:** 2025-11-09
 **Implementation Effort:** 2-3 days
 
 ---
@@ -179,13 +181,8 @@ CREATE TABLE sessions (
     metadata TEXT  -- JSON: {terminal_pid, user_agent, etc.}
 );
 
--- Auto-cleanup trigger (delete sessions older than 24 hours)
-CREATE TRIGGER cleanup_old_sessions
-AFTER INSERT ON sessions
-BEGIN
-    DELETE FROM sessions
-    WHERE last_active < datetime('now', '-24 hours');
-END;
+-- Note: Auto-cleanup implemented in application layer (probabilistic)
+-- to avoid trigger performance overhead on every insert
 ```
 
 ---
@@ -197,36 +194,79 @@ END;
 ```python
 def generate_cli_session_id():
     """
-    Auto-generate session ID for CLI based on terminal.
+    Auto-generate session ID for CLI based on terminal and activity.
 
-    Strategy: terminal_pid + hour
-    - Same terminal, same hour = same session
+    Strategy: Duration-based (2 hours of inactivity)
+    - Same terminal = check last activity
+    - If last activity < 2 hours ago → reuse session
+    - If last activity > 2 hours ago → new session
     - New terminal = new session
-    - New hour = new session (auto-reset)
 
-    Example: cli-12345-2025110809
+    Example: cli-12345-20251108092547
     """
     pid = os.getpid()
-    hour = datetime.now().strftime("%Y%m%d%H")
-    return f"cli-{pid}-{hour}"
+
+    # Check for recent session from this terminal
+    recent_session = get_recent_cli_session(pid=pid, within_hours=2)
+
+    if recent_session:
+        # Reuse existing session (activity within 2 hours)
+        return recent_session.session_id
+    else:
+        # Create new session
+        timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+        return f"cli-{pid}-{timestamp}"
+
+
+def get_recent_cli_session(pid: int, within_hours: int = 2):
+    """
+    Find most recent session from this terminal within time window.
+
+    Returns:
+        Session object if found, None otherwise
+    """
+    cutoff = datetime.now() - timedelta(hours=within_hours)
+
+    sessions = db.query("""
+        SELECT session_id, last_active
+        FROM sessions
+        WHERE source = 'cli'
+          AND metadata LIKE ?
+          AND last_active > ?
+        ORDER BY last_active DESC
+        LIMIT 1
+    """, f'%"pid":{pid}%', cutoff)
+
+    return sessions[0] if sessions else None
 ```
 
 **Rationale:**
 - ✅ Auto-session per terminal (user doesn't think about it)
-- ✅ Hourly reset (conversations don't grow unbounded)
+- ✅ Duration-based reset (2 hours idle, NOT hourly clock)
+- ✅ No mid-conversation breaks
 - ✅ No user input required (seamless UX)
 
 **Example:**
 ```bash
-# Terminal 1 (PID 12345), 10:00-10:59
-make agent-ask Q="Chart çiz"        # session: cli-12345-2025110810
-make agent-ask Q="Renk ekle"        # session: cli-12345-2025110810 ✅ Same!
+# Terminal 1 (PID 12345), 10:00
+make agent-ask Q="Chart çiz"        # session: cli-12345-20251108100047
+                                    # (new session created)
 
-# Terminal 1, 11:00
-make agent-ask Q="Yeni konu"        # session: cli-12345-2025110811 (new hour)
+# 10:30 (30 min later)
+make agent-ask Q="Renk ekle"        # session: cli-12345-20251108100047 ✅ Same!
+                                    # (within 2 hours, reused)
+
+# 11:45 (1h 45min later, total 1h 45min from last request)
+make agent-ask Q="Başlık ekle"      # session: cli-12345-20251108100047 ✅ Same!
+                                    # (still within 2 hours)
+
+# 14:00 (2h 15min later since last request = idle timeout)
+make agent-ask Q="Yeni konu"        # session: cli-12345-20251108140012 🆕 New!
+                                    # (>2 hours idle, new session)
 
 # Terminal 2 (PID 67890), 10:30
-make agent-ask Q="Başka konu"       # session: cli-67890-2025110810 (new terminal)
+make agent-ask Q="Başka konu"       # session: cli-67890-20251108103015
+                                    # (different PID = new session)
 ```
 
 ---
@@ -352,9 +392,9 @@ def get_full_context(prompt: str, session_id: str, config: dict) -> str:
                 'priority': 2  # Lower priority
             })
 
-    # 3. TOKEN BUDGET ENFORCEMENT
+    # 3. TOKEN BUDGET ENFORCEMENT (Flexible allocation with priority)
     max_tokens = config.get('max_context_tokens', 600)
-    selected = apply_token_budget(contexts, max_tokens)
+    selected = apply_token_budget_with_priority(contexts, max_tokens)
 
     # 4. FORMAT FINAL CONTEXT
     return format_final_context(selected)
@@ -419,6 +459,83 @@ def format_knowledge_context(conversations: List[dict]) -> str:
         parts.append(f"Summary: \"{conv['response'][:200]}...\"\n")
 
     return "\n".join(parts)
+
+
+def apply_token_budget_with_priority(contexts: List[dict], max_tokens: int) -> List[dict]:
+    """
+    Apply token budget with priority-based flexible allocation.
+
+    Strategy:
+    1. Session context gets priority (up to 75% of budget)
+    2. Knowledge context uses remaining tokens
+    3. If session < 75%, knowledge can use the rest
+
+    This prevents session overflow while maximizing context usage.
+
+    Args:
+        contexts: List of context dicts with 'type', 'text', 'tokens', 'priority'
+        max_tokens: Total budget
+
+    Returns:
+        Selected contexts within budget
+
+    Example:
+        max_tokens = 600
+        session_max = 450 (75%)
+
+        Case 1: Session needs 300 tokens
+        → Session gets 300, Knowledge gets 300 (uses remaining 300)
+
+        Case 2: Session needs 500 tokens
+        → Session gets 450 (75% cap), Knowledge gets 150
+
+        Case 3: Session needs 100 tokens
+        → Session gets 100, Knowledge gets 500 (uses remaining 500)
+    """
+    if not contexts:
+        return []
+
+    selected = []
+    session_max = int(max_tokens * 0.75)  # 75% cap for session
+    remaining_budget = max_tokens
+
+    # Sort by priority (1 = highest)
+    sorted_contexts = sorted(contexts, key=lambda x: x['priority'])
+
+    for ctx in sorted_contexts:
+        if ctx['type'] == 'session':
+            # Session gets priority, but capped at 75%
+            allocated = min(ctx['tokens'], session_max, remaining_budget)
+        else:
+            # Knowledge uses remaining budget
+            allocated = min(ctx['tokens'], remaining_budget)
+
+        if allocated > 0:
+            # Truncate context if needed
+            if allocated < ctx['tokens']:
+                ctx['text'] = truncate_to_tokens(ctx['text'], allocated)
+                ctx['tokens'] = allocated
+
+            selected.append(ctx)
+            remaining_budget -= allocated
+
+        if remaining_budget <= 0:
+            break
+
+    return selected
+
+
+def truncate_to_tokens(text: str, target_tokens: int) -> str:
+    """
+    Truncate text to fit target token count.
+
+    Simple approximation: ~4 chars per token for English/Turkish.
+    """
+    estimated_chars = target_tokens * 4
+    if len(text) <= estimated_chars:
+        return text
+
+    return text[:estimated_chars] + "...\n[Context truncated to fit budget]"
 ```
 
 ---
@@ -529,6 +646,176 @@ def migrate():
 if __name__ == "__main__":
     migrate()
 ```
+
+---
+
+### Session Cleanup Strategy (Probabilistic)
+
+**Why Not Trigger-Based:**
+- Database triggers execute on EVERY insert
+- Cleanup deletes can be expensive (table scans)
+- All users wait for cleanup to finish
+- 100% overhead for something needed <1% of time
+
+**Probabilistic Approach:**
+```python
+# core/session_manager.py
+
+import random
+from datetime import datetime, timedelta
+
+def save_session(session_id: str, source: str, metadata: dict):
+    """
+    Save or update session with probabilistic cleanup.
+
+    Cleanup runs randomly (10% probability) to spread load.
+    """
+    # Save/update session
+    db.execute("""
+        INSERT INTO sessions (session_id, source, metadata, last_active)
+        VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+        ON CONFLICT(session_id)
+        DO UPDATE SET last_active = CURRENT_TIMESTAMP
+    """, session_id, source, json.dumps(metadata))
+
+    # Probabilistic cleanup (10% of requests)
+    if random.random() < 0.1:
+        cleanup_old_sessions()
+
+
+def cleanup_old_sessions(hours: int = 24):
+    """
+    Delete sessions older than N hours.
+
+    Called probabilistically (10% of saves) to avoid overhead.
+    Average: 1 cleanup per 10 requests.
+    """
+    cutoff = datetime.now() - timedelta(hours=hours)
+
+    result = db.execute("""
+        DELETE FROM sessions
+        WHERE last_active < ?
+    """, cutoff)
+
+    deleted = result.rowcount
+    if deleted > 0:
+        logger.debug(f"Cleaned up {deleted} old sessions (>{hours}h)")
+
+    return deleted
+```
+
+**Benefits:**
+- ✅ No per-insert overhead (90% of time)
+- ✅ Cleanup happens eventually (10% probability)
+- ✅ Simple implementation
+- ✅ No database triggers needed
+
+**Math:**
+- 100 requests → ~10 cleanups (statistical)
+- Cleanup cost: amortized over 10 requests
+- Load: spread randomly over time
+
+---
+
+### Migration Rollback Procedure
+
+If migration fails or needs to be reverted:
+
+```python
+# scripts/rollback_session_tracking.py
+
+import sqlite3
+from pathlib import Path
+
+def rollback():
+    """
+    Rollback session tracking migration.
+
+    WARNING: This removes session_id data!
+    """
+    db_path = Path("data/MEMORY/conversations.db")
+
+    # Backup first!
+    backup_path = db_path.with_suffix('.db.backup')
+    import shutil
+    shutil.copy2(db_path, backup_path)
+    print(f"📦 Backup created: {backup_path}")
+
+    conn = sqlite3.connect(str(db_path))
+    cursor = conn.cursor()
+
+    try:
+        # Start transaction
+        cursor.execute("BEGIN TRANSACTION")
+
+        # Drop indexes
+        print("🔍 Dropping indexes...")
+        cursor.execute("DROP INDEX IF EXISTS idx_session_id")
+
+        # Drop sessions table
+        print("📊 Dropping sessions table...")
+        cursor.execute("DROP TABLE IF EXISTS sessions")
+
+        # Remove session_id column (SQLite limitation workaround)
+        print("🔄 Removing session_id column...")
+
+        # SQLite doesn't support DROP COLUMN directly
+        # We need to recreate the table
+        cursor.execute("""
+            CREATE TABLE conversations_backup AS
+            SELECT
+                id, timestamp, agent, model, provider,
+                prompt, response, duration_ms,
+                prompt_tokens, completion_tokens, total_tokens,
+                estimated_cost_usd, fallback_used, embedding
+            FROM conversations
+        """)
+
+        cursor.execute("DROP TABLE conversations")
+        cursor.execute("ALTER TABLE conversations_backup RENAME TO conversations")
+
+        # Recreate original indexes
+        cursor.execute("CREATE INDEX idx_timestamp ON conversations(timestamp DESC)")
+        cursor.execute("CREATE INDEX idx_agent ON conversations(agent)")
+
+        # Commit transaction
+        cursor.execute("COMMIT")
+
+        print("✅ Rollback complete!")
+        print(f"📦 Backup available at: {backup_path}")
+
+    except Exception as e:
+        cursor.execute("ROLLBACK")
+        print(f"❌ Rollback failed: {e}")
+        print(f"📦 Restore from backup: {backup_path}")
+        raise
+
+    finally:
+        conn.close()
+
+
+if __name__ == "__main__":
+    import sys
+
+    confirm = input("⚠️  This will REMOVE all session data. Continue? (yes/no): ")
+    if confirm.lower() != "yes":
+        print("Rollback cancelled.")
+        sys.exit(0)
+
+    rollback()
+```
+
+**Rollback Steps:**
+1. Stop all services (API server, CLI usage)
+2. Run `python scripts/rollback_session_tracking.py`
+3. Verify backup created successfully
+4. Confirm rollback when prompted
+5. Restart services
+
+**Data Loss:**
+- Session metadata will be lost
+- Conversation data preserved (except session_id column)
+- Backup available if issues occur
 
 ---
 
@@ -673,6 +960,161 @@ def test_knowledge_excludes_session():
     )
     assert all(r['session_id'] != "test-123" for r in results)
 ```
+
+---
+
+### Input Validation Tests
+
+```python
+# tests/test_session_validation.py
+
+import re
+import pytest
+from core.session_manager import validate_session_id
+
+def test_session_id_valid_formats():
+    """Valid session IDs should pass validation."""
+    valid_ids = [
+        "cli-12345-20251108100047",
+        "ui-a1b2c3d4-e5f6-7890",
+        "api-custom-session-123",
+        "test-session_with-underscores",
+    ]
+
+    for session_id in valid_ids:
+        assert validate_session_id(session_id) == True
+
+
+def test_session_id_max_length():
+    """Session IDs over 64 chars should be rejected."""
+    too_long = "x" * 65
+
+    with pytest.raises(ValueError, match="session_id too long"):
+        validate_session_id(too_long)
+
+
+def test_session_id_invalid_characters():
+    """Session IDs with special chars should be rejected."""
+    invalid_ids = [
+        "session<script>alert(1)</script>",
+        "session; DROP TABLE sessions;--",
+        "session/../../../etc/passwd",
+        "session\x00null-byte",
+        "session with spaces",
+    ]
+
+    for session_id in invalid_ids:
+        with pytest.raises(ValueError, match="Invalid characters"):
+            validate_session_id(session_id)
+
+
+def test_session_id_sql_injection():
+    """SQL injection attempts should be rejected."""
+    sql_injection_attempts = [
+        "' OR '1'='1",
+        "1'; DROP TABLE sessions; --",
+        "admin'--",
+        "' UNION SELECT * FROM users--",
+    ]
+
+    for session_id in sql_injection_attempts:
+        with pytest.raises(ValueError, match="Invalid characters"):
+            validate_session_id(session_id)
+```
+
+**Input Validation Implementation:**
+
+```python
+# core/session_manager.py
+
+import re
+
+def validate_session_id(session_id: str) -> bool:
+    """
+    Validate session_id for security and correctness.
+
+    Rules:
+    - Max length: 64 characters
+    - Allowed chars: a-zA-Z0-9_-
+    - No special characters (SQL injection prevention)
+    - No path traversal attempts
+    - No null bytes
+
+    Raises:
+        ValueError: If validation fails
+
+    Returns:
+        True if valid
+    """
+    if not session_id:
+        raise ValueError("session_id cannot be empty")
+
+    if len(session_id) > 64:
+        raise ValueError("session_id too long (max 64 chars)")
+
+    # Allow only alphanumeric, underscore, hyphen
+    if not re.match(r'^[a-zA-Z0-9_-]+$', session_id):
+        raise ValueError("Invalid characters in session_id (allowed: a-z, A-Z, 0-9, _, -)")
+
+    # Additional check for null bytes (paranoid)
+    if '\x00' in session_id:
+        raise ValueError("Null byte in session_id")
+
+    return True
+
+
+def get_or_create_session(session_id: str = None, source: str = "cli", metadata: dict = None):
+    """
+    Get existing session or create new one.
+
+    Args:
+        session_id: Optional session ID (validated)
+        source: 'cli', 'ui', or 'api'
+        metadata: Additional metadata to store
+
+    Returns:
+        Session ID (validated)
+    """
+    if session_id:
+        # Validate user-provided session_id
+        validate_session_id(session_id)
+    else:
+        # Auto-generate based on source
+        if source == "cli":
+            session_id = generate_cli_session_id()
+        elif source == "ui":
+            session_id = generate_ui_session_id()
+        else:
+            session_id = f"api-{uuid4()}"
+
+    # Save or update session
+    save_session(session_id, source, metadata or {})
+
+    return session_id
+```
+
+**Security Considerations:**
+
+1. **SQL Injection Prevention:**
+   - Whitelist allowed characters (alphanumeric + `_` + `-`)
+   - Parameterized queries (already used in DB layer)
+   - No dynamic SQL construction
+
+2. **Path Traversal Prevention:**
+   - No `/`, `\`, `.` allowed in session_id
+   - Session IDs never used in file paths
+
+3. **XSS Prevention:**
+   - No `<`, `>`, `'`, `"` allowed
+   - Session IDs rendered in UI are safe
+
+4. **Length Limits:**
+   - 64 char max prevents buffer overflow
+   - Database column: `TEXT` (no practical limit, but app enforces)
+
+5. **Null Byte Prevention:**
+   - Explicit check for `\x00`
+   - Prevents C string termination attacks
 
 ---
 
@@ -924,6 +1366,69 @@ C) ❌ **Reject** - Keep stateless, document limitations
 
 ---
 
-**Version:** RFC v1.0
-**Last Updated:** 2025-11-08
-**Status:** ⏳ Awaiting Approval
+## 📋 Revision History
+
+### RFC v1.1 (2025-11-09)
+
+**Status:** Revised based on technical review
+
+**Changes from v1.0:**
+
+1. **Critical Fix #1: CLI Session Duration-Based (not hourly)**
+   - **Problem:** Hourly reset breaks mid-conversation (10:55 → 11:02 = new session)
+   - **Solution:** Duration-based (2 hours idle timeout)
+   - **Files:** Section 3.1 - CLI Session ID Generation
+   - **Impact:** Better UX, no conversation breaks
+
+2. **Critical Fix #2: Token Budget Flexible Allocation**
+   - **Problem:** Fixed 50/50 split causes overflow when session needs >300 tokens
+   - **Solution:** Priority-based allocation (session up to 75%, knowledge uses remaining)
+   - **Files:** Section 4.2 - Context Aggregation Logic
+   - **Impact:** Maximizes context usage, prevents truncation
+
+3. **Critical Fix #3: Probabilistic Cleanup (not trigger-based)**
+   - **Problem:** Trigger on every insert causes performance overhead
+   - **Solution:** 10% probability cleanup (amortized cost)
+   - **Files:** Section 5.1 - Session Cleanup Strategy
+   - **Impact:** Better performance, no per-insert latency
+
+4. **Addition: Input Validation (Security)**
+   - **Added:** Section 6.3 - Input Validation Tests
+   - **Content:** SQL injection prevention, XSS prevention, path traversal prevention
+   - **Impact:** Security hardening
+
+5. **Addition: Migration Rollback**
+   - **Added:** Section 7.2 - Migration Rollback Procedure
+   - **Content:** Complete rollback script with transaction safety
+   - **Impact:** Risk mitigation, safe deployment
+
+**Review Reference:** `docs/RFC_SESSION_TRACKING_REVIEW.md`
+
+**Approval Status:** ⏳ Awaiting final approval (post-revision)
+
+---
+
+### RFC v1.0 (2025-11-08)
+
+**Status:** Reviewed (conditional approval)
+
+**Initial Proposal:**
+- Session-based conversation tracking
+- Dual-context model (session + knowledge)
+- Auto-session management for CLI and UI
+- Database schema changes
+- 3-phase implementation plan
+
+**Review Findings:**
+- 3 critical issues identified
+- 2 medium issues identified
+- 4 minor issues identified
+- Overall rating: 4.2/5 stars
+- Recommendation: APPROVE WITH REVISIONS
+
+---
+
+**RFC Version:** v1.1
+**Last Updated:** 2025-11-09
+**Status:** ✅ Revised (Awaiting Approval)
+**Reviewers:** Technical Review Team
