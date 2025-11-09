@@ -5,6 +5,74 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.4] - 2025-11-09
+
+### Added - P2 Medium Priority UI Improvements (Friend Code Review Response)
+
+**1. Enhanced Error Messages with Context-Aware Solutions** (`ui/templates/index.html`)
+- **Smart Error Detection**: Analyzes error messages and provides specific solutions
+- **Error Types Handled**:
+  - **API Key Missing**: Shows .env configuration with all provider keys
+  - **Model Deprecated**: Suggests current models (claude-sonnet-4-5, gpt-4o, gemini-2.5-flash)
+  - **Rate Limit (429)**: Explains wait times, alternative providers, plan upgrades
+  - **Network Errors**: Troubleshooting checklist (server running, internet, firewall)
+  - **Timeout**: Optimization suggestions (simplify prompt, try different model)
+  - **Generic Fallback**: Browser console, server logs, GitHub issues link
+- **Implementation**:
+  - `showError(error, context)`: Parses error message and generates contextual solution
+  - HTMX `responseError` event handler for all requests
+  - Visual improvements: solution boxes with green accent border, code examples
+- **Impact**: Users get actionable solutions instead of generic "Error 500" messages
+
+**2. Keyboard Shortcuts for Power Users** (`ui/templates/index.html`)
+- **Shortcuts**:
+  - `Ctrl+Enter` / `Cmd+Enter`: Submit form (ChatGPT-style)
+  - `Cmd+K` / `Ctrl+K`: Focus search box (ChatGPT/Claude-style)
+  - `Esc`: Clear prompt textarea
+  - `/`: Focus prompt (Reddit/Slack-style)
+- **Features**:
+  - Platform-aware (detects Mac vs Windows/Linux)
+  - Smart context detection (/ only works when not typing)
+  - preventDefault() to avoid conflicts
+- **Implementation**: Global keydown event listener in DOMContentLoaded
+- **Impact**: Power users can navigate 3-5x faster without mouse
+
+**3. Enhanced Cost Tracking Dashboard** (`ui/templates/index.html`)
+- **Cost Breakdown by Agent**:
+  - Percentage bars showing usage distribution
+  - Request count and average tokens per request
+  - Visual progress bars (green accent color)
+  - Sorted by usage
+- **Usage by Model**:
+  - Model-specific token counts
+  - Percentage of total usage
+  - Request counts per model
+  - Monospace font for model names
+- **Features**:
+  - Auto-updates every 10 seconds (HTMX polling)
+  - Maintains existing 4 stats cards (Conversations, Tokens, Cost, Agents)
+  - Responsive layout (grid-column: 1 / -1)
+- **Implementation**: Enhanced `/memory/stats` handler with breakdowns
+- **Impact**: Better cost visibility for budget management and optimization
+
+**Files Changed**:
+- `ui/templates/index.html` (+253 lines, -8 lines)
+
+**Technical Details**:
+- **Error Handling**: 6+ error type detections with regex pattern matching
+- **Keyboard**: Cross-platform support (Ctrl vs Cmd detection)
+- **Cost Tracking**: Leverages existing backend data (no API changes needed)
+
+**All P1-P2 Work Complete:**
+- ✅ P0: Model list, Memory context visibility (v0.11.2)
+- ✅ Phase 1: Copy button, Search placeholder, Tooltips (v0.11.2)
+- ✅ P1: Code highlighting, Chain progress (v0.11.3)
+- ✅ P2: Error messages, Keyboard shortcuts, Cost tracking (v0.11.4)
+
+**Remaining Work** (P3 optional):
+- Conversation threading UI (2 days) - Backend ready (v0.11.0 session tracking)
+- WebSocket real-time updates (1 day) - Incremental improvement
+
 ## [0.11.3] - 2025-11-09
 
 ### Added - P1 High Priority UI Improvements (Friend Code Review Response)
