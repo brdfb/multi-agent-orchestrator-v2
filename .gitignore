@@ -3,7 +3,7 @@ __pycache__/
 *.pyc
 .env
 data/CONVERSATIONS/
-data/MEMORY/*.db
+data/MEMORY/
 .pytest_cache/
 .ruff_cache/
 *.db-journal

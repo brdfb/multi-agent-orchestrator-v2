@@ -5,6 +5,127 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.0] - 2025-11-09
+
+### Added - Session Tracking for Conversation Continuity 🎯
+
+**Major Feature:** ChatGPT-style conversation continuity across CLI, API, and Web UI
+
+**Problem Solved:**
+```
+Before v0.11.0 (Stateless):
+User: "Create a REST API"
+Assistant: [Code for REST API]
+
+User: "Add authentication"
+Assistant: ❌ "Add authentication to what?" (forgot previous conversation)
+
+After v0.11.0 (Session Tracking):
+User: "Create a REST API"
+Assistant: [Code for REST API]
+
+User: "Add authentication"
+Assistant: ✅ Adds auth to the REST API from previous message
+```
+
+**Architecture: Dual-Context Model**
+- **Session Context**: Recent messages from same session (continuity)
+- **Knowledge Context**: Semantic search from other sessions (knowledge retrieval)
+- **Token Budget**: Priority-based allocation (75% session cap, knowledge uses remaining)
+
+**Components Added:**
+1. `core/session_manager.py` (351 lines)
+   - Auto-session generation (CLI: PID+duration, UI: sessionStorage)
+   - Input validation (SQL injection, XSS, path traversal prevention)
+   - Probabilistic cleanup (10% of requests, no trigger overhead)
+
+2. `core/context_aggregator.py` (373 lines)
+   - Dual-context retrieval
+   - Flexible token budget (maximizes context usage)
+   - Smart truncation
+
+3. Database Migration:
+   - Added `sessions` table
+   - Added `session_id` column to conversations
+   - Migration script: `scripts/migrate_add_session_tracking.py`
+   - Rollback script: `scripts/rollback_session_tracking.py`
+
+**Integration Points:**
+- ✅ **CLI**: Auto-generates session based on PID + 2h idle timeout
+- ✅ **API**: Accepts optional `session_id` in request body
+- ✅ **Web UI**: Auto-generates session via browser sessionStorage
+- ✅ **Agent Runtime**: Uses ContextAggregator for dual-context model
+- ✅ **Memory Engine**: Stores conversations with session_id
+
+**Session Behavior:**
+
+| Interface | Session ID Format | Persistence | Reset Condition |
+|-----------|------------------|-------------|-----------------|
+| CLI | `cli-{pid}-{timestamp}` | 2h idle timeout | 2 hours without activity |
+| Web UI | `ui-{timestamp}-{random}` | Tab lifetime | Tab closed |
+| API | User-provided or auto | Client-managed | Client decides |
+
+**Example - CLI Sequential Conversation:**
+```bash
+# Terminal PID: 12345
+# 10:00
+$ mao builder "Create FastAPI project"
+# Session: cli-12345-20251109100047
+
+# 10:30 (30 min later)
+$ mao builder "Add JWT authentication"
+# Session: cli-12345-20251109100047 ✅ SAME!
+# System sees previous "Create FastAPI" conversation
+
+# 13:00 (2h 30min later = timeout)
+$ mao builder "New Django project"
+# Session: cli-12345-20251109130012 🆕 NEW!
+```
+
+**Security Features:**
+- Input validation (alphanumeric + `_` + `-` only)
+- Max length: 64 characters
+- SQL injection prevention
+- XSS prevention
+- Path traversal prevention
+- Null byte prevention
+
+**Performance Optimizations:**
+- Duration-based CLI sessions (not hourly reset - RFC v1.1 fix)
+- Flexible token budget (not fixed 50/50 - RFC v1.1 fix)
+- Probabilistic cleanup (not trigger-based - RFC v1.1 fix)
+- Indexed database queries (<50ms session lookup)
+
+**Backward Compatibility:**
+✅ `session_id` is optional everywhere
+✅ Existing clients work without changes
+✅ No breaking API changes
+✅ Graceful degradation if database unavailable
+
+**Documentation:**
+- `docs/RFC_SESSION_TRACKING.md` (v1.1 - 1435 lines)
+- `docs/RFC_SESSION_TRACKING_REVIEW.md` (763 lines)
+- `docs/RFC_SESSION_TRACKING_v1.1_CHANGES.md` (summary)
+
+**Implementation Stats:**
+- Files created: 7
+- Files modified: 6
+- Lines added: 1,800+
+- Commits: 7
+- Development time: 4 hours
+
+**Testing:**
+- ✅ Smoke test: CLI with mock LLM
+- ✅ Manual testing: Sequential conversations work
+- ✅ Migration tested: 109 existing conversations preserved
+
+**Credits:**
+- RFC Design: Claude Code + User collaboration
+- Technical Review: Identified 3 critical issues, all fixed in v1.1
+- Implementation: Claude Code
+
+---
+
 ## [0.10.3] - 2025-11-08
 
 ### Improved - Aggressive Recency Bias for Sequential Conversations
