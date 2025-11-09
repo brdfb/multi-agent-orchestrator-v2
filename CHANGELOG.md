@@ -5,6 +5,137 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.12.0] - 2025-11-09
+
+### Added - CLI Enhancements (Feature Parity with Web UI)
+
+**Brings CLI to same quality level as Web UI with rich terminal formatting, enhanced error messages, syntax highlighting, and comprehensive cost tracking.**
+
+**1. Rich Terminal Formatting** (`requirements.txt`, `scripts/agent_runner.py`, `scripts/chain_runner.py`)
+- **Added Dependency**: `rich>=13.7.0` for beautiful terminal output
+- **Features**:
+  - Colored, formatted output with emojis and boxes
+  - Progress indicators with visual formatting
+  - Syntax-highlighted code blocks in LLM responses
+  - Tree-style data display (├─ and └─ symbols)
+  - Dynamic width detection for separators
+- **Implementation**:
+  - `rich.Console()`: Terminal output with markup support
+  - `rich.Syntax()`: Code highlighting with monokai theme and line numbers
+  - `rich.Table()`: Tabular data with borders and alignment
+  - `rich.Panel()`: Boxed content with titles and borders
+- **Impact**: Professional terminal output matching modern CLI tools
+
+**2. Enhanced Error Messages** (`scripts/agent_runner.py`, `scripts/chain_runner.py`)
+- **Context-Aware Error Handling**: 6+ error types with specific solutions
+- **Error Types Covered**:
+  - **API Key Missing**: Shows how to add keys to `.env` file with examples
+  - **Model Deprecated**: Suggests current models (claude-sonnet-4-5, gpt-4o, gemini-2.5-flash)
+  - **Rate Limit (429)**: Explains wait times (30-60s), alternative providers, plan upgrades
+  - **Network Errors**: Troubleshooting checklist (server running, internet, firewall)
+  - **Timeout**: Optimization suggestions (simplify prompt, try different model)
+  - **Generic Fallback**: Links to GitHub issues, server logs
+- **Implementation**:
+  - `show_error_with_solution(error_msg)`: Pattern matching on error strings
+  - Rich markup for colored error messages and solution boxes
+  - Console-width separators for visual clarity
+- **Impact**: Users get actionable solutions instead of raw error messages
+
+**3. Memory Context Visibility** (`scripts/agent_runner.py`, `scripts/chain_runner.py`)
+- **Memory Injection Display**: Shows when memory context is injected into prompts
+- **Features**:
+  - Total tokens injected from memory
+  - Breakdown by source:
+    * Session tokens (from recent conversation history)
+    * Knowledge tokens (from semantic search)
+    * Message counts for each source
+  - Tree-style formatting with ├─ and └─ symbols
+- **Implementation**:
+  - Checks for `injected_context_tokens` attribute on RunResult
+  - Uses `getattr()` for optional fields (session_tokens, knowledge_tokens, etc.)
+  - Conditional display only when memory is actually used
+- **Impact**: Transparency into how memory affects responses, debugging aid
+
+**4. Code Syntax Highlighting** (`scripts/agent_runner.py`, `scripts/chain_runner.py`)
+- **Markdown Code Block Detection**: Regex pattern `r'```(\w+)?\n(.*?)```'`
+- **Features**:
+  - Auto-detects language from markdown (```python, ```javascript, etc.)
+  - Multi-language syntax highlighting (Python, JS, Go, Rust, etc.)
+  - Monokai theme with line numbers
+  - Fallback to plain text for non-code responses
+- **Implementation**:
+  - `display_response(response)`: Splits response by code blocks
+  - `rich.Syntax(code, lang, theme="monokai", line_numbers=True)`
+  - Regular text printed as-is with rich markup support
+- **Impact**: Dramatically improved code readability in CLI responses
+
+**5. Cost Tracking Dashboard** (`scripts/stats_cli.py`, NEW, `Makefile`)
+- **Comprehensive Usage Statistics**: 318-line CLI tool for cost/usage analysis
+- **Features**:
+  - **Overall Stats Panel**:
+    * Total conversations, tokens (prompt/completion breakdown)
+    * Total cost in USD
+    * Average duration
+    * Unique agents and models used
+    * Fallback usage count
+  - **Breakdown by Agent**:
+    * Request count and usage percentage
+    * Total tokens and average tokens per request
+    * Total cost and average duration
+    * Visual bars showing usage distribution (40-char width)
+  - **Breakdown by Model**:
+    * Provider, request count, total tokens
+    * Token percentage of total usage
+    * Total cost
+    * Shortened model names for readability
+  - **Cost Trends Over Time** (--trends flag):
+    * Daily cost and request count
+    * Visual bars (30-char width)
+    * Configurable time window (--days N)
+- **Implementation**:
+  - Direct SQLite queries via `memory.backend._get_connection()`
+  - Uses `cost_usd` column (not `estimated_cost_usd`)
+  - Rich tables with box formatting and alignment
+  - Time filtering with datetime.timedelta
+- **Usage**:
+  ```bash
+  make stats                    # All-time stats
+  make stats DAYS=7             # Last 7 days
+  make stats DAYS=30 TRENDS=1   # 30 days with trends
+  ```
+- **Impact**: Visibility into API costs and usage patterns for budget management
+
+**Files Modified**:
+- `requirements.txt`: Added `rich>=13.7.0` (+1 line)
+- `scripts/agent_runner.py`: Complete rewrite with rich formatting (+60 lines, -30 lines)
+- `scripts/chain_runner.py`: Enhanced with rich, fixed save-to-file (+80 lines, -61 lines)
+- `Makefile`: Added `stats` target (+3 lines)
+
+**Files Created**:
+- `scripts/stats_cli.py`: New cost tracking dashboard (318 lines)
+
+**Technical Details**:
+- **Database Schema**: Uses `cost_usd` column from conversations table
+- **Connection Pattern**: Each query gets fresh connection via `memory.backend._get_connection()`, closed in finally block
+- **Rich Console**: No `flush=True` parameter (not supported by rich.Console)
+- **Regex Pattern**: `r'(```\w*\n.*?```)'` with `re.DOTALL` flag for multi-line code blocks
+
+**Testing**:
+- ✅ Stats CLI: All-time, filtered by days, with trends
+- ✅ Agent runner: Rich formatting, memory visibility, syntax highlighting
+- ✅ Chain runner: Multi-stage formatting, progress indicators, save-to-file
+- ✅ Makefile: `make stats` command with parameters
+
+**CLI Feature Parity Achieved**:
+- ✅ Enhanced error messages (matches Web UI v0.11.4)
+- ✅ Code syntax highlighting (matches Web UI v0.11.3)
+- ✅ Memory context visibility (NEW, exceeds Web UI)
+- ✅ Cost tracking dashboard (matches Web UI v0.11.4)
+
+**Before vs After**:
+- **Before**: Plain text output, raw errors, no code highlighting, no cost visibility
+- **After**: Colored/formatted output, context-aware errors, syntax highlighting, comprehensive cost dashboard
+
 ## [0.11.4] - 2025-11-09
 
 ### Added - P2 Medium Priority UI Improvements (Friend Code Review Response)
