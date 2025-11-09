@@ -530,12 +530,40 @@
             font-weight: 600;
             color: var(--error);
             margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .error-details {
+            font-size: 14px;
+            color: var(--text-primary);
+            margin: 8px 0;
+            line-height: 1.6;
         }
 
         .error-solution {
             font-size: 14px;
             color: var(--text-secondary);
             margin-top: 12px;
+            padding: 12px;
+            background: var(--bg-secondary);
+            border-radius: 6px;
+            border-left: 3px solid var(--accent);
+        }
+
+        .error-solution-title {
+            font-weight: 600;
+            color: var(--accent);
+            margin-bottom: 6px;
+        }
+
+        .error-code {
+            font-family: 'Courier New', monospace;
+            background: var(--bg-tertiary);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 13px;
         }
 
         .error-solution ul {
@@ -761,6 +789,142 @@
             alert('Memory Context Breakdown\n\n' + parts.join('\n'));
         }
 
+        // Enhanced error handling with solutions
+        function showError(error, context = '') {
+            let errorHtml = '<div class="error-message">';
+            errorHtml += '<div class="error-title">⚠️ Error</div>';
+
+            // Parse error and provide context-specific solutions
+            const errorMsg = error.message || error.toString();
+            const errorLower = errorMsg.toLowerCase();
+
+            errorHtml += `<div class="error-details">${errorMsg}</div>`;
+
+            // Specific error solutions
+            if (errorLower.includes('api key') || errorLower.includes('authentication') || errorLower.includes('unauthorized')) {
+                errorHtml += `
+                    <div class="error-solution">
+                        <div class="error-solution-title">💡 Solution:</div>
+                        <div>Your API key is missing or invalid. Add it to your <span class="error-code">.env</span> file:</div>
+                        <ul>
+                            <li><code>ANTHROPIC_API_KEY=sk-ant-...</code></li>
+                            <li><code>OPENAI_API_KEY=sk-...</code></li>
+                            <li><code>GOOGLE_API_KEY=...</code></li>
+                        </ul>
+                        <div style="margin-top: 8px;">Then restart the API server: <code>make run-api</code></div>
+                    </div>
+                `;
+            } else if (errorLower.includes('model') && (errorLower.includes('not found') || errorLower.includes('deprecated'))) {
+                errorHtml += `
+                    <div class="error-solution">
+                        <div class="error-solution-title">💡 Solution:</div>
+                        <div>The model you selected is no longer available. Try these current models:</div>
+                        <ul>
+                            <li><code>claude-sonnet-4-5</code> (Anthropic, latest)</li>
+                            <li><code>gpt-4o</code> (OpenAI, latest)</li>
+                            <li><code>gemini-2.5-flash</code> (Google, latest)</li>
+                        </ul>
+                    </div>
+                `;
+            } else if (errorLower.includes('rate limit') || errorLower.includes('too many requests') || errorLower.includes('429')) {
+                errorHtml += `
+                    <div class="error-solution">
+                        <div class="error-solution-title">💡 Solution:</div>
+                        <div>You've exceeded the API rate limit. Options:</div>
+                        <ul>
+                            <li>Wait 30-60 seconds and try again</li>
+                            <li>Use a different model provider</li>
+                            <li>Upgrade your API plan for higher limits</li>
+                        </ul>
+                    </div>
+                `;
+            } else if (errorLower.includes('network') || errorLower.includes('fetch') || errorLower.includes('connection')) {
+                errorHtml += `
+                    <div class="error-solution">
+                        <div class="error-solution-title">💡 Solution:</div>
+                        <div>Network connection issue. Check:</div>
+                        <ul>
+                            <li>Is the API server running? <code>make run-api</code></li>
+                            <li>Is your internet connection working?</li>
+                            <li>Are you behind a firewall blocking API calls?</li>
+                        </ul>
+                    </div>
+                `;
+            } else if (errorLower.includes('timeout')) {
+                errorHtml += `
+                    <div class="error-solution">
+                        <div class="error-solution-title">💡 Solution:</div>
+                        <div>Request timed out. This usually means:</div>
+                        <ul>
+                            <li>The prompt was too complex (try simplifying)</li>
+                            <li>The LLM provider is slow (try a different model)</li>
+                            <li>Network latency issues</li>
+                        </ul>
+                    </div>
+                `;
+            } else {
+                // Generic fallback
+                errorHtml += `
+                    <div class="error-solution">
+                        <div class="error-solution-title">💡 Need Help?</div>
+                        <div>Try these troubleshooting steps:</div>
+                        <ul>
+                            <li>Check the browser console for detailed errors (F12)</li>
+                            <li>Verify API server is running: <code>make run-api</code></li>
+                            <li>Check API server logs for error details</li>
+                            <li>Report issues: <a href="https://github.com/brdfb/multi-agent-orchestrator-v2/issues" target="_blank">GitHub Issues</a></li>
+                        </ul>
+                    </div>
+                `;
+            }
+
+            errorHtml += '</div>';
+            return errorHtml;
+        }
+
+        // Keyboard shortcuts
+        document.addEventListener('DOMContentLoaded', function() {
+            document.addEventListener('keydown', function(e) {
+                // Ctrl+Enter / Cmd+Enter: Submit form
+                if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+                    e.preventDefault();
+                    const form = document.querySelector('form[hx-post="/ask"]');
+                    if (form) {
+                        // Trigger HTMX request
+                        htmx.trigger(form, 'submit');
+                    }
+                }
+
+                // Cmd+K / Ctrl+K: Focus search
+                if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+                    e.preventDefault();
+                    const searchInput = document.querySelector('input[type="search"]');
+                    if (searchInput) {
+                        searchInput.focus();
+                        searchInput.select();
+                    }
+                }
+
+                // Esc: Clear prompt textarea
+                if (e.key === 'Escape') {
+                    const textarea = document.querySelector('textarea[name="prompt"]');
+                    if (textarea && textarea === document.activeElement) {
+                        textarea.value = '';
+                        textarea.blur();
+                    }
+                }
+
+                // /: Focus prompt (if not already typing)
+                if (e.key === '/' && !['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) {
+                    e.preventDefault();
+                    const textarea = document.querySelector('textarea[name="prompt"]');
+                    if (textarea) {
+                        textarea.focus();
+                    }
+                }
+            });
+        });
+
         // Apply syntax highlighting to code blocks
         function highlightCode(element) {
             if (!element) return;
@@ -917,14 +1081,25 @@
             })
             .catch(err => {
                 clearInterval(progressInterval);
-                output.innerHTML = `
-                    <div class="error-message">
-                        <div class="error-title">Error</div>
-                        <div>${err.message}</div>
-                    </div>
-                `;
+                output.innerHTML = showError(err, 'chain');
             });
         }
+
+        // HTMX error handler
+        document.body.addEventListener('htmx:responseError', function(evt) {
+            const target = evt.detail.target;
+            const xhr = evt.detail.xhr;
+
+            let error;
+            try {
+                const response = JSON.parse(xhr.responseText);
+                error = new Error(response.detail || response.error || 'Request failed');
+            } catch {
+                error = new Error(`HTTP ${xhr.status}: ${xhr.statusText}`);
+            }
+
+            target.innerHTML = showError(error, evt.detail.pathInfo.requestPath);
+        });
 
         // HTMX response handlers
         document.body.addEventListener('htmx:afterRequest', function(evt) {
@@ -983,10 +1158,12 @@
                 }
             }
 
-            // Handle /memory/stats
+            // Handle /memory/stats with enhanced cost tracking
             if (path === '/memory/stats' && evt.detail.successful) {
                 const stats = JSON.parse(evt.detail.xhr.response);
-                evt.detail.target.innerHTML = `
+
+                // Main stats cards
+                let html = `
                     <div class="stat-card">
                         <div class="stat-value">${stats.total_conversations || 0}</div>
                         <div class="stat-label">Conversations</div>
@@ -1004,6 +1181,74 @@
                         <div class="stat-label">Active Agents</div>
                     </div>
                 `;
+
+                // Cost breakdown by agent
+                if (stats.by_agent && Object.keys(stats.by_agent).length > 0) {
+                    html += '<div style="grid-column: 1 / -1; margin-top: 16px;">';
+                    html += '<div style="font-weight: 600; margin-bottom: 12px; color: var(--text-primary);">📊 Cost Breakdown by Agent</div>';
+                    html += '<div style="display: grid; gap: 8px;">';
+
+                    // Calculate total for percentages
+                    const totalTokens = stats.total_tokens || 1;
+
+                    Object.entries(stats.by_agent).forEach(([agent, data]) => {
+                        const percentage = ((data.tokens / totalTokens) * 100).toFixed(1);
+                        const avgTokens = Math.round(data.tokens / data.count);
+
+                        html += `
+                            <div style="background: var(--bg-secondary); padding: 12px; border-radius: 8px; border: 1px solid var(--border);">
+                                <div style="display: flex; justify-content: space-between; align-items: center;">
+                                    <div>
+                                        <div style="font-weight: 600; text-transform: uppercase; font-size: 13px; color: var(--accent);">${agent}</div>
+                                        <div style="font-size: 12px; color: var(--text-secondary); margin-top: 4px;">
+                                            ${data.count} requests • Avg ${avgTokens.toLocaleString()} tokens/req
+                                        </div>
+                                    </div>
+                                    <div style="text-align: right;">
+                                        <div style="font-size: 18px; font-weight: 600; color: var(--text-primary);">${percentage}%</div>
+                                        <div style="font-size: 12px; color: var(--text-secondary);">${data.tokens.toLocaleString()} tokens</div>
+                                    </div>
+                                </div>
+                                <div style="margin-top: 8px; height: 6px; background: var(--bg-tertiary); border-radius: 3px; overflow: hidden;">
+                                    <div style="height: 100%; background: var(--accent); width: ${percentage}%;"></div>
+                                </div>
+                            </div>
+                        `;
+                    });
+
+                    html += '</div></div>';
+                }
+
+                // Cost breakdown by model
+                if (stats.by_model && Object.keys(stats.by_model).length > 0) {
+                    html += '<div style="grid-column: 1 / -1; margin-top: 16px;">';
+                    html += '<div style="font-weight: 600; margin-bottom: 12px; color: var(--text-primary);">🤖 Usage by Model</div>';
+                    html += '<div style="display: grid; gap: 8px;">';
+
+                    Object.entries(stats.by_model).forEach(([model, data]) => {
+                        const percentage = ((data.tokens / (stats.total_tokens || 1)) * 100).toFixed(1);
+                        const avgTokens = Math.round(data.tokens / data.count);
+
+                        html += `
+                            <div style="background: var(--bg-secondary); padding: 10px 12px; border-radius: 8px; border: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center;">
+                                <div style="flex: 1;">
+                                    <div style="font-size: 13px; font-family: monospace; color: var(--text-primary);">${model}</div>
+                                    <div style="font-size: 11px; color: var(--text-secondary); margin-top: 2px;">
+                                        ${data.count} requests
+                                    </div>
+                                </div>
+                                <div style="text-align: right;">
+                                    <div style="font-size: 14px; font-weight: 600; color: var(--text-primary);">${data.tokens.toLocaleString()}</div>
+                                    <div style="font-size: 11px; color: var(--text-secondary);">${percentage}%</div>
+                                </div>
+                            </div>
+                        `;
+                    });
+
+                    html += '</div></div>';
+                }
+
+                evt.detail.target.innerHTML = html;
             }
 
             // Handle /memory/search
