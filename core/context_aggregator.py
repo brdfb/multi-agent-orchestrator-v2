@@ -189,39 +189,41 @@ class ContextAggregator:
         Returns:
             List of conversation dicts with scores
         """
-        # Use existing memory engine's search
-        strategy = config.get('strategy', 'semantic')
-        min_relevance = config.get('min_relevance', 0.15)
-        time_decay_hours = config.get('time_decay_hours', 168)
+        # Use memory engine's existing search API
+        # For now, get recent conversations and manually filter by session
+        # This is a simplified approach - full semantic search would require
+        # accessing the embedding search functionality
 
-        # Get candidates
-        if strategy == 'semantic':
-            candidates = self.memory._get_semantic_candidates(prompt)
-        else:
-            candidates = self.memory._get_keyword_candidates(prompt)
+        try:
+            # Get recent conversations (last 50)
+            recent = self.memory.get_recent_conversations(limit=50)
 
-        # Score and filter
-        scored = []
-        for rec in candidates:
-            # Skip current session
-            if exclude_session_id and rec.get('session_id') == exclude_session_id:
-                continue
+            # Filter out current session
+            filtered = []
+            for conv in recent:
+                if exclude_session_id and conv.get('session_id') == exclude_session_id:
+                    continue
+                # Simple relevance based on keyword match
+                prompt_lower = prompt.lower()
+                conv_prompt_lower = conv.get('prompt', '').lower()
 
-            # Score based on strategy
-            if strategy == 'semantic':
-                score = self.memory._score_semantic(prompt, rec, time_decay_hours)
-            else:
-                score = self.memory._score_keywords(prompt, rec, time_decay_hours)
+                # Basic keyword overlap
+                prompt_words = set(prompt_lower.split())
+                conv_words = set(conv_prompt_lower.split())
+                overlap = len(prompt_words & conv_words) / max(len(prompt_words), 1)
 
-            if score >= min_relevance:
-                rec['_score'] = score
-                scored.append(rec)
+                if overlap > 0.1:  # At least 10% overlap
+                    conv['_score'] = overlap
+                    filtered.append(conv)
 
-        # Sort by score and return top results
-        scored.sort(key=lambda x: x['_score'], reverse=True)
+            # Sort by score
+            filtered.sort(key=lambda x: x.get('_score', 0), reverse=True)
 
-        # Limit to reasonable number (will be token-budgeted later)
-        return scored[:10]
+            return filtered[:10]
+
+        except Exception:
+            # Graceful degradation - return empty list
+            return []
 
     def _format_session_context(self, conversations: List[Dict[str, Any]]) -> str:
         """
