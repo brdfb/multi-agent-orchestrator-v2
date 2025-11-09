@@ -1,4 +1,4 @@
-.PHONY: install run-api run-ui agent-ask agent-chain agent-last lint test clean memory-init memory-sync memory-note memory-log memory-search memory-recent memory-stats memory-cleanup memory-export
+.PHONY: install run-api run-ui agent-ask agent-chain agent-last stats lint test clean memory-init memory-sync memory-note memory-log memory-search memory-recent memory-stats memory-cleanup memory-export
 
 install:
 	python3 -m venv .venv && . .venv/bin/activate && pip install -r requirements.txt
@@ -29,6 +29,9 @@ agent-chain:
 
 agent-last:
 	@ls -t data/CONVERSATIONS/*.json 2>/dev/null | head -1 | xargs cat | python3 -m json.tool || echo "No logs found"
+
+stats:
+	. .venv/bin/activate && python scripts/stats_cli.py $(if $(DAYS),--days $(DAYS)) $(if $(TRENDS),--trends)
 
 lint:
 	. .venv/bin/activate && ruff check . && black --check .

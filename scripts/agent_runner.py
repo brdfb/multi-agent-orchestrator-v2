@@ -10,6 +10,93 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from config.settings import get_env_source
 from core.agent_runtime import AgentRuntime
 from core.session_manager import get_session_manager
+from rich.console import Console
+from rich.syntax import Syntax
+from rich.panel import Panel
+from rich.markdown import Markdown
+
+console = Console()
+
+
+def show_error_with_solution(error_msg: str):
+    """Display error with context-aware solution."""
+    console.print(f"\n[bold red]❌ Error:[/bold red] {error_msg}")
+
+    error_lower = error_msg.lower()
+
+    # Context-aware solutions
+    if "api key" in error_lower or "authentication" in error_lower or "unauthorized" in error_lower:
+        console.print("\n[bold cyan]💡 Solution:[/bold cyan]")
+        console.print("Add API key to your [yellow].env[/yellow] file:")
+        console.print("  [green]ANTHROPIC_API_KEY[/green]=sk-ant-...")
+        console.print("  [green]OPENAI_API_KEY[/green]=sk-...")
+        console.print("  [green]GOOGLE_API_KEY[/green]=...")
+        console.print("\nThen restart: [yellow]make run-api[/yellow]")
+
+    elif "model" in error_lower and ("not found" in error_lower or "deprecated" in error_lower):
+        console.print("\n[bold cyan]💡 Solution:[/bold cyan]")
+        console.print("The model is no longer available. Try these current models:")
+        console.print("  [green]claude-sonnet-4-5[/green] (Anthropic, latest)")
+        console.print("  [green]gpt-4o[/green] (OpenAI, latest)")
+        console.print("  [green]gemini-2.5-flash[/green] (Google, latest)")
+
+    elif "rate limit" in error_lower or "too many requests" in error_lower or "429" in error_lower:
+        console.print("\n[bold cyan]💡 Solution:[/bold cyan]")
+        console.print("You've exceeded the API rate limit. Options:")
+        console.print("  • Wait 30-60 seconds and try again")
+        console.print("  • Use a different model provider")
+        console.print("  • Upgrade your API plan for higher limits")
+
+    elif "network" in error_lower or "connection" in error_lower:
+        console.print("\n[bold cyan]💡 Solution:[/bold cyan]")
+        console.print("Network connection issue. Check:")
+        console.print("  • Is the API server running? [yellow]make run-api[/yellow]")
+        console.print("  • Is your internet connection working?")
+        console.print("  • Are you behind a firewall?")
+
+    elif "timeout" in error_lower:
+        console.print("\n[bold cyan]💡 Solution:[/bold cyan]")
+        console.print("Request timed out. This usually means:")
+        console.print("  • The prompt was too complex (try simplifying)")
+        console.print("  • The LLM provider is slow (try a different model)")
+        console.print("  • Network latency issues")
+
+    else:
+        console.print("\n[bold cyan]💡 Need Help?[/bold cyan]")
+        console.print("Troubleshooting steps:")
+        console.print("  • Check API server logs for details")
+        console.print("  • Verify API keys are set correctly")
+        console.print("  • Report issues: [blue]https://github.com/brdfb/multi-agent-orchestrator-v2/issues[/blue]")
+
+
+def display_response(response: str):
+    """Display response with syntax highlighting for code blocks."""
+    import re
+
+    # Check if response contains code blocks
+    code_block_pattern = r'```(\w+)?\n(.*?)```'
+
+    if '```' in response:
+        # Split by code blocks
+        parts = re.split(r'(```\w*\n.*?```)', response, flags=re.DOTALL)
+
+        for part in parts:
+            if part.startswith('```'):
+                # Extract language and code
+                match = re.match(r'```(\w+)?\n(.*?)```', part, re.DOTALL)
+                if match:
+                    lang = match.group(1) or 'python'
+                    code = match.group(2).strip()
+
+                    # Display with syntax highlighting
+                    syntax = Syntax(code, lang, theme="monokai", line_numbers=True)
+                    console.print(syntax)
+            elif part.strip():
+                # Regular text (markdown)
+                console.print(part.strip())
+    else:
+        # No code blocks, just print as markdown
+        console.print(response)
 
 
 def main():
@@ -67,27 +154,43 @@ def main():
 
     # Display result
     if result.error:
-        print(f"\n❌ Error: {result.error}")
+        show_error_with_solution(result.error)
         sys.exit(1)
 
-    print(f"\n✅ Agent: {result.agent}")
-    print(f"📊 Model: {result.model}")
+    # Success header
+    console.print(f"\n[bold green]✅ Agent:[/bold green] [cyan]{result.agent}[/cyan]")
+    console.print(f"[bold]📊 Model:[/bold] [yellow]{result.model}[/yellow]")
 
     # Show fallback information if used
     if result.fallback_used:
-        print(f"⚠️  Fallback: {result.original_model} → {result.model}")
-        print(f"   Reason: {result.fallback_reason}")
+        console.print(f"[bold yellow]⚠️  Fallback:[/bold yellow] {result.original_model} → {result.model}")
+        console.print(f"   [dim]Reason: {result.fallback_reason}[/dim]")
 
-    print(f"⏱️  Duration: {result.duration_ms:.0f}ms")
-    print(
-        f"🔢 Tokens: {result.total_tokens} (prompt: {result.prompt_tokens}, completion: {result.completion_tokens})"
+    # Show memory context if injected
+    if hasattr(result, 'injected_context_tokens') and result.injected_context_tokens > 0:
+        session_tokens = getattr(result, 'session_context_tokens', 0)
+        knowledge_tokens = getattr(result, 'knowledge_context_tokens', 0)
+        session_msgs = getattr(result, 'session_messages', 0)
+        knowledge_msgs = getattr(result, 'knowledge_messages', 0)
+
+        console.print(f"\n[bold magenta]🧠 Memory:[/bold magenta] {result.injected_context_tokens} tokens injected")
+        if session_tokens > 0:
+            console.print(f"   [dim]├─ Session: {session_tokens} tokens ({session_msgs} messages)[/dim]")
+        if knowledge_tokens > 0:
+            console.print(f"   [dim]└─ Knowledge: {knowledge_tokens} tokens ({knowledge_msgs} messages)[/dim]")
+
+    # Performance metrics
+    console.print(f"\n[bold]⏱️  Duration:[/bold] {result.duration_ms:.0f}ms")
+    console.print(
+        f"[bold]🔢 Tokens:[/bold] {result.total_tokens} [dim](prompt: {result.prompt_tokens}, completion: {result.completion_tokens})[/dim]"
     )
-    print(f"📁 Log file: {result.log_file}")
-    print()
-    print("Response:")
-    print("-" * 80)
-    print(result.response)
-    print("-" * 80)
+    console.print(f"[bold]📁 Log file:[/bold] [dim]{result.log_file}[/dim]")
+
+    # Response with syntax highlighting
+    console.print("\n[bold]Response:[/bold]")
+    console.print("─" * console.width)
+    display_response(result.response)
+    console.print("─" * console.width)
 
 
 if __name__ == "__main__":
