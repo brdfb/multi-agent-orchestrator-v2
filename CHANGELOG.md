@@ -5,6 +5,68 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.3] - 2025-11-08
+
+### Improved - Aggressive Recency Bias for Sequential Conversations
+
+**UX Issue: Sequential vs Knowledge-Based Context**
+- **Problem**: Memory system optimized for knowledge retrieval (Wikipedia-style) but users expect sequential conversation (WhatsApp-style)
+- **Symptom**: "Chart'a renk ekle" → system injects generic programming context instead of recent chart conversation
+- **User Feedback**: "System should remember what we just talked about, not search for most relevant topic"
+
+**Root Cause Analysis:**
+```
+Current behavior (WRONG):
+"Chart'a renk ekle" → Semantic search → Generic conversation (similarity: 0.36)
+                                     → Chart conversation (similarity: 0.03) ❌ Rejected
+
+User expectation (CORRECT):
+"Chart'a renk ekle" → Recent context → Chart conversation (2 mins ago) ✅
+```
+
+**Solution: Aggressive Time Decay**
+- Changed `time_decay_hours` from 168 (7 days) to 2 hours
+- Effect: Recent conversations heavily prioritized over older ones
+- Formula: `score = similarity × exp(-age_hours / 2)`
+
+**Impact Table:**
+
+| Age | Old Decay (168h) | New Decay (2h) | Score Multiplier |
+|-----|-----------------|----------------|------------------|
+| 2 min | 0.999 | 0.983 | ~1.0× |
+| 1 hour | 0.994 | 0.606 | ~0.6× |
+| 2 hours | 0.988 | 0.368 | ~0.4× |
+| 1 day | 0.889 | 0.000000006 | ~0× |
+
+**Changes:**
+- `config/agents.yaml` - Builder: `time_decay_hours: 168 → 2`
+- `config/agents.yaml` - Critic: `time_decay_hours: 72 → 2`
+
+**Test Results:**
+```bash
+# Sequential conversation test
+Step 1: "Python'da bar chart nasıl çizilir?"
+        → injected_context_tokens: 0 ✅
+
+Step 2: "Önceki chart'a başlık ve renkler ekle"
+        → injected_context_tokens: 113 ✅ (chart context injected!)
+```
+
+**Trade-offs:**
+- ✅ **Better UX:** Sequential conversations work as expected
+- ✅ **No code changes:** Config-only fix (10 minutes)
+- ⚠️ **Aggressive decay:** Older but highly relevant conversations may be lost
+- ⚠️ **Use case shift:** System now optimized for chat-style usage, less for knowledge retrieval
+
+**Future Improvements (Phase 2 - Optional):**
+- Smart intent detection ("önceki" keyword → recent context)
+- Dual-mode memory (session context + knowledge context)
+- Recency boost (5× multiplier for last N conversations)
+
+**Analysis:** `docs/MEMORY_CONTEXT_ANALYSIS.md` (full trade-offs and alternatives)
+
+**Credits:** Friend (tester) - identified UX mismatch between semantic search and user expectations
+
 ## [0.10.2] - 2025-11-08
 
 ### Fixed - Model Updates & Token Budget Fix

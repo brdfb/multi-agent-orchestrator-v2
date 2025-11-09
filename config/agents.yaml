@@ -168,7 +168,7 @@ agents:
     memory:
       max_context_tokens: 600
       strategy: "semantic"  # Using multilingual semantic search for better context retrieval
-      time_decay_hours: 168
+      time_decay_hours: 2  # Aggressive recency bias for sequential conversations (was 168)
       min_relevance: 0.15  # Lowered from 0.3 - semantic similarity can be lower than keyword overlap
       exclude_same_turn: true
 
@@ -199,7 +199,7 @@ agents:
     memory:
       max_context_tokens: 500
       strategy: "keywords"
-      time_decay_hours: 72  # 3 days - critic focuses on recent issues
+      time_decay_hours: 2  # Aggressive recency bias for sequential conversations (was 72)
       min_relevance: 0.35
       exclude_same_turn: true
 
