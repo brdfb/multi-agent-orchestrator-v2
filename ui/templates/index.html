@@ -5,6 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Multi-Agent Orchestrator</title>
     <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+    <!-- Highlight.js for code syntax highlighting -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
     <style>
         /* Modern AI Tool UI - 2025 Edition */
         * {
@@ -182,6 +185,108 @@
             margin-left: 12px;
         }
 
+        /* Chain Progress Indicator */
+        .chain-progress {
+            background: var(--bg-primary);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 24px;
+            margin: 16px 0;
+        }
+
+        .chain-progress-header {
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 20px;
+        }
+
+        .chain-stages {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+            position: relative;
+        }
+
+        .chain-stages::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: var(--border);
+            z-index: 0;
+        }
+
+        .chain-stage {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+            z-index: 1;
+            background: var(--bg-primary);
+            padding: 0 8px;
+        }
+
+        .chain-stage-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: var(--bg-tertiary);
+            border: 2px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            transition: all 0.3s;
+        }
+
+        .chain-stage.active .chain-stage-icon {
+            background: var(--accent);
+            border-color: var(--accent);
+            color: white;
+            animation: pulse 2s infinite;
+        }
+
+        .chain-stage.completed .chain-stage-icon {
+            background: var(--accent);
+            border-color: var(--accent);
+            color: white;
+        }
+
+        .chain-stage-label {
+            font-size: 12px;
+            color: var(--text-secondary);
+            text-align: center;
+        }
+
+        .chain-stage.active .chain-stage-label {
+            color: var(--accent);
+            font-weight: 600;
+        }
+
+        .chain-stage.completed .chain-stage-label {
+            color: var(--text-primary);
+        }
+
+        @keyframes pulse {
+            0%, 100% {
+                box-shadow: 0 0 0 0 rgba(16, 163, 127, 0.7);
+            }
+            50% {
+                box-shadow: 0 0 0 10px rgba(16, 163, 127, 0);
+            }
+        }
+
+        .chain-status {
+            text-align: center;
+            color: var(--text-secondary);
+            font-size: 14px;
+            margin-top: 12px;
+        }
+
         /* Response Area */
         .response-section {
             background: var(--bg-primary);
@@ -233,6 +338,41 @@
             white-space: pre-wrap;
             word-wrap: break-word;
             line-height: 1.7;
+        }
+
+        /* Code highlighting styles */
+        .response-content code {
+            background: var(--bg-tertiary);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: 'Courier New', Consolas, Monaco, monospace;
+            font-size: 13px;
+        }
+
+        .response-content pre {
+            background: #0d1117;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 16px;
+            overflow-x: auto;
+            margin: 12px 0;
+        }
+
+        .response-content pre code {
+            background: transparent;
+            padding: 0;
+            border-radius: 0;
+            color: #c9d1d9;
+            display: block;
+        }
+
+        /* Override highlight.js theme for light mode */
+        :root[data-theme="light"] .response-content pre {
+            background: #f6f8fa;
+        }
+
+        :root[data-theme="light"] .response-content pre code {
+            color: #24292f;
         }
 
         .meta-info {
@@ -621,6 +761,74 @@
             alert('Memory Context Breakdown\n\n' + parts.join('\n'));
         }
 
+        // Apply syntax highlighting to code blocks
+        function highlightCode(element) {
+            if (!element) return;
+
+            // Find all <pre><code> blocks and apply highlighting
+            const codeBlocks = element.querySelectorAll('pre code');
+            codeBlocks.forEach(block => {
+                hljs.highlightElement(block);
+            });
+        }
+
+        // Format response text with proper code block detection
+        function formatResponse(text) {
+            if (!text) return '';
+
+            // Convert markdown-style code blocks to HTML
+            // Match ```language\ncode\n``` patterns
+            text = text.replace(/```(\w+)?\n([\s\S]*?)```/g, function(match, lang, code) {
+                const language = lang || 'plaintext';
+                const escapedCode = code
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;');
+                return `<pre><code class="language-${language}">${escapedCode}</code></pre>`;
+            });
+
+            // Convert inline code `code` to <code>
+            text = text.replace(/`([^`]+)`/g, '<code>$1</code>');
+
+            return text;
+        }
+
+        // Show chain progress indicator
+        function showChainProgress(currentStage = 0) {
+            const stages = [
+                { name: 'Builder', icon: '🔨', label: 'Implementation' },
+                { name: 'Critic', icon: '🔍', label: 'Review' },
+                { name: 'Closer', icon: '✅', label: 'Synthesis' }
+            ];
+
+            let stagesHtml = stages.map((stage, idx) => {
+                let stateClass = '';
+                if (idx < currentStage) stateClass = 'completed';
+                else if (idx === currentStage) stateClass = 'active';
+
+                return `
+                    <div class="chain-stage ${stateClass}" data-stage="${idx}">
+                        <div class="chain-stage-icon">${idx < currentStage ? '✓' : stage.icon}</div>
+                        <div class="chain-stage-label">${stage.label}</div>
+                    </div>
+                `;
+            }).join('');
+
+            const statusText = currentStage < stages.length
+                ? `Running ${stages[currentStage].name}...`
+                : 'Chain completed!';
+
+            return `
+                <div class="chain-progress">
+                    <div class="chain-progress-header">Multi-Agent Chain Progress</div>
+                    <div class="chain-stages">
+                        ${stagesHtml}
+                    </div>
+                    <div class="chain-status">${statusText}</div>
+                </div>
+            `;
+        }
+
         // Run chain
         function runChain() {
             const prompt = document.querySelector('textarea[name="prompt"]').value;
@@ -630,7 +838,21 @@
             }
 
             const output = document.getElementById('output');
-            output.innerHTML = '<div class="response-section"><div class="loading-indicator">Running chain: builder → critic → closer...</div></div>';
+
+            // Show progress indicator - stage 0 (builder)
+            output.innerHTML = showChainProgress(0);
+
+            // Simulate progress updates (since API doesn't support SSE yet)
+            const progressInterval = setInterval(() => {
+                const currentStage = parseInt(output.querySelector('.chain-stage.active')?.dataset?.stage || 0);
+                if (currentStage < 3) {
+                    // Don't update if we're done
+                    const nextStage = currentStage + 1;
+                    if (nextStage < 3) {
+                        output.innerHTML = showChainProgress(nextStage);
+                    }
+                }
+            }, 15000); // Update every 15 seconds (rough estimate per stage)
 
             fetch('/chain', {
                 method: 'POST',
@@ -642,9 +864,11 @@
             })
             .then(res => res.json())
             .then(results => {
+                clearInterval(progressInterval);
+
                 let html = '';
                 results.forEach((result, idx) => {
-                    const responseText = result.response;
+                    const formattedResponse = formatResponse(result.response);
                     const copyId = `copy-btn-${idx}`;
                     html += `
                         <div class="response-section">
@@ -657,7 +881,7 @@
                                     </button>
                                 </div>
                             </div>
-                            <div class="response-content">${responseText}</div>
+                            <div class="response-content" data-response-idx="${idx}">${formattedResponse}</div>
                             <div class="meta-info">
                                 <div class="meta-item">
                                     <span class="meta-label">Duration:</span>
@@ -673,6 +897,14 @@
                 });
                 output.innerHTML = html;
 
+                // Apply syntax highlighting to all responses
+                results.forEach((result, idx) => {
+                    const responseEl = output.querySelector(`[data-response-idx="${idx}"]`);
+                    if (responseEl) {
+                        highlightCode(responseEl);
+                    }
+                });
+
                 // Attach copy handlers after rendering
                 results.forEach((result, idx) => {
                     const copyBtn = document.getElementById(`copy-btn-${idx}`);
@@ -684,6 +916,7 @@
                 });
             })
             .catch(err => {
+                clearInterval(progressInterval);
                 output.innerHTML = `
                     <div class="error-message">
                         <div class="error-title">Error</div>
@@ -717,6 +950,7 @@
                 }
 
                 const responseText = result.response;
+                const formattedResponse = formatResponse(responseText);
                 evt.detail.target.innerHTML = `
                     <div class="response-section">
                         <div class="response-header">
@@ -728,7 +962,7 @@
                                 </button>
                             </div>
                         </div>
-                        <div class="response-content">${responseText}</div>
+                        <div class="response-content" id="ask-response-content">${formattedResponse}</div>
                         <div class="meta-info">
                             <div class="meta-item">
                                 <span class="meta-label">Duration:</span>
@@ -741,6 +975,12 @@
                         </div>
                     </div>
                 `;
+
+                // Apply syntax highlighting
+                const responseEl = document.getElementById('ask-response-content');
+                if (responseEl) {
+                    highlightCode(responseEl);
+                }
             }
 
             // Handle /memory/stats
