@@ -49,6 +49,7 @@ class MemoryEngine:
         provider: str,
         metadata: Optional[Dict[str, Any]] = None,
         generate_embedding: bool = True,
+        session_id: Optional[str] = None,
     ) -> int:
         """
         Store conversation to memory with optional embedding generation.
@@ -61,6 +62,7 @@ class MemoryEngine:
             provider: Provider name (openai, anthropic, google)
             metadata: Additional metadata (tokens, cost, duration, etc.)
             generate_embedding: Whether to generate and store embedding
+            session_id: Optional session ID for conversation tracking (v0.11.0+)
 
         Returns:
             Conversation ID
@@ -76,6 +78,10 @@ class MemoryEngine:
             "model": model,
             "provider": provider,
         }
+
+        # Add session_id if provided
+        if session_id:
+            conversation["session_id"] = session_id
 
         # Merge metadata
         if metadata:
