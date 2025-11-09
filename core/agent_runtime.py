@@ -8,6 +8,7 @@ from config.settings import load_agents_config, load_memory_config
 from core.llm_connector import LLMConnector, LLMResponse
 from core.logging_utils import write_json
 from core.memory_engine import MemoryEngine
+from core.context_aggregator import ContextAggregator
 
 
 @dataclass
@@ -60,8 +61,7 @@ class AgentRuntime:
         self.memory_config = load_memory_config()
         self.connector = LLMConnector(retry_count=1)
         self._memory = None  # Lazy initialization
-        # Generate session ID for this runtime instance
-        self.session_id = datetime.now(timezone.utc).isoformat()
+        self._context_aggregator = None  # Lazy initialization
 
     @property
     def memory(self) -> MemoryEngine:
@@ -69,6 +69,13 @@ class AgentRuntime:
         if self._memory is None:
             self._memory = MemoryEngine()
         return self._memory
+
+    @property
+    def context_aggregator(self) -> ContextAggregator:
+        """Lazy initialization of context aggregator."""
+        if self._context_aggregator is None:
+            self._context_aggregator = ContextAggregator()
+        return self._context_aggregator
 
     def _compress_semantic(self, text: str, max_tokens: int = 500) -> str:
         """
@@ -456,7 +463,7 @@ ORIGINAL OUTPUT TO SUMMARIZE:
             # Sequential execution
             for critic_name in critic_names:
                 print(f"🔍 Running {critic_name}...")
-                result = self.run(critic_name, critic_context)
+                result = self.run(critic_name, critic_context, session_id=session_id)
                 critic_results.append((critic_name, result.response))
                 run_results.append(result)
                 print(f"✅ {critic_name} complete ({result.total_tokens} tokens)")
@@ -507,7 +514,12 @@ ORIGINAL OUTPUT TO SUMMARIZE:
         return agent
 
     def run(
-        self, agent: str, prompt: str, override_model: Optional[str] = None, mock_mode: Optional[bool] = None
+        self,
+        agent: str,
+        prompt: str,
+        override_model: Optional[str] = None,
+        mock_mode: Optional[bool] = None,
+        session_id: Optional[str] = None,
     ) -> RunResult:
         """
         Run agent with prompt and fallback support.
@@ -517,6 +529,7 @@ ORIGINAL OUTPUT TO SUMMARIZE:
             prompt: User prompt
             override_model: Optional model override
             mock_mode: Optional mock mode override (defaults to LLM_MOCK env var)
+            session_id: Optional session ID for conversation tracking (v0.11.0+)
 
         Returns:
             RunResult with response and metadata
@@ -538,73 +551,35 @@ ORIGINAL OUTPUT TO SUMMARIZE:
         if not override_model:
             fallback_order = agent_config.get("fallback_order", [])
 
-        # Memory context injection
+        # Memory context injection (v0.11.0: Dual-context model)
         system_prompt = agent_config["system"]
         injected_context_tokens = 0
+        context_metadata = {}
 
         if agent_config.get("memory_enabled", False):
             try:
-                # Get agent-specific memory config (with global defaults)
+                # Get agent-specific memory config
                 agent_memory_config = agent_config.get("memory", {})
-                global_memory_config = self.memory_config.get("memory", {})
 
-                # Merge configs (agent-specific overrides global)
-                max_tokens = agent_memory_config.get(
-                    "max_context_tokens",
-                    global_memory_config.get("context", {}).get(
-                        "max_context_tokens_default", 350
-                    ),
-                )
-                min_relevance = agent_memory_config.get(
-                    "min_relevance",
-                    global_memory_config.get("filtering", {}).get(
-                        "min_relevance", 0.35
-                    ),
-                )
-                time_decay_hours = agent_memory_config.get(
-                    "time_decay_hours",
-                    global_memory_config.get("filtering", {}).get(
-                        "time_decay_hours", 96
-                    ),
-                )
-                exclude_same_turn = agent_memory_config.get(
-                    "exclude_same_turn",
-                    global_memory_config.get("filtering", {}).get(
-                        "exclude_same_turn", True
-                    ),
-                )
-
-                # Get context from memory
-                memory_context = self.memory.get_context_for_prompt(
-                    prompt,
-                    strategy=agent_memory_config.get("strategy", "keywords"),
-                    max_tokens=max_tokens,
-                    min_relevance=min_relevance,
-                    time_decay_hours=time_decay_hours,
-                    exclude_current_session=exclude_same_turn,
-                    agent=agent,  # Filter by current agent
-                    session_id=self.session_id,
+                # Use ContextAggregator for dual-context retrieval
+                context_text, context_metadata = self.context_aggregator.get_full_context(
+                    prompt=prompt,
+                    session_id=session_id,  # Can be None (no session context)
+                    config=agent_memory_config
                 )
 
                 # Inject context if available
-                if memory_context:
-                    # Add context header from config
-                    context_header = global_memory_config.get("context", {}).get(
-                        "prompt_header",
-                        "[MEMORY CONTEXT - Relevant past conversations]\n",
-                    )
-                    context_block = f"{context_header}{memory_context}"
-
+                if context_text:
                     # Inject into system prompt
-                    system_prompt = f"{agent_config['system']}\n\n{context_block}"
+                    system_prompt = f"{agent_config['system']}\n\n{context_text}"
 
-                    # Estimate injected tokens using standardized counting
-                    from config.settings import count_tokens
-                    injected_context_tokens = count_tokens(context_block)
-            except Exception:
-                # If memory retrieval fails (e.g., database not available), continue without context
+                    # Total tokens from metadata
+                    injected_context_tokens = context_metadata.get('total_context_tokens', 0)
+            except Exception as e:
+                # If context aggregation fails, continue without context
                 # This ensures graceful degradation in test/development environments
-                pass
+                import sys
+                print(f"⚠️  Context aggregation failed: {e}", file=sys.stderr)
 
         # Call LLM with fallback support
         llm_response: LLMResponse = self.connector.call(
@@ -654,6 +629,7 @@ ORIGINAL OUTPUT TO SUMMARIZE:
                     agent=agent,
                     model=llm_response.model,
                     provider=llm_response.provider,
+                    session_id=session_id,  # v0.11.0: Pass session_id as parameter
                     metadata={
                         "duration_ms": llm_response.duration_ms,
                         "prompt_tokens": llm_response.prompt_tokens,
@@ -663,8 +639,12 @@ ORIGINAL OUTPUT TO SUMMARIZE:
                         "fallback_used": llm_response.original_model is not None,
                         "original_model": llm_response.original_model,
                         "fallback_reason": llm_response.fallback_reason,
-                        "session_id": self.session_id,
                         "injected_context_tokens": injected_context_tokens,
+                        # v0.11.0: Add context metadata
+                        "session_context_tokens": context_metadata.get('session_context_tokens', 0),
+                        "knowledge_context_tokens": context_metadata.get('knowledge_context_tokens', 0),
+                        "session_messages": context_metadata.get('session_messages', 0),
+                        "knowledge_messages": context_metadata.get('knowledge_messages', 0),
                     },
                 )
             except Exception as e:
@@ -695,7 +675,15 @@ ORIGINAL OUTPUT TO SUMMARIZE:
 
         return result
 
-    def chain(self, prompt: str, stages: Optional[List[str]] = None, progress_callback=None, enable_refinement: Optional[bool] = None, mock_mode: Optional[bool] = None) -> List[RunResult]:
+    def chain(
+        self,
+        prompt: str,
+        stages: Optional[List[str]] = None,
+        progress_callback=None,
+        enable_refinement: Optional[bool] = None,
+        mock_mode: Optional[bool] = None,
+        session_id: Optional[str] = None,
+    ) -> List[RunResult]:
         """
         Execute multi-agent chain with optional single-iteration refinement.
 
@@ -705,6 +693,7 @@ ORIGINAL OUTPUT TO SUMMARIZE:
             progress_callback: Optional function(stage_num, total, agent_name) to report progress
             enable_refinement: If True, allows builder to refine based on critical issues (default: from config)
             mock_mode: Optional mock mode override (defaults to LLM_MOCK env var)
+            session_id: Optional session ID for conversation tracking (v0.11.0+)
 
         Returns:
             List of RunResults from each stage
@@ -803,16 +792,16 @@ ORIGINAL OUTPUT TO SUMMARIZE:
                             results.extend(critic_run_results)
                         else:
                             # Fallback to single critic if multi-critic failed
-                            result = self.run(agent=agent, prompt=context, mock_mode=mock_mode)
+                            result = self.run(agent=agent, prompt=context, mock_mode=mock_mode, session_id=session_id)
                     else:
                         # No builder result, use single critic
-                        result = self.run(agent=agent, prompt=context, mock_mode=mock_mode)
+                        result = self.run(agent=agent, prompt=context, mock_mode=mock_mode, session_id=session_id)
                 else:
                     # Multi-critic disabled, use single critic
-                    result = self.run(agent=agent, prompt=context, mock_mode=mock_mode)
+                    result = self.run(agent=agent, prompt=context, mock_mode=mock_mode, session_id=session_id)
             else:
                 # Non-critic agents use standard execution
-                result = self.run(agent=agent, prompt=context, mock_mode=mock_mode)
+                result = self.run(agent=agent, prompt=context, mock_mode=mock_mode, session_id=session_id)
 
             results.append(result)
 
@@ -874,7 +863,7 @@ Provide a complete, refined solution."""
                             print(f"🔄 Iteration {iteration}/{max_iterations}: Running {builder_label}...")
 
                             # Run builder again with refinement prompt
-                            refined_result = self.run(agent="builder", prompt=refine_prompt)
+                            refined_result = self.run(agent="builder", prompt=refine_prompt, session_id=session_id)
                             results.append(refined_result)
 
                             print(f"✅ {builder_label} complete ({refined_result.total_tokens} tokens)\n")
@@ -900,7 +889,7 @@ Provide a complete, refined solution."""
                             print(f"🔄 Iteration {iteration}/{max_iterations}: Running {critic_label}...")
 
                             # Run critic on refined output
-                            critic_result = self.run(agent="critic", prompt=critic_context)
+                            critic_result = self.run(agent="critic", prompt=critic_context, session_id=session_id)
                             results.append(critic_result)
 
                             # Extract issues from new critic response
