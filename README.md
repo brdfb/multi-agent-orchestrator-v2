@@ -678,17 +678,22 @@ uvicorn api.server:app --port 5051
 
 ### User Guides (Non-Technical)
 
-- **[HOW_IT_WORKS.md](HOW_IT_WORKS.md)** - Idiot-proof guide (English)
-  - 5-year-old level explanations
-  - Restaurant analogy
-  - ASCII diagrams
-  - FAQ for beginners
+- **[reading_summary.md](reading_summary.md)** - Complete system overview (English/Turkish)
+  - All documentation summarized
+  - Version history (v0.6.0 - v0.12.0)
+  - Multi-critic consensus explained
+  - Dynamic selection overview
+  - Session tracking & UI/UX features
+  - File references and architecture
 
-- **[NASIL_ÇALIŞIR.md](NASIL_ÇALIŞIR.md)** - Idiot-proof guide (Turkish)
-  - Teknik olmayan anlatım
-  - Restoran benzetmesi
-  - ASCII akış diyagramları
-  - Sıkça sorulan sorular
+- **[executive_summary.md](executive_summary.md)** - Executive summary
+  - Strategic overview
+  - Value proposition
+  - Technical capabilities
+  - Roadmap and statistics
+  - Production-ready status
+
+> **Note**: Previous beginner guides ([HOW_IT_WORKS.md](docs/archive/HOW_IT_WORKS.md), [NASIL_ÇALIŞIR.md](docs/archive/NASIL_ÇALIŞIR.md)) have been archived as they covered older versions (pre-v0.9.0). Current documentation above reflects v0.12.0 features.
 
 ### Specialized Guides
 
