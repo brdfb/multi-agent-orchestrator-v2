@@ -1,10 +1,20 @@
 .PHONY: install run-api run-ui agent-ask agent-chain agent-last stats lint test clean memory-init memory-sync memory-note memory-log memory-search memory-recent memory-stats memory-cleanup memory-export
 
+# Python interpreter from venv
+PYTHON := .venv/bin/python
+PIP := .venv/bin/pip
+PYTEST := .venv/bin/pytest
+UVICORN := .venv/bin/uvicorn
+RUFF := .venv/bin/ruff
+BLACK := .venv/bin/black
+
 install:
-	python3 -m venv .venv && . .venv/bin/activate && pip install -r requirements.txt
+	python3 -m venv .venv
+	$(PIP) install --upgrade pip wheel setuptools
+	$(PIP) install -r requirements.txt
 
 run-api:
-	. .venv/bin/activate && uvicorn api.server:app --reload --host 0.0.0.0 --port 5050
+	$(UVICORN) api.server:app --reload --host 0.0.0.0 --port 5050
 
 run-ui:
 	@echo "UI is served by the API server. Access at http://localhost:5050"
@@ -16,7 +26,7 @@ agent-ask:
 		echo "  AGENT: auto, builder, critic, closer"; \
 		exit 1; \
 	fi
-	. .venv/bin/activate && python scripts/agent_runner.py $(AGENT) "$(Q)"
+	$(PYTHON) scripts/agent_runner.py $(AGENT) "$(Q)"
 
 agent-chain:
 	@if [ -z "$(Q)" ]; then \
@@ -25,19 +35,19 @@ agent-chain:
 		echo "  Example: make agent-chain Q='Review code' STAGES='builder critic'"; \
 		exit 1; \
 	fi
-	. .venv/bin/activate && python scripts/chain_runner.py "$(Q)" $(STAGES)
+	$(PYTHON) scripts/chain_runner.py "$(Q)" $(STAGES)
 
 agent-last:
 	@ls -t data/CONVERSATIONS/*.json 2>/dev/null | head -1 | xargs cat | python3 -m json.tool || echo "No logs found"
 
 stats:
-	. .venv/bin/activate && python scripts/stats_cli.py $(if $(DAYS),--days $(DAYS)) $(if $(TRENDS),--trends)
+	$(PYTHON) scripts/stats_cli.py $(if $(DAYS),--days $(DAYS)) $(if $(TRENDS),--trends)
 
 lint:
-	. .venv/bin/activate && ruff check . && black --check .
+	$(RUFF) check . && $(BLACK) --check .
 
 test:
-	. .venv/bin/activate && pytest -q tests/
+	$(PYTEST) -q tests/
 
 clean:
 	rm -rf .venv __pycache__ .pytest_cache .ruff_cache
@@ -72,25 +82,25 @@ memory-search:
 		echo "Usage: make memory-search Q='query' [AGENT=agent] [LIMIT=10]"; \
 		exit 1; \
 	fi
-	. .venv/bin/activate && python scripts/memory_cli.py search "$(Q)" \
+	$(PYTHON) scripts/memory_cli.py search "$(Q)" \
 		$(if $(AGENT),--agent $(AGENT)) \
 		$(if $(LIMIT),--limit $(LIMIT))
 
 memory-recent:
-	. .venv/bin/activate && python scripts/memory_cli.py recent \
+	$(PYTHON) scripts/memory_cli.py recent \
 		$(if $(LIMIT),--limit $(LIMIT),--limit 10) \
 		$(if $(AGENT),--agent $(AGENT))
 
 memory-stats:
-	. .venv/bin/activate && python scripts/memory_cli.py stats
+	$(PYTHON) scripts/memory_cli.py stats
 
 memory-cleanup:
-	. .venv/bin/activate && python scripts/memory_cli.py cleanup \
+	$(PYTHON) scripts/memory_cli.py cleanup \
 		$(if $(DAYS),--days $(DAYS),--days 90) \
 		$(if $(CONFIRM),-y)
 
 memory-export:
-	. .venv/bin/activate && python scripts/memory_cli.py export \
+	$(PYTHON) scripts/memory_cli.py export \
 		$(if $(FROM),--from-date $(FROM)) \
 		$(if $(TO),--to-date $(TO)) \
 		$(if $(FORMAT),--format $(FORMAT),--format json) \
