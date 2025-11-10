@@ -1,26 +1,52 @@
-# Multi-Agent Orchestrator - Quick Start
+# Multi-Agent Orchestrator v1.0.0 - Quick Start
+
+60-second guide to get Multi-Agent Orchestrator running on your machine.
+
+---
+
+## ⚡ Fastest Way (Automated Setup - Recommended)
+
+**Single command - does everything!**
+
+```bash
+git clone https://github.com/brdfb/multi-agent-orchestrator-v2.git
+cd multi-agent-orchestrator-v2
+./setup.sh
+```
+
+**What happens:**
+1. ✅ Checks Python 3.11+ installed
+2. ✅ Creates virtual environment
+3. ✅ Installs dependencies (~2 minutes)
+4. ✅ Interactive API key setup
+5. ✅ Initializes database
+6. ✅ Runs health checks
+7. ✅ Starts server + opens browser
+
+**Done!** System running at `http://localhost:5050` 🎉
+
+---
 
 ## ⏱️ Timing Expectations
 
 **First-time installation (fresh system):**
-- System setup (python, git, make): ~2-5 minutes
-- `make install` (dependencies): ~5-10 minutes
-- First `make test` (model download ~400MB): ~10-15 minutes
-- **Total: 15-30 minutes** (depending on internet speed)
+- Automated setup (`./setup.sh`): ~5-10 minutes
+- First test run (downloads ML models): +10-15 minutes
+- **Total: 15-25 minutes** (depending on internet speed)
 
 **Subsequent runs (everything cached):**
-- `make test`: ~20-30 seconds
+- `make test`: ~20 seconds
 - `make run-api`: instant
 - **Total: under 1 minute**
 
 ---
 
-## Quick Setup
+## 🔧 Alternative: Manual Setup
 
 ### Prerequisites
 ```bash
-# Ensure you have Python 3.10+ installed
-python3 --version  # Should be 3.10 or higher
+# Ensure you have Python 3.11+ installed
+python3 --version  # Should be 3.11 or higher
 
 # If not, install on Ubuntu/Debian:
 sudo apt update && sudo apt install -y python3 python3-pip python3-venv git make
@@ -61,6 +87,30 @@ make run-api
 - If you've already exported API keys in `~/.bashrc` or `~/.zshrc`, you don't need a `.env` file
 - The system automatically uses environment variables
 - First-time model download happens during first test run or first semantic search operation
+
+---
+
+## ✅ Verify Installation
+
+```bash
+# Check health
+curl http://localhost:5050/health
+
+# Expected output:
+# {
+#   "status": "healthy",
+#   "service": "multi-agent-orchestrator",
+#   "version": "1.0.0",
+#   "providers": {"openai": true, "anthropic": true, "google": true},
+#   "memory": {"enabled": true, "database_connected": true}
+# }
+
+# Run test suite (89 tests)
+make test
+# Expected: ===== 89 passed in 16s =====
+```
+
+---
 
 ## Main Features
 
@@ -138,8 +188,8 @@ make agent-last  # View last log
 ```yaml
 agents:
   builder:
-    model: "anthropic/claude-3-5-sonnet-20241022"
-    temperature: 0.3
+    model: "anthropic/claude-sonnet-4-5"
+    temperature: 0.2
 ```
 
 **Override per request** - Via UI or API
@@ -201,7 +251,7 @@ builder:
 ├── api/                # FastAPI server + memory endpoints
 ├── ui/                 # HTMX web interface
 ├── scripts/            # CLI tools + memory_cli.py
-├── tests/              # Test suite (55+ tests)
+├── tests/              # Test suite (89 tests - all passing)
 ├── data/CONVERSATIONS/ # JSON logs
 └── data/MEMORY/        # SQLite conversation database
 ```
@@ -226,8 +276,24 @@ make clean    # Remove virtual environment
 
 ## Next Steps
 
-1. Check full docs: `README.md`
-2. Customize agents: `config/agents.yaml`
-3. Add new agents (no code changes needed)
-4. Monitor costs via `/metrics`
-5. Deploy to production (see README)
+1. **Read INSTALLATION.md** - Detailed setup guide
+2. **Read MEMORY_GUIDE.md** - Understand the memory system
+3. **Customize agents** - Edit `config/agents.yaml`
+4. **Monitor costs** - Run `make stats` or check `/metrics`
+5. **Add new agents** - No code changes needed, just YAML config
+
+---
+
+## 🆘 Need Help?
+
+- **Full Documentation:** README.md
+- **Installation Issues:** INSTALLATION.md
+- **Common Problems:** TROUBLESHOOTING.md
+- **Memory System:** MEMORY_GUIDE.md
+- **GitHub Issues:** https://github.com/brdfb/multi-agent-orchestrator-v2/issues
+
+---
+
+**Version:** 1.0.0
+**Status:** Production Ready (Developer Tool)
+**Repository:** https://github.com/brdfb/multi-agent-orchestrator-v2
