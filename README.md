@@ -2,6 +2,38 @@
 
 Production-ready multi-LLM agent system with CLI, REST API, and modern web UI. Route tasks intelligently across OpenAI, Anthropic Claude, and Google Gemini models.
 
+---
+
+## 🎯 Target Users & Scope
+
+**Who this is for:**
+- 👨‍💻 Solo developers and small teams (1-10 users)
+- 🔬 AI experimentation and prototyping
+- 🛠️ Local development workflows
+- 📚 Learning multi-agent orchestration patterns
+
+**What this provides:**
+- ✅ Multi-agent orchestration (builder → critics → closer)
+- ✅ 3 LLM providers with intelligent fallback
+- ✅ Persistent memory with semantic search
+- ✅ Cost tracking and optimization
+- ✅ CLI + REST API + Web UI
+- ✅ 89 comprehensive tests
+
+**What this is NOT:**
+- ❌ Enterprise SaaS platform (no RBAC, multi-tenancy)
+- ❌ Distributed system (single-machine deployment)
+- ❌ Plugin marketplace (agents are config-based)
+- ❌ Production API service (no authentication by default)
+
+**Deployment:** Local machine or single Docker container (trusted environment)
+**Scale:** 1-10 concurrent users, suitable for team collaboration
+**Security:** Designed for trusted networks - add auth layer if exposing publicly
+
+> **v2.0 Enterprise Edition** with plugin architecture, RBAC, and multi-tenancy is on the roadmap - see [docs/ROADMAP.md](docs/ROADMAP.md)
+
+---
+
 ## ⚡ Quick Start
 
 ### Option 1: Automated Setup (Recommended - 60 seconds)
@@ -831,14 +863,17 @@ Built with:
 
 ---
 
-**Version**: 0.12.0
-**Status**: Production Ready
+**Version**: 1.0.0 🎉
+**Status**: Production Ready (Developer Tool)
 **Last Updated**: November 2025
 **Maintained**: Active
 
-**What's New in v0.12.0:**
-- ✅ CLI Feature Parity (rich formatting, syntax highlighting, cost tracking)
-- ✅ Web UI Enhancements (code highlighting, keyboard shortcuts, error messages)
-- ✅ Session Tracking (cross-conversation context)
-- ✅ 29 comprehensive tests passing
-- ✅ Both CLI and Web UI fully featured
+**v1.0.0 Release Highlights:**
+- ✅ 89 comprehensive tests passing (full test suite success)
+- ✅ 12 major releases (v0.1.0 → v1.0.0)
+- ✅ Multi-agent orchestration with parallel critic execution
+- ✅ Dynamic critic selection (30-50% cost savings)
+- ✅ Semantic memory with session tracking
+- ✅ Rich CLI + Web UI feature parity
+- ✅ 15 comprehensive documentation files
+- ✅ Stable API for local development workflows

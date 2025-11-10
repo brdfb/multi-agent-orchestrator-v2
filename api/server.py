@@ -418,7 +418,7 @@ async def health():
     return {
         "status": overall_status,
         "service": "multi-agent-orchestrator",
-        "version": "0.12.0",
+        "version": "1.0.0",
         "timestamp": datetime.now(timezone.utc).isoformat(),
 
         "providers": provider_status,
