@@ -1,630 +1,420 @@
-# Installation Guide - Multi-Agent Orchestrator
+# Installation Guide - Multi-Agent Orchestrator v1.0.0
 
-Bu dokuman, Multi-Agent Orchestrator sistemini **sıfırdan** yeni bir makineye kurmanız için hazırlanmıştır.
-
----
-
-## 📋 İçindekiler
-
-1. [Sistem Gereksinimleri](#sistem-gereksinimleri)
-2. [Hızlı Kurulum (Git)](#hızlı-kurulum-git)
-3. [Manuel Kurulum (Git olmadan)](#manuel-kurulum-git-olmadan)
-4. [Kurulum Sonrası Doğrulama](#kurulum-sonrası-doğrulama)
-5. [API Key Ekleme](#api-key-ekleme)
-6. [Troubleshooting](#troubleshooting)
-7. [Farklı İşletim Sistemleri](#farklı-işletim-sistemleri)
+Complete installation guide for setting up Multi-Agent Orchestrator from scratch on a new machine.
 
 ---
 
-## 🔧 Sistem Gereksinimleri
+## 📋 Table of Contents
 
-### Minimum Gereksinimler
+1. [Prerequisites](#prerequisites)
+2. [Option 1: Automated Setup (Recommended)](#option-1-automated-setup-recommended)
+3. [Option 2: Manual Setup](#option-2-manual-setup)
+4. [Post-Installation Verification](#post-installation-verification)
+5. [Troubleshooting](#troubleshooting)
+6. [Platform-Specific Notes](#platform-specific-notes)
 
-- **Python:** 3.10 veya üstü (önerilen: 3.12+)
-- **pip:** Python paket yöneticisi
+---
+
+## 🔧 Prerequisites
+
+### Minimum Requirements
+
+- **Python:** 3.11+ (recommended: 3.12)
+- **pip:** Python package manager
 - **venv:** Python virtual environment
-- **Disk:** ~100MB boş alan
-- **İşletim Sistemi:** Linux, macOS, WSL2 (Windows)
+- **Disk:** ~2GB free space (includes dependencies and ML models)
+- **OS:** Linux, macOS, WSL2 (Windows)
 
-### Opsiyonel
+### Optional
 
-- **git:** Repo klonlamak için (önerilen)
-- **make:** Makefile komutları için
-- **curl:** API testleri için
+- **git:** For cloning repository
+- **make:** For Makefile commands
+- **curl:** For API testing
 
-### Gereksinimler Kontrolü
+### Quick Check
 
 ```bash
-# Python versiyonu
-python3 --version  # 3.10+ olmalı
+# Check Python version
+python3 --version  # Should be 3.11+
 
-# pip
+# Check pip
 python3 -m pip --version
 
-# venv
-python3 -m venv --help
-
-# git (opsiyonel)
+# Check git (optional)
 git --version
 ```
 
-**Ubuntu/Debian'da eksikler varsa:**
+**Install missing dependencies:**
+
+**Ubuntu/Debian:**
 ```bash
 sudo apt update
 sudo apt install -y python3 python3-pip python3-venv git make curl
 ```
 
-**macOS'ta (Homebrew ile):**
+**macOS (Homebrew):**
 ```bash
 brew install python3 git
 ```
 
----
-
-## 🚀 Hızlı Kurulum (Git)
-
-### Adım 1: Repository Klonlama
-
+**Windows (WSL2):**
 ```bash
-# Private repo (HTTPS - GitHub authentication gerekli)
-git clone https://github.com/brdfb/orchestrator.git ~/.orchestrator
-
-# Private repo (SSH - SSH key gerekli)
-git clone git@github.com:brdfb/orchestrator.git ~/.orchestrator
-
-# Authentication için:
-# HTTPS: gh auth login (GitHub CLI ile)
-# SSH: ssh-keygen + GitHub'a public key ekle
+# Install WSL2 first, then follow Ubuntu instructions
+wsl --install
 ```
 
-### Adım 2: Virtual Environment ve Dependencies
+---
+
+## 🚀 Option 1: Automated Setup (Recommended)
+
+**Single command - does everything for you!**
+
+### Step 1: Clone Repository
 
 ```bash
-cd ~/.orchestrator
+git clone https://github.com/brdfb/multi-agent-orchestrator-v2.git
+cd multi-agent-orchestrator-v2
+```
 
-# Virtual environment oluştur
+### Step 2: Run Setup Script
+
+```bash
+./setup.sh
+```
+
+**What it does:**
+1. ✅ Checks Python 3.11+ is installed
+2. ✅ Creates virtual environment (`.venv/`)
+3. ✅ Installs all dependencies (~2 minutes)
+4. ✅ Interactive API key setup (or uses existing `.env`)
+5. ✅ Initializes SQLite database
+6. ✅ Runs health checks
+7. ✅ Starts server + opens browser
+
+**Non-interactive mode (for CI/automation):**
+```bash
+# Uses environment variables for API keys
+export OPENAI_API_KEY=sk-...
+export ANTHROPIC_API_KEY=sk-ant-...
+export GOOGLE_API_KEY=...
+
+./setup.sh --yes --no-browser --port 5050
+```
+
+**Done!** The system is now running at `http://localhost:5050`
+
+---
+
+## 🔧 Option 2: Manual Setup
+
+### Step 1: Clone Repository
+
+```bash
+git clone https://github.com/brdfb/multi-agent-orchestrator-v2.git
+cd multi-agent-orchestrator-v2
+```
+
+### Step 2: Create Virtual Environment
+
+```bash
+# Create virtual environment
 python3 -m venv .venv
 
-# Aktive et
-source .venv/bin/activate
+# Activate it
+source .venv/bin/activate  # Linux/macOS
+# or
+.venv\Scripts\activate     # Windows
+```
 
-# Dependencies yükle
+### Step 3: Install Dependencies
+
+```bash
 pip install -r requirements.txt
 ```
 
-### Adım 3: Shell Entegrasyonu
+**Note:** First installation takes ~5-10 minutes (downloads ~30+ packages including PyTorch for semantic search).
+
+### Step 4: Configure API Keys
+
+**Option A: .env file (recommended for development)**
 
 ```bash
-# Orchestrator alias'larını .bashrc'ye ekle
-cat >> ~/.bashrc << 'EOF'
+# Copy example file
+cp .env.example .env
 
-# >>> Multi-Agent Orchestrator Integration >>>
-export ORCHESTRATOR_HOME="$HOME/.orchestrator"
-export PYTHONPATH="$ORCHESTRATOR_HOME:$PYTHONPATH"
-
-# Quick access alias
-alias mao="python3 $ORCHESTRATOR_HOME/scripts/agent_runner.py"
-
-# Enhanced aliases with common tasks
-alias mao-builder='mao builder'
-alias mao-critic='mao critic'
-alias mao-closer='mao closer'
-alias mao-auto='mao auto'
-
-# Orchestrator management
-alias mao-status='cd $ORCHESTRATOR_HOME && git status 2>/dev/null || echo "Not a git repo"'
-alias mao-update='cd $ORCHESTRATOR_HOME && git pull 2>/dev/null || echo "Not a git repo"'
-alias mao-dir='cd $ORCHESTRATOR_HOME'
-
-# Welcome message (shows once per session)
-if [ -z "$ORCHESTRATOR_WELCOME_SHOWN" ] && [ -f "$ORCHESTRATOR_HOME/docs/POSTSETUP_MANIFEST.md" ]; then
-  export ORCHESTRATOR_WELCOME_SHOWN=1
-  echo ""
-  echo "🧠 Multi-Agent Orchestrator aktif — mao komutunu kullanabilirsin!"
-  echo "📖 Detaylar: cat ~/.orchestrator/docs/POSTSETUP_MANIFEST.md"
-  echo "💡 Hızlı test: mao auto 'Merhaba!'"
-  echo ""
-fi
-# <<< Multi-Agent Orchestrator Integration <<<
-EOF
-
-# Aktive et
-source ~/.bashrc
+# Edit with your keys
+nano .env  # or vim, code, etc.
 ```
 
-### Adım 4: Memory Sistemi (Opsiyonel)
-
-```bash
-# Memory klasör yapısını oluştur
-mkdir -p ~/memory/{NOTES,HISTORY,BIN}
-
-# Memory script'lerini kopyala
-cp ~/.orchestrator/scripts/memory_post_setup.sh ~/memory/BIN/
-
-# Memory Makefile hedeflerini kullanabilmek için
-cd ~/.orchestrator
-make memory-init
-```
-
-### Adım 5: Doğrulama
-
-```bash
-# Test suite çalıştır
-cd ~/.orchestrator
-make test
-
-# Alias'ları test et
-mao-dir && pwd  # /home/USER/.orchestrator olmalı
-```
-
-**Beklenen çıktı:**
-```
-======================== 19 passed, 7 warnings in 3s ========================
-```
-
-✅ Kurulum tamamlandı! [API Key Ekleme](#api-key-ekleme) bölümüne geçin.
-
----
-
-## 📦 Manuel Kurulum (Git olmadan)
-
-Git kullanmadan, tar arşivi veya dosya transferi ile kurulum.
-
-### Adım 1: Dosyaları Aktar
-
-**Kaynak makinede (eski sistemde):**
-```bash
-# Arşiv oluştur
-cd ~
-tar -czf orchestrator-$(date +%Y%m%d).tar.gz \
-    .orchestrator/ \
-    setup_orchestrator_local.sh \
-    memory/ 2>/dev/null || true
-
-# Dosya boyutunu kontrol et
-ls -lh orchestrator-*.tar.gz
-
-# Dosyayı yeni makineye aktar (USB, scp, email, vs.)
-# Örnek: scp orchestrator-*.tar.gz user@new-machine:~/
-```
-
-**Hedef makinede (yeni sistem):**
-```bash
-# Arşivi aç
-cd ~
-tar -xzf orchestrator-*.tar.gz
-
-# Dizin yapısını kontrol et
-ls -la ~/.orchestrator/
-```
-
-### Adım 2: Virtual Environment Yeniden Oluştur
-
-Virtual environment taşınabilir değil, yeniden oluşturmalısın:
-
-```bash
-cd ~/.orchestrator
-
-# Eski venv'i sil (varsa)
-rm -rf .venv
-
-# Yeni venv oluştur
-python3 -m venv .venv
-
-# Aktive et
-source .venv/bin/activate
-
-# Dependencies yükle
-pip install -r requirements.txt
-```
-
-### Adım 3: Shell Entegrasyonu
-
-```bash
-# Setup script'i çalıştır (eğer taşıdıysan)
-~/setup_orchestrator_local.sh
-
-# VEYA manuel olarak ekle (yukarıdaki Adım 3'teki gibi)
-# ~/.bashrc'ye alias'ları ekle
-
-# Aktive et
-source ~/.bashrc
-```
-
-### Adım 4: Doğrulama
-
-```bash
-cd ~/.orchestrator
-make test
-```
-
----
-
-## ✅ Kurulum Sonrası Doğrulama
-
-### Test Checklist
-
-```bash
-# 1. Python environment
-cd ~/.orchestrator
-source .venv/bin/activate
-python3 --version
-python3 -c "import litellm; print('LiteLLM OK')"
-
-# 2. Testler
-make test  # 19/19 geçmeli
-
-# 3. Alias'lar
-type mao  # alias göstermeli
-mao-dir && pwd  # ~/.orchestrator göstermeli
-
-# 4. Config
-python3 -c "from config.settings import AGENTS_CONFIG; print('Config OK')"
-
-# 5. Memory (opsiyonel)
-ls ~/memory/NOTES/ ~/memory/HISTORY/ ~/memory/BIN/
-```
-
-### Beklenen Klasör Yapısı
-
-```
-~/.orchestrator/
-├── .venv/                # Virtual environment
-├── api/                  # FastAPI server
-├── config/               # agents.yaml, settings.py
-├── core/                 # llm_connector, agent_runtime
-├── data/
-│   └── CONVERSATIONS/    # JSON logs
-├── docs/                 # Dokümantasyon
-├── scripts/              # agent_runner.py
-├── tests/                # Test suite
-├── ui/                   # Web interface
-├── requirements.txt
-├── Makefile
-├── README.md
-└── ...
-
-~/memory/                 # Project memory (opsiyonel)
-├── NOTES/
-├── HISTORY/
-└── BIN/
-```
-
----
-
-## 🔑 API Key Ekleme
-
-Sistemi gerçek LLM'lerle kullanmak için API key'leri eklemelisin.
-
-### Yöntem 1: Environment Variables (.bashrc)
-
-**Önerilen yöntem** - Tüm projelerden erişilebilir:
-
-```bash
-# API key'leri .bashrc'ye ekle
-cat >> ~/.bashrc << 'EOF'
-
-# LLM API Keys
-export ANTHROPIC_API_KEY="sk-ant-..."
-export OPENAI_API_KEY="sk-proj-..."
-export GOOGLE_API_KEY="..."
-EOF
-
-# Aktive et
-source ~/.bashrc
-
-# Doğrula (masked)
-env | grep -E "(ANTHROPIC|OPENAI|GOOGLE).*API" | sed 's/=.*/=***MASKED***/'
-```
-
-### Yöntem 2: .env Dosyası
-
-**Geliştirme ortamı için** - Sadece orchestrator'dan erişilebilir:
-
-```bash
-# .env dosyası oluştur
-cd ~/.orchestrator
-cat > .env << 'EOF'
+Add your API keys:
+```env
+OPENAI_API_KEY=sk-...
 ANTHROPIC_API_KEY=sk-ant-...
-OPENAI_API_KEY=sk-proj-...
 GOOGLE_API_KEY=...
-EOF
-
-# Doğrula
-cat .env
 ```
 
-**NOT:** `.env` dosyası `.gitignore`'da, git'e commit edilmez (güvenlik).
-
-### API Key Nereden Alınır?
-
-| Provider | URL | Ücretlendirme |
-|----------|-----|---------------|
-| **Anthropic (Claude)** | https://console.anthropic.com/settings/keys | Ücretli - $5 minimum |
-| **OpenAI (GPT)** | https://platform.openai.com/api-keys | Ücretli - Pay-as-you-go |
-| **Google (Gemini)** | https://aistudio.google.com/app/apikey | Ücretsiz tier mevcut ✨ |
-
-### Test Etme
+**Option B: Environment variables (recommended for production)**
 
 ```bash
-# API key var mı kontrol et
-cd ~/.orchestrator
-source .venv/bin/activate
-python3 -c "from config.settings import get_env_source; print(get_env_source())"
+export OPENAI_API_KEY=sk-...
+export ANTHROPIC_API_KEY=sk-ant-...
+export GOOGLE_API_KEY=...
+```
 
-# Mock ile test (API key gerektirmez)
+Or add to `~/.bashrc` / `~/.zshrc`:
+```bash
+echo 'export OPENAI_API_KEY=sk-...' >> ~/.bashrc
+echo 'export ANTHROPIC_API_KEY=sk-ant-...' >> ~/.bashrc
+echo 'export GOOGLE_API_KEY=...' >> ~/.bashrc
+source ~/.bashrc
+```
+
+### Step 5: Initialize Database
+
+```bash
+# Database is auto-created on first run, but you can test:
+python3 -c "from core.memory_engine import MemoryEngine; m = MemoryEngine(); print('✅ Database initialized')"
+```
+
+### Step 6: Run Tests (Optional)
+
+```bash
+# Run all tests
 make test
 
-# Gerçek LLM ile test (API key gerektirir)
-mao auto "Kısa bir test mesajı"
+# Or with pytest directly
+.venv/bin/pytest tests/ -v
 ```
+
+**Note:** First test run downloads semantic search model (~400MB), takes ~10-15 minutes. Subsequent runs: ~20 seconds.
+
+### Step 7: Start Server
+
+```bash
+# Start API + Web UI
+make run-api
+
+# Or with uvicorn directly
+.venv/bin/uvicorn api.server:app --host 0.0.0.0 --port 5050
+```
+
+Access at: `http://localhost:5050`
+
+---
+
+## ✅ Post-Installation Verification
+
+### 1. Health Check
+
+```bash
+curl http://localhost:5050/health | python3 -m json.tool
+```
+
+**Expected output:**
+```json
+{
+  "status": "healthy",
+  "service": "multi-agent-orchestrator",
+  "version": "1.0.0",
+  "providers": {
+    "openai": true,
+    "anthropic": true,
+    "google": true
+  },
+  "memory": {
+    "enabled": true,
+    "database_connected": true
+  }
+}
+```
+
+### 2. Test Agent Execution
+
+**CLI:**
+```bash
+# Activate virtual environment first
+source .venv/bin/activate
+
+# Test builder agent
+python scripts/agent_runner.py --agent builder --prompt "Test: Print hello world in Python"
+```
+
+**API:**
+```bash
+curl -X POST http://localhost:5050/ask \
+  -H "Content-Type: application/json" \
+  -d '{"agent": "builder", "prompt": "Test: Print hello world"}'
+```
+
+### 3. Run Test Suite
+
+```bash
+make test
+```
+
+**Expected:** All 89 tests passing ✅
 
 ---
 
 ## 🐛 Troubleshooting
 
-### Problem 1: "python3: command not found"
+### Issue: `python3: command not found`
 
-**Çözüm:**
+**Solution:**
 ```bash
-# Ubuntu/Debian
-sudo apt install -y python3 python3-pip python3-venv
-
-# macOS
-brew install python3
+# Install Python 3.11+
+sudo apt update
+sudo apt install python3.11 python3.11-venv python3-pip
 ```
 
-### Problem 2: "ensurepip is not available"
+### Issue: `pip install` fails with permission error
 
-**Çözüm:**
+**Solution:**
 ```bash
-# Ubuntu/Debian
-sudo apt install -y python3.12-venv  # Veya python3-venv
-
-# macOS
-# Python3 reinstall
-brew reinstall python3
-```
-
-### Problem 3: "ModuleNotFoundError: No module named 'litellm'"
-
-**Çözüm:**
-```bash
-cd ~/.orchestrator
+# DON'T use sudo! Use virtual environment:
+python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-### Problem 4: "make: command not found"
+### Issue: API keys not detected
 
-**Çözüm 1:** make yükle:
+**Check which source is being used:**
 ```bash
-sudo apt install -y make  # Ubuntu/Debian
-brew install make          # macOS
+# Start server and look for startup message:
+make run-api
+# Should show: "🔑 API keys loaded from environment variables" or "📁 API keys loaded from .env file"
 ```
 
-**Çözüm 2:** make kullanmadan çalıştır:
+**Solution:**
 ```bash
-# Test yerine
-python3 -m pytest tests/
+# Verify keys are set:
+echo $OPENAI_API_KEY    # Should not be empty
+echo $ANTHROPIC_API_KEY # Should not be empty
 
-# Run yerine
-cd ~/.orchestrator
+# If empty, add to .env file:
+cp .env.example .env
+nano .env  # Add your keys
+```
+
+### Issue: Tests fail - `ModuleNotFoundError`
+
+**Solution:**
+```bash
+# Ensure virtual environment is activated:
 source .venv/bin/activate
-python3 api/server.py
+
+# Reinstall dependencies:
+pip install -r requirements.txt
 ```
 
-### Problem 5: Testler fail oluyor
+### Issue: First test run very slow (~15 minutes)
 
-**Doğrulama:**
+**This is normal!** First test run downloads:
+- Sentence transformers model (~400MB)
+- PyTorch dependencies (~1.7GB)
+
+Subsequent runs: ~20 seconds ✅
+
+### Issue: Port 5050 already in use
+
+**Solution:**
 ```bash
-cd ~/.orchestrator
-source .venv/bin/activate
+# Use different port:
+uvicorn api.server:app --host 0.0.0.0 --port 8080
 
-# Tek tek test et
-python3 -m pytest tests/test_config.py -v
-python3 -m pytest tests/test_runtime.py -v
-
-# Detaylı hata
-python3 -m pytest tests/ -vv --tb=short
+# Or kill existing process:
+lsof -ti:5050 | xargs kill -9
 ```
 
-### Problem 6: "mao: command not found"
+### Issue: Database locked error
 
-**Çözüm:**
+**Solution:**
 ```bash
-# .bashrc'ye eklendi mi kontrol et
-grep "ORCHESTRATOR_HOME" ~/.bashrc
+# Close all running instances:
+pkill -f "python.*api.server"
 
-# Yoksa manuel ekle
-cat >> ~/.bashrc << 'EOF'
-export ORCHESTRATOR_HOME="$HOME/.orchestrator"
-alias mao="python3 $ORCHESTRATOR_HOME/scripts/agent_runner.py"
-EOF
-
-# Aktive et
-source ~/.bashrc
-
-# Test et
-type mao
-```
-
-### Problem 7: API Key çalışmıyor
-
-**Kontrol:**
-```bash
-# Environment'ta var mı?
-env | grep API_KEY
-
-# .env dosyasında var mı?
-cat ~/.orchestrator/.env
-
-# Config doğru mu?
-cd ~/.orchestrator
-source .venv/bin/activate
-python3 -c "from config.settings import get_env_source; print(get_env_source())"
-```
-
-**Çözüm:**
-```bash
-# Environment variable ekle
-echo 'export OPENAI_API_KEY="sk-..."' >> ~/.bashrc
-source ~/.bashrc
-
-# Veya .env oluştur
-cd ~/.orchestrator
-nano .env  # .env.example'dan kopyala
-```
-
-### Problem 8: Port 5050 kullanımda
-
-**Çözüm:**
-```bash
-# Başka port kullan
-cd ~/.orchestrator
-source .venv/bin/activate
-uvicorn api.server:app --host 0.0.0.0 --port 5051 --reload
+# Restart:
+make run-api
 ```
 
 ---
 
-## 🖥️ Farklı İşletim Sistemleri
+## 🖥️ Platform-Specific Notes
 
 ### Linux (Ubuntu/Debian)
 
-En kolay kurulum, yukarıdaki adımlar direkt çalışır.
+**Works out of the box!** Just follow automated setup.
 
 ```bash
-# Sistem paketleri
-sudo apt update
-sudo apt install -y python3 python3-pip python3-venv git make curl
-
-# Kuruluma devam et
-git clone ... ~/.orchestrator
-cd ~/.orchestrator
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
+git clone https://github.com/brdfb/multi-agent-orchestrator-v2.git
+cd multi-agent-orchestrator-v2
+./setup.sh
 ```
 
 ### macOS
 
-Homebrew kullanımı önerilir.
-
+**Install Homebrew first:**
 ```bash
-# Homebrew yükle (yoksa)
 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+```
 
-# Python ve Git
+**Then:**
+```bash
 brew install python3 git
-
-# Kuruluma devam et
-git clone ... ~/.orchestrator
-cd ~/.orchestrator
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-
-# .bashrc yerine .zshrc kullan (macOS Catalina+)
-# Yukarıdaki ~/.bashrc'yi ~/.zshrc olarak değiştir
+git clone https://github.com/brdfb/multi-agent-orchestrator-v2.git
+cd multi-agent-orchestrator-v2
+./setup.sh
 ```
 
 ### Windows (WSL2)
 
-**WSL2 kurulumu (PowerShell - Admin):**
+**Install WSL2:**
 ```powershell
+# Run in PowerShell as Administrator
 wsl --install
 wsl --set-default-version 2
 ```
 
-**WSL içinde (Ubuntu):**
+**Then inside WSL2:**
 ```bash
-# Linux adımlarını takip et
+# Follow Linux instructions
 sudo apt update
-sudo apt install -y python3 python3-pip python3-venv git
-
-git clone ... ~/.orchestrator
-cd ~/.orchestrator
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
+sudo apt install -y python3 python3-pip python3-venv git make
+git clone https://github.com/brdfb/multi-agent-orchestrator-v2.git
+cd multi-agent-orchestrator-v2
+./setup.sh
 ```
 
-**NOT:** Native Windows (CMD/PowerShell) desteklenmez, WSL2 kullanın.
+**Note:** Native Windows (non-WSL) is not supported in v1.0.0.
+
+### Docker (Coming Soon)
+
+Docker deployment is planned for v1.1.0. For now, use automated setup or manual installation.
 
 ---
 
-## 📚 Ek Kaynaklar
+## 📚 Next Steps
 
-Kurulum sonrası bu dokümanları okuyun:
+**Once installed:**
 
-```bash
-cat ~/.orchestrator/README.md                          # Ana kılavuz
-cat ~/.orchestrator/QUICKSTART.md                      # Hızlı başlangıç
-cat ~/.orchestrator/QUICK_REFERENCE.md                 # Komut referansı
-cat ~/.orchestrator/docs/ENVIRONMENT_SETUP.md          # Environment detayları
-cat ~/.orchestrator/docs/LOCAL_INTEGRATION.md          # Merkezi sistem
-cat ~/.orchestrator/docs/POSTSETUP_MANIFEST.md         # Kurulum sonrası
-cat ~/.orchestrator/docs/DEVELOPMENT_CONTINUATION.md   # Geliştirme
-```
+1. **Read QUICKSTART.md** - 60-second feature overview
+2. **Read MEMORY_GUIDE.md** - Understand the memory system
+3. **Experiment with agents** - Try builder, critic, closer
+4. **Run multi-agent chains** - `make agent-chain Q="your prompt"`
+5. **Track costs** - `make stats` to see usage
 
 ---
 
-## 🆘 Yardım
+## 🆘 Need Help?
 
-### Hızlı Yardım
-
-```bash
-# Sistem durumu
-cd ~/.orchestrator
-git log -3 --oneline
-make test
-
-# Alias'lar çalışıyor mu?
-type mao
-mao-dir && pwd
-
-# Virtual env aktif mi?
-which python3
-
-# Config yükleniyor mu?
-python3 -c "from config.settings import AGENTS_CONFIG; print('OK')"
-```
-
-### Dokümantasyon
-
-- **README.md** - Sistem kullanımı
-- **QUICKSTART.md** - 60 saniye'de başla
-- **SESSION_SUMMARY.md** - Tüm geliştirme süreci
-- **CONTEXT_HANDOFF.md** - Context yönetimi
-
-### İletişim
-
-GitHub Repo: https://github.com/brdfb/orchestrator (Private)
-GitHub Issues: https://github.com/brdfb/orchestrator/issues
+- **Documentation:** See README.md and QUICKSTART.md
+- **Troubleshooting:** See TROUBLESHOOTING.md
+- **Issues:** https://github.com/brdfb/multi-agent-orchestrator-v2/issues
+- **Health Check:** `curl http://localhost:5050/health`
 
 ---
 
-## ✅ Kurulum Başarılı mı?
-
-Şu checklist'i tamamladıysan hazırsın:
-
-- [ ] Python 3.10+ kurulu
-- [ ] `~/.orchestrator/` dizini var
-- [ ] Virtual environment oluşturuldu ve dependencies yüklendi
-- [ ] `.bashrc` veya `.zshrc`'ye alias'lar eklendi
-- [ ] `source ~/.bashrc` çalıştırıldı
-- [ ] `make test` → 19/19 test geçti
-- [ ] `mao-dir` çalışıyor
-- [ ] API key'ler eklendi (opsiyonel)
-
-**Hepsi tamam mı? Tebrikler! 🎉**
-
-```bash
-mao auto "Merhaba! Sistem kurulumu tamamlandı."
-```
-
----
-
-**Son güncelleme:** 2025-11-03
-**Versiyon:** v0.1.0
+**Version:** 1.0.0
+**Last Updated:** November 2025
+**Repository:** https://github.com/brdfb/multi-agent-orchestrator-v2
