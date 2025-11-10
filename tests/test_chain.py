@@ -58,7 +58,7 @@ def test_chain_returns_three_results():
 
     call_count = 0
 
-    def mock_run(agent, prompt, override_model=None, mock_mode=None):
+    def mock_run(agent, prompt, override_model=None, mock_mode=None, session_id=None):
         nonlocal call_count
         result = mock_results[call_count]
         call_count += 1
@@ -81,7 +81,7 @@ def test_chain_validates_agent_names():
 
     agents_called = []
 
-    def mock_run(agent, prompt, override_model=None, mock_mode=None):
+    def mock_run(agent, prompt, override_model=None, mock_mode=None, session_id=None):
         agents_called.append(agent)
         return RunResult(
             agent=agent,
