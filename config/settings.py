@@ -231,10 +231,17 @@ def get_api_key(provider: str, optional: bool = False) -> Optional[str]:
 
 # Cost estimation table (USD per 1M tokens)
 COST_TABLE = {
+    # Anthropic models
     "anthropic/claude-3-5-sonnet-20241022": {"input": 3.0, "output": 15.0},
+    "anthropic/claude-sonnet-4-5": {"input": 3.0, "output": 15.0},  # Same as 3.5 Sonnet
+
+    # OpenAI models
     "openai/gpt-4o": {"input": 2.5, "output": 10.0},
     "openai/gpt-4o-mini": {"input": 0.15, "output": 0.6},
+
+    # Google Gemini models
     "gemini/gemini-2.5-pro": {"input": 1.25, "output": 5.0},
+    "gemini/gemini-2.5-flash": {"input": 0.075, "output": 0.3},  # Same as 2.0 Flash
     "gemini/gemini-2.0-flash": {"input": 0.075, "output": 0.3},
     "gemini/gemini-flash-latest": {"input": 0.075, "output": 0.3},
     "gemini/gemini-pro-latest": {"input": 1.25, "output": 5.0},
