@@ -56,6 +56,8 @@ make run-api
 
 ## 🎯 Features
 
+### Core Capabilities
+
 - **Multi-Provider Support**: OpenAI, Anthropic, Google Gemini via unified LiteLLM interface
 - **Intelligent Routing**: Auto-route requests to the best agent for the task
 - **Agent Roles**:
@@ -64,13 +66,36 @@ make run-api
   - ✅ **Closer**: Synthesizes decisions into actionable steps
   - 🧭 **Router**: Automatically selects the right agent
 - **Multi-Agent Chains**: Run builder → critic → closer workflows
-- **🎯 Dynamic Critic Selection (v0.10.0)**: AI-powered keyword analysis selects only relevant critics (30-50% cost savings)
+
+### Advanced Features (v0.6.0 - v0.10.0)
+
+- **🎯 Dynamic Critic Selection (v0.10.0)**: Keyword-based relevance scoring selects only relevant critics (30-50% cost savings)
 - **🎭 Multi-Critic Consensus (v0.9.0)**: 3 specialized critics (security, performance, quality) run in parallel with weighted consensus
 - **🔄 Multi-Iteration Refinement (v0.8.0)**: Iterative refinement with convergence detection (max 3 iterations)
 - **🔄 Automatic Refinement (v0.7.0)**: Builder auto-fixes critical issues detected by critic
 - **📦 Semantic Compression (v0.6.0)**: 86% token savings with 100% context preservation
+
+### Recent Additions (v0.11.0 - v0.12.0)
+
+- **🔗 Session Tracking (v0.11.0)**: Cross-conversation context with automatic session management
+- **🎨 Web UI Enhancements (v0.11.1-4)**:
+  - Code syntax highlighting (Highlight.js with GitHub Dark theme)
+  - Keyboard shortcuts (Ctrl+Enter, Cmd+K, Esc, /)
+  - Chain progress indicator (animated 3-stage pipeline)
+  - Enhanced error messages with context-aware solutions
+  - Cost tracking dashboard (agent/model breakdowns)
+  - Memory context visibility
+- **💻 CLI Feature Parity (v0.12.0)**:
+  - Rich terminal formatting (colored output, emojis, boxes)
+  - Code syntax highlighting (monokai theme)
+  - Memory context visibility (session + knowledge breakdown)
+  - Enhanced error messages (6+ types with solutions)
+  - Cost tracking dashboard (`make stats` with trends)
+
+### Infrastructure
+
 - **Persistent Memory System**: SQLite-backed conversation memory with context injection
-- **Three Interfaces**: CLI, REST API, Web UI (HTMX + PicoCSS)
+- **Three Interfaces**: CLI (rich formatting), REST API, Web UI (HTMX + PicoCSS)
 - **Complete Observability**: JSON logs, metrics, token/cost tracking
 - **Model Override**: Test any model on any agent
 - **Security**: API key masking, input sanitization
@@ -94,9 +119,12 @@ make run-api
 │   └── templates/
 │       └── index.html       # HTMX web interface
 ├── scripts/
-│   ├── agent_runner.py      # CLI tool
-│   └── memory_cli.py        # Memory system CLI
-├── tests/                   # 55+ comprehensive tests
+│   ├── agent_runner.py      # CLI tool (rich formatting)
+│   ├── chain_runner.py      # Chain CLI tool
+│   ├── stats_cli.py         # Cost tracking dashboard
+│   ├── memory_cli.py        # Memory system CLI
+│   └── view_logs.py         # Log viewer
+├── tests/                   # 29 comprehensive tests
 └── data/
     ├── CONVERSATIONS/       # JSON logs (auto-created)
     └── MEMORY/             # SQLite database (auto-created)
@@ -165,14 +193,36 @@ agents:
 
 ### CLI
 
-```bash
-# Ask a single agent
-make agent-ask AGENT=builder Q="Create a REST API for todos"
-make agent-ask AGENT=critic Q="Review this code: ..."
-make agent-ask AGENT=auto Q="What should I do?"  # Auto-routes
+**Basic Commands:**
 
-# Direct script usage
+```bash
+# Ask a single agent (auto-routes with rich formatting)
+mao auto "Your question"
+mao builder "Create a REST API for todos"
+mao critic "Review this code: ..."
+
+# Multi-agent chain
+mao-chain "Design a scalable system"
+mao-chain --save-to report.md "Design system"  # Save output
+
+# Cost tracking (v0.12.0)
+make stats                    # All-time statistics
+make stats DAYS=7             # Last 7 days
+make stats DAYS=30 TRENDS=1   # 30 days with daily trends
+```
+
+**Legacy Makefile commands:**
+
+```bash
+make agent-ask AGENT=builder Q="Create a REST API"
+make agent-chain Q="Design system"
+```
+
+**Direct script usage:**
+
+```bash
 python scripts/agent_runner.py builder "Your question"
+python scripts/stats_cli.py --days 7 --trends
 ```
 
 ### Web UI
@@ -182,13 +232,28 @@ make run-ui
 # Open http://localhost:5050
 ```
 
-Features:
+**Core Features:**
 - Select agent (auto/builder/critic/closer)
 - Override model per request
 - Run chains with one click
 - View logs and metrics
 - Dark/light theme toggle
 - Export results
+
+**Enhanced Features (v0.11.1-4):**
+- **Code Syntax Highlighting**: Highlight.js with GitHub Dark theme for code blocks
+- **Keyboard Shortcuts**:
+  - `Ctrl+Enter` / `Cmd+Enter`: Submit form
+  - `Cmd+K` / `Ctrl+K`: Focus search
+  - `Esc`: Clear prompt
+  - `/`: Focus prompt
+- **Chain Progress Indicator**: Animated 3-stage pipeline (Builder → Critic → Closer)
+- **Enhanced Error Messages**: Context-aware solutions for 6+ error types
+- **Cost Tracking Dashboard**:
+  - Agent breakdown with usage percentages
+  - Model breakdown with token distribution
+  - Visual progress bars
+- **Memory Context Visibility**: See injected context tokens in real-time
 
 ### REST API
 
@@ -286,9 +351,11 @@ The orchestrator includes a persistent memory system that stores all conversatio
 - **Context Injection**: Relevant past conversations are injected into agent prompts
 - **Relevance Scoring**: Keyword-based matching with time decay
 - **Agent-Specific Memory**: Each agent can access its own conversation history
+- **Session Tracking (v0.11.0)**: Cross-conversation context with automatic session management
 - **Session Management**: Prevents same-session context repetition
 - **REST API**: Search and manage conversations via HTTP
 - **CLI Tools**: Command-line interface for memory operations
+- **Cost Tracking (v0.12.0)**: Comprehensive dashboard with agent/model breakdowns and trends
 
 ### How It Works
 
@@ -462,7 +529,8 @@ Every request creates a JSON log in `data/CONVERSATIONS/`:
   "completion_tokens": 500,
   "total_tokens": 650,
   "estimated_cost_usd": 0.0123,
-  "timestamp": "2024-01-01T12:00:00"
+  "timestamp": "2024-01-01T12:00:00",
+  "session_id": "cli-12345"
 }
 ```
 
@@ -470,10 +538,14 @@ Every request creates a JSON log in `data/CONVERSATIONS/`:
 
 ```bash
 make agent-last
+mao-last          # View last single conversation
+mao-last-chain    # View last chain execution (all stages)
+mao-logs 10       # Browse 10 recent conversations
 ```
 
-### Metrics
+### Metrics & Cost Tracking
 
+**REST API:**
 ```bash
 curl http://localhost:5050/metrics
 ```
@@ -484,6 +556,20 @@ Returns:
 - Estimated costs (USD)
 - Average duration
 - Agent usage breakdown
+
+**CLI Dashboard (v0.12.0):**
+```bash
+make stats                    # All-time statistics
+make stats DAYS=7             # Last 7 days
+make stats DAYS=30 TRENDS=1   # With daily cost trends
+```
+
+**Output includes:**
+- Overall stats (conversations, tokens, cost, duration)
+- Breakdown by agent (usage %, avg tokens, cost)
+- Breakdown by model (token distribution, percentages)
+- Daily cost trends with visual bars (--trends flag)
+- Fallback usage tracking
 
 ## 🧪 Testing
 
@@ -745,6 +831,14 @@ Built with:
 
 ---
 
-**Version**: 0.6.0
+**Version**: 0.12.0
 **Status**: Production Ready
+**Last Updated**: November 2025
 **Maintained**: Active
+
+**What's New in v0.12.0:**
+- ✅ CLI Feature Parity (rich formatting, syntax highlighting, cost tracking)
+- ✅ Web UI Enhancements (code highlighting, keyboard shortcuts, error messages)
+- ✅ Session Tracking (cross-conversation context)
+- ✅ 29 comprehensive tests passing
+- ✅ Both CLI and Web UI fully featured
