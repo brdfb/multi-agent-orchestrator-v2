@@ -63,7 +63,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="Multi-Agent Orchestrator",
     description="Multi-LLM agent system with CLI, API, and UI",
-    version="0.11.0",
+    version="1.0.1",  # Updated to reflect current version
     lifespan=lifespan,
 )
 
@@ -418,7 +418,7 @@ async def health():
     return {
         "status": overall_status,
         "service": "multi-agent-orchestrator",
-        "version": "1.0.0",
+        "version": "1.0.1",  # Updated to reflect v1.0.1 hotfixes
         "timestamp": datetime.now(timezone.utc).isoformat(),
 
         "providers": provider_status,
