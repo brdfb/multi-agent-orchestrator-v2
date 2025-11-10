@@ -117,9 +117,12 @@ ORIGINAL OUTPUT TO SUMMARIZE:
 {text}"""
 
         try:
-            # Use fast, cheap model for compression
+            # Use compression model from config (default: gemini-2.5-flash)
+            compression_config = self.config.get('compression', {})
+            compression_model = compression_config.get('model', 'gemini/gemini-2.5-flash')
+
             response = self.connector.call(
-                model="gemini/gemini-flash-latest",
+                model=compression_model,
                 system="You are a semantic compression agent. Extract structured summaries from technical outputs.",
                 user=compression_prompt,
                 temperature=0.1,
