@@ -8,7 +8,7 @@ from pathlib import Path
 # Add parent directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from config.settings import get_env_source
+from config.settings import get_env_source, is_provider_enabled, get_available_providers
 from core.agent_runtime import AgentRuntime
 from core.session_manager import get_session_manager
 from rich.console import Console
@@ -17,6 +17,84 @@ from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn
 import re
 
 console = Console()
+
+
+def validate_path_basic(path: str) -> Path:
+    """Basic sanity checks for file paths (not enterprise security)."""
+    resolved = Path(path).resolve()
+
+    # Block obvious sensitive files
+    blocked = ['.env', '.git', '.ssh', 'id_rsa', 'credentials', 'password']
+    if any(b in str(resolved).lower() for b in blocked):
+        matched = [b for b in blocked if b in str(resolved).lower()]
+        console.print(f"\n[bold red]🔒 Blocked:[/bold red] {path}")
+        console.print(f"   Matches blocked pattern: {matched}")
+        console.print("   Security policy prevents accessing this file")
+        sys.exit(1)
+
+    # Warn if outside CWD (but allow)
+    if not str(resolved).startswith(str(Path.cwd())):
+        console.print(f"\n[yellow]⚠️  Reading outside project:[/yellow] {resolved}")
+        # Allow it - just informational
+
+    return resolved
+
+
+def read_file_with_validation(file_path: str) -> str:
+    """Read file with validation and error handling."""
+    # Validate path
+    resolved = validate_path_basic(file_path)
+
+    # Check existence
+    if not resolved.exists():
+        console.print(f"\n[bold red]❌ File not found:[/bold red] {file_path}")
+        sys.exit(1)
+
+    # Check if it's a file
+    if not resolved.is_file():
+        console.print(f"\n[bold red]❌ Not a file:[/bold red] {file_path}")
+        sys.exit(1)
+
+    # Check size (10MB limit)
+    max_size = 10 * 1024 * 1024  # 10MB
+    if resolved.stat().st_size > max_size:
+        size_mb = resolved.stat().st_size / 1024 / 1024
+        console.print(f"\n[bold red]❌ File too large:[/bold red] {size_mb:.1f}MB")
+        console.print(f"   Maximum allowed: 10MB")
+        sys.exit(1)
+
+    # Read file
+    try:
+        with open(resolved, 'r', encoding='utf-8') as f:
+            content = f.read()
+        return content
+    except UnicodeDecodeError:
+        console.print(f"\n[bold red]❌ Cannot read file:[/bold red] Not a text file (binary?)")
+        sys.exit(1)
+    except Exception as e:
+        console.print(f"\n[bold red]❌ Error reading file:[/bold red] {e}")
+        sys.exit(1)
+
+
+def estimate_input_cost(text: str, model: str) -> tuple[int, float]:
+    """Estimate tokens and cost for input text."""
+    try:
+        import tiktoken
+        # Use generic encoding (works for most models)
+        enc = tiktoken.get_encoding("cl100k_base")
+        tokens = len(enc.encode(text))
+
+        # Rough cost estimate (input tokens)
+        # GPT-4o: $0.0025 per 1K input tokens
+        # Claude: $0.003 per 1K input tokens
+        cost = tokens * 0.000003  # Average
+
+        return tokens, cost
+    except:
+        # Fallback: rough estimate
+        tokens = len(text) // 4
+        cost = tokens * 0.000003
+        return tokens, cost
 
 
 def show_error_with_solution(error_msg: str):
@@ -111,14 +189,26 @@ def main():
         epilog="""
 Examples:
   mao-chain "Design a REST API"
-  mao-chain "Review code" builder critic
-  mao-chain "Analyze system" --save-to report.md
+  mao-chain --file design.md builder critic
+  mao-chain "Review code" --save-to report.md
+  mao-chain "Task" --model gpt-4o --max-usd 1.00
   mao-chain  (interactive mode)
         """
     )
-    parser.add_argument("prompt", nargs="?", help="The prompt to process")
+    parser.add_argument("prompt", nargs="?", help="The prompt to process (or use --file)")
     parser.add_argument("stages", nargs="*", help="Custom stages (e.g., builder critic)")
+
+    # File I/O
+    parser.add_argument("--file", type=str, help="Read prompt from file")
     parser.add_argument("--save-to", "-o", metavar="FILE", help="Save output to file")
+
+    # Model override
+    parser.add_argument("--model", type=str, help="Override default models for all stages")
+
+    # Cost guardrails
+    parser.add_argument("--max-usd", type=float, help="Abort if estimated cost exceeds threshold")
+    parser.add_argument("--max-input-tokens", type=int, help="Reject prompts over N tokens")
+    parser.add_argument("--force", action="store_true", help="Bypass cost limits (logged)")
 
     # If no args, go interactive
     if len(sys.argv) == 1:
@@ -135,15 +225,27 @@ Examples:
             sys.exit(0)
         stages = None
         save_to = None
+        override_model = None
+        args = None  # No args in interactive mode
     else:
         args = parser.parse_args()
-        prompt = args.prompt
-        stages = args.stages if args.stages else None
-        save_to = args.save_to
 
-        if not prompt:
+        # Get prompt from file or argument
+        if args.file:
+            prompt = read_file_with_validation(args.file)
+            # Optionally combine with additional prompt
+            if args.prompt:
+                prompt = f"{prompt}\n\n{args.prompt}"
+        elif args.prompt:
+            prompt = args.prompt
+        else:
+            console.print("\n[bold red]❌ Error:[/bold red] Must provide either prompt or --file")
             parser.print_help()
             sys.exit(1)
+
+        stages = args.stages if args.stages else None
+        save_to = args.save_to
+        override_model = args.model
 
     # Validate stages if provided
     if stages:
@@ -153,6 +255,43 @@ Examples:
                 console.print(f"[bold red]Error:[/bold red] Invalid agent '{stage}'")
                 console.print(f"Valid agents: {', '.join(valid_agents)}")
                 sys.exit(1)
+
+    # Validate model override (only if args exists - not in interactive mode)
+    if args and override_model:
+        # Check if provider is enabled
+        provider = override_model.split('/')[0] if '/' in override_model else 'openai'
+        if not is_provider_enabled(provider):
+            console.print(f"\n[bold red]❌ Provider '{provider}' is disabled[/bold red]")
+            available = get_available_providers()
+            console.print(f"   Available providers: {', '.join(available)}")
+            sys.exit(1)
+
+    # Cost guardrails - pre-flight check (only if args exists)
+    if args and (args.max_input_tokens or args.max_usd):
+        input_tokens, estimated_cost = estimate_input_cost(prompt, override_model or "gpt-4o")
+
+        # Token limit check
+        if args.max_input_tokens and input_tokens > args.max_input_tokens:
+            if not args.force:
+                console.print(f"\n[bold red]❌ Input exceeds limit:[/bold red] {input_tokens} > {args.max_input_tokens} tokens")
+                console.print(f"   Estimated cost: [yellow]${estimated_cost:.3f}[/yellow]")
+                console.print(f"   Use [cyan]--force[/cyan] to override")
+                sys.exit(1)
+            else:
+                console.print(f"\n[yellow]⚠️  FORCE:[/yellow] Bypassing token limit ({input_tokens} > {args.max_input_tokens})")
+
+        # Cost limit check (chain typically 3x single agent cost)
+        if args.max_usd:
+            chain_estimated_cost = estimated_cost * 3  # Rough chain estimate
+            if chain_estimated_cost > args.max_usd:
+                if not args.force:
+                    console.print(f"\n[bold red]❌ Estimated chain cost exceeds budget:[/bold red] ~${chain_estimated_cost:.3f} > ${args.max_usd:.2f}")
+                    console.print(f"   Input tokens: {input_tokens}")
+                    console.print(f"   Chain multiplier: ~3x single agent")
+                    console.print(f"   Use [cyan]--force[/cyan] to override or reduce prompt size")
+                    sys.exit(1)
+                else:
+                    console.print(f"\n[yellow]⚠️  FORCE:[/yellow] Bypassing cost limit (~${chain_estimated_cost:.3f} > ${args.max_usd:.2f})")
 
     # Show environment source
     env_source = get_env_source()
@@ -165,7 +304,11 @@ Examples:
 
     stage_list = stages or ["builder", "critic", "closer"]
     console.print(f"[bold]🔗 Running chain:[/bold] [cyan]{' → '.join(stage_list)}[/cyan]")
-    console.print(f"[bold]📝 Prompt:[/bold] {prompt}")
+    if args and args.file:
+        console.print(f"[bold]📄 Input file:[/bold] [yellow]{args.file}[/yellow]")
+    console.print(f"[bold]📝 Prompt:[/bold] {prompt[:100]}..." if len(prompt) > 100 else f"[bold]📝 Prompt:[/bold] {prompt}")
+    if override_model:
+        console.print(f"[bold]🔧 Model override:[/bold] [yellow]{override_model}[/yellow]")
     console.print()
 
     # Progress callback with rich formatting
@@ -187,7 +330,8 @@ Examples:
             prompt=prompt,
             stages=stages,
             progress_callback=show_progress,
-            session_id=session_id  # v0.11.0
+            session_id=session_id,  # v0.11.0
+            override_model=override_model  # v0.13.0
         )
     except Exception as e:
         console.print(f"\n[bold red]❌ Chain failed:[/bold red] {str(e)}")
@@ -221,6 +365,9 @@ Examples:
     # Save to file if requested
     if save_to:
         try:
+            # Validate write path
+            validate_path_basic(save_to)
+
             output_path = Path(save_to)
             with open(output_path, "w", encoding="utf-8") as f:
                 # Add header

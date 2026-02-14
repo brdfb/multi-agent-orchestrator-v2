@@ -4,6 +4,39 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 🆕 Recent Changes (For Claude Code)
 
+### 2025-11-11: CLI Feature Parity (v0.12.0) - Rich Formatting & Cost Tracking
+**Goal**: Bring CLI to feature parity with Web UI (syntax highlighting, error messages, cost tracking)
+
+**Key Features**:
+1. **Rich Terminal Formatting** - Libraries: Rich, Colorama, Tabulate, Pygments
+   - Colored output (success=green, error=red, info=cyan, warning=yellow)
+   - Code syntax highlighting (monokai theme, 300+ languages)
+   - Memory context visibility (session + knowledge breakdown with token counts)
+   - Boxed sections and progress indicators
+
+2. **Enhanced Error Messages** - 6+ error types with actionable solutions
+   - API key errors → .env configuration guide
+   - Rate limits → wait times and alternative providers
+   - Timeouts → optimization tips
+   - Model not found → available model list
+
+3. **Cost Tracking Dashboard** (scripts/stats_cli.py - 331 lines)
+   - Commands: `make stats`, `make stats DAYS=7`, `make stats DAYS=30 TRENDS=1`
+   - Overall stats: conversations, tokens, cost, avg duration
+   - Agent breakdown: usage %, request count, cost per agent
+   - Model breakdown: token distribution with percentages
+   - Daily cost trends with visual bars
+
+**Dependencies**: `rich>=13.7.0`, `colorama>=0.4.6`, `tabulate>=0.9.0`, `pygments>=2.17.0`
+
+**Files**: scripts/stats_cli.py (+331), agent_runner.py (+80), chain_runner.py (+120), requirements.txt (+4)
+
+**Post-Release Fixes (v1.0.1)**:
+- Tool usage policy added to all agents (prevents LLM hallucination)
+- COST_TABLE updated with claude-sonnet-4-5 and gemini-2.5-flash
+- Fixed hardcoded compression model - now reads from config
+- Fixed Makefile venv paths
+
 ### 2025-11-09: Session Tracking & Dual-Context Model (v0.11.0)
 **Feature**: ChatGPT-style conversation continuity with intelligent context aggregation
 **Problem Solved**: Stateless architecture → Stateful sessions across CLI, API, and Web UI
@@ -36,409 +69,70 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **See**: Full documentation in "Session Tracking & Conversation Continuity" section below
 
-### 2025-11-09: P2 UI Improvements (v0.11.4) - Error Messages, Shortcuts, Cost Tracking
-**Context**: Friend's UI/UX review - completing P2 medium priority items (7 hours total)
+### 2025-11-09: UI/UX Improvements (v0.11.2-4)
+**Progress**: Fixed 9/10 issues from friend's comprehensive review (score: 6/10 → 9/10)
 
-**1. Enhanced Error Messages** (ui/templates/index.html:792-883)
-- **Smart Error Detection**: Pattern matching on error messages
-  ```javascript
-  function showError(error, context = '') {
-      const errorLower = error.message.toLowerCase();
+**v0.11.4 - P2 Medium Priority** (7h):
+- Enhanced error messages (6+ types with context-aware solutions)
+- Keyboard shortcuts: `Ctrl+Enter` (submit), `Ctrl+K` (search), `Esc` (clear), `/` (focus)
+- Cost tracking with visual progress bars (agent/model breakdown, auto-updates every 10s)
+- Files: ui/templates/index.html (+253 lines)
 
-      if (errorLower.includes('api key') || errorLower.includes('unauthorized')) {
-          // Show .env configuration guide
-      } else if (errorLower.includes('rate limit') || errorLower.includes('429')) {
-          // Show wait time and alternatives
-      } else if (errorLower.includes('timeout')) {
-          // Show optimization tips
-      }
-      // ... 6+ error types handled
-  }
-  ```
-- **Context-Aware Solutions**:
-  - API key → `.env` file configuration with all providers
-  - Deprecated model → Current model suggestions
-  - Rate limit → Wait times, alternative providers
-  - Network → Server status checklist
-  - Timeout → Prompt optimization tips
-  - Generic → Browser console, GitHub issues
-- **HTMX Integration**: Global `responseError` event handler
-- **Impact**: Users get actionable fixes instead of generic error codes
+**v0.11.3 - P1 High Priority** (4h):
+- Code syntax highlighting (Highlight.js 11.9.0, theme-aware, 300+ languages)
+- Chain progress indicator (3-stage progress bar with pulse animation)
+- Files: ui/templates/index.html (+244 lines)
 
-**2. Keyboard Shortcuts** (ui/templates/index.html:885-926)
-- **Power User Navigation**:
-  ```javascript
-  document.addEventListener('keydown', (e) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
-          // Submit form
-      } else if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
-          // Focus search (ChatGPT-style)
-      } else if (e.key === 'Escape') {
-          // Clear textarea
-      } else if (e.key === '/' && !typing) {
-          // Focus prompt (Reddit-style)
-      }
-  });
-  ```
-- **Shortcuts**:
-  - `Ctrl/Cmd + Enter`: Submit form
-  - `Ctrl/Cmd + K`: Focus search
-  - `Esc`: Clear prompt
-  - `/`: Focus prompt (when not typing)
-- **Platform-Aware**: Detects Mac vs Windows/Linux
-- **Impact**: 3-5x faster navigation for power users
-
-**3. Enhanced Cost Tracking** (ui/templates/index.html:1161-1252)
-- **Agent Breakdown with Visual Progress Bars**:
-  ```javascript
-  // Calculate percentage for each agent
-  const percentage = (data.tokens / totalTokens * 100).toFixed(1);
-  const avgTokens = Math.round(data.tokens / data.count);
-
-  // Render with progress bar
-  <div class="progress-bar" style="width: ${percentage}%"></div>
-  ```
-- **Displays**:
-  - 📊 Cost Breakdown by Agent (percentage bars, avg tokens/req)
-  - 🤖 Usage by Model (token counts, percentage of total)
-  - Request counts and efficiency metrics
-- **Features**:
-  - Auto-updates every 10 seconds
-  - Visual progress bars with percentages
-  - Average tokens per request
-  - Sorted by usage
-- **Impact**: Better budget visibility and optimization insights
-
-**Files Changed**:
-- ui/templates/index.html (+253 lines, -8 lines)
-
-**All P1-P2 Complete** (Friend's review: 10 issues identified, 9 fixed):
-- ✅ P0: Model list, Memory visibility (v0.11.2)
-- ✅ Phase 1: Copy, Search, Tooltips (v0.11.2)
-- ✅ P1: Syntax highlighting, Progress indicator (v0.11.3)
-- ✅ **P2: Error messages, Shortcuts, Cost tracking (v0.11.4)** ← NEW
-
-**Remaining** (P3 optional):
-- Conversation threading UI (2 days, backend ready)
-- WebSocket real-time updates (1 day, incremental improvement)
-
-### 2025-11-09: P1 UI Improvements (v0.11.3) - Code Highlighting & Progress
-**Context**: Friend's UI/UX review identified 10 issues, implementing P1 high-priority items (4 hours total)
-
-**1. Code Syntax Highlighting** (ui/templates/index.html)
-- **Library**: Highlight.js 11.9.0 (29 KB) - industry standard for syntax highlighting
-- **Implementation**:
-  ```javascript
-  // Convert markdown code blocks to HTML
-  function formatResponse(text) {
-      text = text.replace(/```(\w+)?\n([\s\S]*?)```/g, (match, lang, code) => {
-          const language = lang || 'plaintext';
-          return `<pre><code class="language-${language}">${escapeHtml(code)}</code></pre>`;
-      });
-      return text;
-  }
-
-  // Apply Highlight.js after rendering
-  function highlightCode(element) {
-      element.querySelectorAll('pre code').forEach(block => {
-          hljs.highlightElement(block);
-      });
-  }
-  ```
-- **Features**:
-  - Auto-detects language from markdown fences (```python, ```javascript)
-  - Inline code (`code`) styled with background
-  - Theme-aware: GitHub Dark (dark mode) / Light background (light mode)
-  - Applied to both `/ask` and `/chain` responses
-- **Impact**: Code snippets now readable, professional appearance matching ChatGPT/Claude
-
-**2. Chain Progress Indicator** (ui/templates/index.html:188-288)
-- **Visual 3-Stage Progress Bar**: Builder 🔨 → Critic 🔍 → Closer ✅
-- **Implementation**:
-  ```javascript
-  function showChainProgress(currentStage) {
-      // Renders: pending → active (pulse animation) → completed (checkmark)
-      // Status text: "Running Builder...", "Running Critic...", etc.
-  }
-
-  // Simulated progress (API doesn't support SSE yet)
-  setInterval(() => updateProgress(), 15000); // 15s per stage estimate
-  ```
-- **Features**:
-  - Animated pulse effect on active stage (green glow, @keyframes)
-  - Completed stages show checkmarks (✓)
-  - Real-time status text below progress bar
-  - Progress bar with connecting line between stages
-  - Cleared when chain completes
-- **Impact**: Users see progress during 30-90s chains, reduces abandonment/confusion
-
-**Files Changed**:
-- ui/templates/index.html (+244 lines, -4 lines)
-
-**Technical Notes**:
-- Highlight.js loaded from CDN (no npm install)
-- Performance: <50ms per response highlighting
-- Progress simulation: 15s intervals (rough estimate, no backend changes needed)
-- Future: Can be upgraded to Server-Sent Events (SSE) for real-time updates
-
-**Remaining Work** (not yet requested):
-- P2: Keyboard shortcuts (2 hours)
-- P2: Conversation threading UI (2 days)
-- P2: Enhanced cost tracking (4 hours)
-- P3: WebSocket real-time updates (1 day)
-
-### 2025-11-09: UI/UX Improvements (v0.11.2)
-**Context**: Friend's comprehensive UI analysis identified 10 issues (overall score: 6/10)
-**Work Done**: Fixed 2 P0 critical issues + 3 Phase 1 quick wins (1 hour total)
-
-**P0 Critical Fixes**:
-1. **Outdated Model List** (ui/templates/index.html:476-482)
-   - Problem: UI showed deprecated models causing API errors
-   - Fix: `claude-3-5-sonnet-20241022` → `claude-sonnet-4-5`, `gemini-1.5-pro` → `gemini-2.5-flash`
-   - Impact: Model override now works without 404 errors
-
-2. **Memory Context Invisibility** (ui/templates/index.html:602-712)
-   - Problem: "🧠 320 tokens" badge with no explanation
-   - Fix: Clickable badge with popup showing session vs knowledge breakdown
-   - Display: "📝 Session: 150 tokens (3 msgs)" + "🔍 Knowledge: 170 tokens (2 msgs)"
-   - Implementation: `showMemoryDetails()` function with alert (simple, 30 min implementation)
-
-**Phase 1 Quick Wins**:
-3. **Copy Button** (ui/templates/index.html:585-662)
-   - Added 📋 button to all responses (single agent + chain)
-   - Visual feedback: "✓ Copied!" with green highlight for 2s
-   - Uses Clipboard API with error handling
-
-4. **Search Placeholder** (ui/templates/index.html:518)
-   - Changed: "Search by keyword..." → "Search conversations (semantic)..."
-   - Clarifies semantic search behavior
-
-5. **Button Tooltips** (ui/templates/index.html:475, 491-492)
-   - Send: "Send to selected agent"
-   - Run Chain: "Run multi-agent pipeline: builder → critic → closer (thorough analysis)" + ⓘ
-   - Model Override: "Override the agent's default model (useful for testing different LLMs)" + ⓘ
-
-**Files Changed**: ui/templates/index.html (+78 lines, -12 lines)
-
-**Remaining Work** (not requested yet):
-- P1: Code syntax highlighting (1 hour)
-- P1: Chain progress indicator (3 hours)
-- P2: Keyboard shortcuts (2 hours)
-- P2: Conversation threading UI (2 days)
+**v0.11.2 - P0 Critical** (1h):
+- Updated model list (claude-sonnet-4-5, gemini-2.5-flash)
+- Memory context visibility (clickable badge with session/knowledge breakdown)
+- Copy button, search placeholder, button tooltips
+- Files: ui/templates/index.html (+78 lines)
 
 ### 2025-11-09: Code Quality Fixes (v0.11.1)
-**Context**: Friend's detailed code review (45 min analysis) identified 11 issues
-**Status**: 5 already fixed, 4 valid bugs fixed now, 2 design choices (not bugs)
-
-**P0 Critical: Token Budget Overflow** (core/context_aggregator.py:416-450)
-- Problem: Regression of Bug #13 - used 4 chars/token approximation (inaccurate for Chinese/emoji)
-- Impact: Chinese/emoji text exceeds budget by 2x
-- Fix: Binary search with tiktoken for precise token counting
-- Before:
-  ```python
-  words = text.split()
-  truncated = " ".join(words[:target_tokens])  # ❌ Assumes 1 word = 1 token
-  ```
-- After:
-  ```python
-  # Binary search for optimal truncation point
-  while left <= right:
-      mid = (left + right) // 2
-      candidate = " ".join(words[:mid])
-      candidate_tokens = count_tokens(candidate)  # ✅ Accurate tiktoken
-      if candidate_tokens <= target_tokens:
-          best_truncation = candidate
-          left = mid + 1
-      else:
-          right = mid - 1
-  ```
-
-**P1 High: Silent Exception Handling** (core/memory_engine.py, core/logging_utils.py)
-- Problem: 6 `except Exception:` blocks with no logging
-- Impact: Debugging nightmare when errors occur
-- Fix: Added `logger.warning()` to all silent handlers
-- Example:
-  ```python
-  # Before
-  except Exception:
-      pass  # ❌ Silent failure
-
-  # After
-  except Exception as e:
-      logger.warning(f"Failed to generate embedding: {e}")  # ✅ Logged
-      pass
-  ```
-
-**P2 Medium: Empty Context Fallback** (core/context_aggregator.py:225-244)
-- Problem: Returns empty list when no semantic matches above threshold
-- Fix: Fallback to most recent conversation (score 0.05) with logging
-- Ensures users always get some context, even if not highly relevant
-
-**P2 Medium: Database Connection Leaks** (core/memory_backend.py)
-- Problem: `conn.close()` not in `try/finally` (10 methods)
-- Fix: Wrapped all DB operations in try/finally
-- Example:
-  ```python
-  # Before
-  def get_recent(self, limit):
-      conn = self._get_connection()
-      cursor = conn.cursor()
-      cursor.execute("SELECT ...")
-      rows = cursor.fetchall()
-      conn.close()  # ❌ Not in finally - leaks on error
-      return rows
-
-  # After
-  def get_recent(self, limit):
-      conn = self._get_connection()
-      cursor = conn.cursor()
-      try:
-          cursor.execute("SELECT ...")
-          rows = cursor.fetchall()
-          return rows
-      finally:
-          conn.close()  # ✅ Always closes
-  ```
-
-**Issues Already Fixed** (v0.10.0-v0.11.0):
-- Multi-critic parallel execution (v0.9.0)
-- Convergence detection (v0.8.0)
-- No-progress detection (v0.8.0)
-- Zero-critic fallback (v0.10.0)
-- Null value checks (v0.10.1)
-
-**Files Changed**:
-- core/context_aggregator.py (+35 lines)
-- core/memory_engine.py (+5 lines)
-- core/logging_utils.py (+2 lines)
-- core/memory_backend.py (10 methods refactored)
-
-### 2025-11-08: Token Budget Overflow Fix (v0.10.2) - ACTUAL ROOT CAUSE
-**Problem**: Memory context injection still returning 0 tokens even after v0.10.1 fixes
-**Discovery**: Friend's builder analysis + detailed debugging revealed token budget overflow
-**Root Cause**: `_estimate_tokens()` counted full responses (2000-4000 tokens) but budget only 600
-**Debug Evidence**:
-- 10 conversations passed min_relevance filter (similarity 0.151-0.655)
-- Top conversation: similarity 0.655 (excellent!), estimated 3389 tokens → ❌ Exceeds 600 budget
-- 9/10 high-scoring conversations rejected due to budget overflow
-- Only 1 tiny conversation (21 tokens) picked → explains why injected_context_tokens still 0
-
-**Fix**: Truncate responses to first 300 chars in memory context
-- `core/memory_engine.py:420-426` - Truncate in `_estimate_tokens()`
-- `core/memory_engine.py:446-447` - Truncate in `_format_context()`
-
-**Impact**: Now multiple high-relevance conversations fit within 600 token budget
-
-**Also Fixed**:
-- Bug #11: Updated Anthropic models to `claude-sonnet-4-5` (was `claude-3-5-sonnet-20241022` - deprecated)
-- Bug #12: Updated Gemini models to `gemini-2.5-flash` (was `gemini-2.0-flash` - outdated)
-
-**Why This Matters**: v0.10.1 fixed embedding persistence, but context was still empty due to budget overflow. v0.10.2 actually makes memory injection work end-to-end.
-
-### 2025-11-08: Memory Context Injection Fix (v0.10.1) - CRITICAL BUG
-**Problem**: Memory system completely non-functional - 0 tokens injected despite 100+ conversations
-**Discovered By**: External tester during "idiot testing" session
-**Root Causes**:
-  1. Backend `_row_to_dict()` missing `embedding` column → embeddings never retrieved
-  2. Lazy generation using non-existent `self.backend._conn` → embeddings never persisted
-  3. `min_relevance: 0.3` too strict for semantic search (top score: 0.194)
+**Status**: Fixed 4/11 issues identified in code review (5 already fixed, 2 design choices)
 
 **Fixes**:
-- Added `embedding` field to `_row_to_dict()` (core/memory_backend.py:446)
-- Created `update_embedding()` method in SQLiteBackend (core/memory_backend.py:377-401)
-- Updated lazy generation to use proper method (core/memory_engine.py:590)
-- Lowered `min_relevance` from 0.3 to 0.15 (config/agents.yaml:172)
+- P0: Token budget overflow - replaced 4 chars/token heuristic with tiktoken binary search (accurate for Chinese/emoji)
+- P1: Silent exception handling - added `logger.warning()` to 6 `except Exception:` blocks
+- P2: Empty context fallback - fallback to most recent conversation when no semantic matches
+- P2: Database connection leaks - wrapped 10 methods in try/finally for guaranteed `conn.close()`
 
-**Why 0.15?** Semantic similarity scores are naturally lower than keyword overlap. Cosine similarity of 0.15-0.20 can still represent meaningful semantic connections.
+**Files**: context_aggregator.py (+35), memory_engine.py (+5), logging_utils.py (+2), memory_backend.py (10 methods)
 
-**Test Results**:
-```bash
-# Before fix:
-"injected_context_tokens": 0  # Every conversation
+### 2025-11-08: Memory System Fixes (v0.10.1-2) - CRITICAL BUGS
+**v0.10.2 - Token Budget Overflow**:
+- Problem: Full responses (2000-4000 tokens) exceeded 600-token budget
+- Fix: Truncate to first 300 chars in memory context
+- Impact: Multiple high-relevance conversations now fit within budget
+- Also: Updated models to claude-sonnet-4-5 and gemini-2.5-flash
 
-# After fix:
-"injected_context_tokens": 269  # Context working!
-```
+**v0.10.1 - Memory Injection Non-Functional**:
+- Root causes: Missing `embedding` column, lazy generation broken, `min_relevance: 0.3` too strict
+- Fixes: Added embedding field, created `update_embedding()` method, lowered threshold to 0.15
+- Result: 0 tokens → 269 tokens injected
+- Also: Migrated FastAPI to `lifespan` context manager, replaced `len(text)//4` with tiktoken
 
-**Verification**:
-```bash
-# Test memory injection
-make agent-ask AGENT=builder Q="Implement JWT auth"
-sleep 5
-make agent-ask AGENT=builder Q="How to refresh tokens?"
+### 2025-11-05: Semantic Search & System Improvements (v0.4.0-0.5.0)
+**Semantic Search (v0.4.0)**:
+- Model: paraphrase-multilingual-MiniLM-L12-v2 (50+ languages, 384 dims)
+- Why: Turkish morphology broke keyword search ("chart" ≠ "chart'a")
+- Strategies: semantic (pure), hybrid (70% semantic + 30% keyword), keywords (old)
+- Performance: First load ~30s (420MB download), subsequent <1s, search <100ms
+- Files: embedding_engine.py (NEW), memory_engine.py (+3 methods), migrate_add_embeddings.py (NEW)
 
-# Check last log
-cat data/CONVERSATIONS/*.json | tail -1 | jq '.injected_context_tokens'
-# Should be > 0
-```
+**Memory Storage Fix** (Critical):
+- Problem: Conversations not persisting - `LLMResponse` missing `estimated_cost` field
+- Hidden by: Bare `except: pass` silencing exceptions
+- Lesson: Always log exceptions
 
-### 2025-11-08: Quick Wins (v0.10.1)
-**Bug #8 - FastAPI Deprecation**: Migrated from `@app.on_event()` to `lifespan` context manager
-**Bug #9 - Token Standardization**: Replaced `len(text) // 4` heuristic with `tiktoken` (44% more accurate)
+**Token Limit Optimization** (v0.5.0):
+- Builder: 2500 → 9000 tokens (3.6x), Critic: 2000 → 7000 (3.5x), Closer: 1800 → 9000 (5x)
+- Why 9K not 32K: 4x cost savings, 3x speed improvement, 1K safety buffer
 
-### 2025-11-05: Semantic Search (v0.4.0) - MULTILINGUAL SUPPORT
-**Feature**: Embedding-based semantic search for memory context retrieval
-**Model**: paraphrase-multilingual-MiniLM-L12-v2 (384 dimensions, 50+ languages)
-**Why**: Keyword-based search failed with Turkish prompts (0.25 overlap < 0.3 threshold)
-  - Example: "chart" vs "chart'a" counted as different keywords
-  - Semantic approach: understands meaning despite morphological differences
-
-**Files Changed**:
-- `core/embedding_engine.py` (NEW) - Embedding generation, serialization, cosine similarity
-- `core/memory_engine.py` - Added `_score_semantic()`, `_score_hybrid()`, `_get_or_generate_embedding()`
-- `scripts/migrate_add_embeddings.py` (NEW) - Adds `embedding` BLOB column to conversations table
-- `config/memory.yaml` - Changed `strategy_default: "keywords"` → `"semantic"`
-- `config/agents.yaml` - Builder now uses `strategy: "semantic"`
-- `requirements.txt` - Added `sentence-transformers>=2.2.2` (+1.7GB deps)
-
-**Usage**:
-```bash
-# Test semantic search
-pytest tests/test_memory_engine.py::test_semantic_search -v
-
-# Run migration (if needed)
-python scripts/migrate_add_embeddings.py
-
-# Check model status
-python -c "from core.embedding_engine import get_embedding_engine; print(get_embedding_engine().model_name)"
-```
-
-**Performance**:
-- First load: ~30s (downloads 420MB model)
-- Subsequent: <1s (cached)
-- Embedding: ~50ms per conversation
-- Search: <100ms for 500 candidates
-
-**Strategies**: `semantic` (pure embedding), `hybrid` (70% semantic + 30% keyword), `keywords` (old)
-
-**GOTCHA**: Embeddings generated on-demand for old conversations (NULL → lazy generation)
-
-### 2025-11-05: Memory System Fix (CRITICAL)
-**Problem**: Memory storage silently failing - conversations not being persisted to database
-**Root Cause**: `LLMResponse` dataclass missing `estimated_cost` field
-**Symptom**: `agent_runtime.py:271` catching exceptions silently with bare `except: pass`
-**Solution**: Added `estimated_cost: float = 0.0` to `LLMResponse` (llm_connector.py:23)
-**Lesson**: Never use bare `except: pass` - at minimum log the error. Added debug logging.
-**Verification**: Test with `mao auto "test"` then check `sqlite3 data/MEMORY/conversations.db "SELECT COUNT(*) FROM conversations"`
-
-### 2025-11-05: Truncation Fix & Token Limit Optimization
-**Problem**: Agent responses cut off mid-sentence (hitting max_tokens limit)
-**Example**: Builder response was 2496/2500 tokens - incomplete code examples
-**Solution**: Progressive token limit increases in `config/agents.yaml`:
-- Builder: 2500 → 4096 → 8000 → 9000 (3.6x increase)
-- Critic: 2000 → 3072 → 6000 → 7000 (3.5x increase)
-- Closer: 1800 → 2560 → 8000 → 9000 (5x increase)
-**Rationale**: Modern LLMs need space for comprehensive code examples + explanations. Final limits include 1K buffer for complex responses while maintaining cost efficiency (9K chosen over 32K max for 4x cost savings and 3x speed improvement).
-
-### 2025-11-05: New User-Facing Tools
-Added CLI tools (user doesn't need to know Makefile syntax):
-- `mao-chain "prompt"` - Interactive chain runner (easier than `make agent-chain Q="..."`)
-- `mao-chain --save-to file.md` - Save full output for documentation
-- `mao-last-chain` - View complete chain execution (all stages)
-- `mao-logs 10` - Browse recent conversation history
-- `scripts/view_logs.py` - Comprehensive log viewer (powers above aliases)
-
-**Implementation**: Added argparse to chain_runner.py, created view_logs.py, updated .bashrc aliases
+**New CLI Tools**:
+- `mao-chain`, `mao-last-chain`, `mao-logs` - User-friendly alternatives to Makefile commands
+- Files: view_logs.py (NEW), chain_runner.py (+argparse)
 
 ## System Overview
 
@@ -783,518 +477,87 @@ pytest tests/test_memory_api.py -v
 
 ## Session Tracking & Conversation Continuity (v0.11.0+)
 
-The orchestrator implements **ChatGPT-style session tracking** for conversation continuity across multiple interactions. Unlike the original memory system (which only used semantic search), v0.11.0 introduces a **dual-context model** that prioritizes recent messages from the same session while still leveraging cross-session knowledge.
+**Problem Solved**: Stateless → Stateful sessions with dual-context model (session + knowledge)
 
-### Problem Solved
+**Dual-Context Architecture**:
+1. **Session Context** (Priority 1): Recent messages from same session, up to 75% of budget (450/600 tokens)
+2. **Knowledge Context** (Priority 2): Semantic search from other sessions, uses remaining tokens (flexible)
 
-**Before v0.11.0** (Stateless):
-- Every request treated as new conversation
-- Memory only retrieved semantically similar past conversations (no session awareness)
-- Multi-turn conversations had no continuity: "add red to the chart" → "What chart?"
-
-**After v0.11.0** (Stateful):
-- Sessions track related conversations
-- Recent messages from same session get priority in context
-- Cross-session knowledge still available via semantic search
-- Natural conversation flow: "create a chart" → "add red color" → understands reference
-
-### Architecture: Dual-Context Model
-
-The system aggregates two types of context with priority-based token allocation:
-
-**1. Session Context** (Priority 1):
-- Recent messages from **same session** (conversation continuity)
-- Up to 75% of token budget
-- Ordered chronologically (oldest to newest)
-- Format: "3 messages ago: User: '...' Assistant: '...'"
-
-**2. Knowledge Context** (Priority 2):
-- Semantic search from **other sessions** (cross-session knowledge)
-- Uses remaining tokens (flexible allocation)
-- Ordered by relevance score
-- Format: "Relevance: 0.82, 2 days ago: Topic: '...' Summary: '...'"
-
-**Token Budget Strategy** (Flexible Allocation):
-```
-Max Budget: 600 tokens
-Session Max: 450 tokens (75% cap)
-
-Case 1: Session needs 300 tokens
-→ Session: 300, Knowledge: 300 (uses remaining)
-
-Case 2: Session needs 500 tokens
-→ Session: 450 (capped at 75%), Knowledge: 150
-
-Case 3: Session needs 100 tokens
-→ Session: 100, Knowledge: 500 (uses remaining)
-```
-
-This prevents session context overflow while maximizing total context usage.
+**Token Budget Example** (600 total):
+- Session needs 300 → Session: 300, Knowledge: 300 (uses remaining)
+- Session needs 500 → Session: 450 (75% cap), Knowledge: 150
+- Session needs 100 → Session: 100, Knowledge: 500 (uses remaining)
 
 ### Core Components
 
-#### SessionManager (`core/session_manager.py`)
-Manages session lifecycle: generation, validation, storage, cleanup.
+**SessionManager** (`core/session_manager.py`):
+- Lifecycle: generation, validation, storage, cleanup
+- Formats: CLI=`cli-{pid}-{timestamp}`, WebUI=`ui-{timestamp}-{random}`, API=user-provided
+- CLI sessions: 2h idle timeout, PID-based reuse
+- Cleanup: Probabilistic (10% calls), 7-day retention, orphan deletion
 
-**Key Methods**:
-```python
-session_manager = get_session_manager()
+**ContextAggregator** (`core/context_aggregator.py`):
+- Aggregates session + knowledge context
+- Returns formatted context + metadata (token counts, message counts)
+- Flow: Query session (last 5 msgs) → Query knowledge (semantic) → Apply budget (75% cap) → Truncate → Format
 
-# Auto-generate or validate session
-session_id = session_manager.get_or_create_session(
-    session_id=None,  # None = auto-generate
-    source="cli",     # "cli", "ui", "api"
-    metadata={"pid": 12345}
-)
+### Session Behavior
 
-# Validate session ID format
-session_manager.validate_session_id("cli-12345-20251109120000")
-# Raises ValueError if invalid
-
-# Save session to database
-session_manager.save_session(
-    session_id="cli-12345-20251109120000",
-    source="cli",
-    metadata={"pid": 12345}
-)
-```
-
-**Session ID Formats**:
-- **CLI**: `cli-{pid}-{timestamp}` (e.g., `cli-12345-20251109120000`)
-- **Web UI**: `ui-{timestamp}-{random}` (e.g., `ui-1699516800-a7b3c2d1`)
-- **API**: User-provided or auto-generated with random UUID
-
-**Duration-Based CLI Sessions** (Not Hourly Reset):
-- Checks for recent session with same PID within 2 hours
-- If found → reuses session ID (conversation continues)
-- If not → generates new session ID (new conversation)
-- Example: PID 12345 at 10:00 AM → same session at 10:30 AM, new session at 12:30 PM
-
-**Cleanup Strategy** (Probabilistic):
-- 10% of `save_session()` calls trigger cleanup
-- Deletes sessions inactive for >7 days
-- Deletes conversations orphaned by session deletion
-- Not database trigger (avoids performance overhead)
-
-#### ContextAggregator (`core/context_aggregator.py`)
-Implements dual-context model with priority-based token budget.
-
-**Key Method**:
-```python
-aggregator = ContextAggregator()
-
-context_text, metadata = aggregator.get_full_context(
-    prompt="Add red color to the chart",
-    session_id="cli-12345-20251109120000",
-    config=agent_memory_config  # from agents.yaml
-)
-
-# context_text contains formatted context:
-# [SESSION CONTEXT - Recent conversation]
-# [3 messages ago]
-# User: "Create a bar chart with matplotlib"
-# Assistant: "Here's your chart code..."
-#
-# [1 message ago]
-# User: "Make it bigger"
-# Assistant: "Updated chart size..."
-#
-# [KNOWLEDGE CONTEXT - Relevant past topics]
-# [Relevance: 0.82, 2 days ago]
-# Topic: Matplotlib customization best practices
-# Summary: "Use rcParams for global settings..."
-
-# metadata contains token counts:
-# {
-#     'session_context_tokens': 250,
-#     'knowledge_context_tokens': 300,
-#     'total_context_tokens': 550,
-#     'session_messages': 3,
-#     'knowledge_messages': 2
-# }
-```
-
-**How It Works**:
-1. Query session context (last 5 messages from same session)
-2. Query knowledge context (semantic search excluding current session)
-3. Apply priority-based token budget (75% session cap, knowledge uses remaining)
-4. Truncate if needed (smart truncation preserves important content)
-5. Format final context string
-
-### Session Behavior by Interface
-
-| Interface | Session ID Generation | Lifetime | Storage |
-|-----------|----------------------|----------|---------|
-| **CLI** | Auto: `cli-{pid}-{timestamp}` | 2h idle timeout | Database |
-| **Web UI** | Auto: `ui-{timestamp}-{random}` | Tab close | sessionStorage + Database |
-| **API** | User-provided or auto-generated | User-controlled | Database |
-
-**CLI Example**:
-```bash
-# Terminal 1 (PID 12345)
-mao builder "Create a chart"
-# session_id: cli-12345-20251109100000
-
-# Same terminal, 30 minutes later (still PID 12345)
-mao builder "Add red color"
-# session_id: cli-12345-20251109100000 (SAME SESSION - reused)
-
-# Same terminal, 3 hours later (PID 12345)
-mao builder "Show me the chart"
-# session_id: cli-12345-20251109130000 (NEW SESSION - timeout)
-```
-
-**Web UI Example**:
-```javascript
-// Page load: Generate or retrieve session ID
-let sessionId = sessionStorage.getItem('agent_session_id');
-if (!sessionId) {
-    sessionId = 'ui-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
-    sessionStorage.setItem('agent_session_id', sessionId);
-}
-
-// Page refresh: Same session ID (sessionStorage persists)
-// New tab: Different session ID (sessionStorage per tab)
-// Tab close + reopen: New session ID (sessionStorage cleared)
-```
-
-**API Example**:
-```bash
-# Provide session ID (user-controlled)
-curl -X POST http://localhost:5050/ask \
-  -H "Content-Type: application/json" \
-  -d '{
-    "agent": "builder",
-    "prompt": "Create a chart",
-    "session_id": "my-custom-session-123"
-  }'
-
-# Auto-generate session ID (omit field)
-curl -X POST http://localhost:5050/ask \
-  -H "Content-Type: application/json" \
-  -d '{
-    "agent": "builder",
-    "prompt": "Create a chart"
-  }'
-# Response includes auto-generated session_id
-```
+| Interface | Generation | Lifetime | Storage |
+|-----------|-----------|----------|---------|
+| CLI | Auto `cli-{pid}-{ts}` | 2h idle | Database |
+| Web UI | Auto `ui-{ts}-{rand}` | Tab close | sessionStorage + DB |
+| API | User or auto | User-controlled | Database |
 
 ### Configuration
 
-**Global Config** (`config/agents.yaml` - per agent):
-```yaml
-builder:
-  model: "anthropic/claude-sonnet-4-5"
-  memory_enabled: true
-  memory:
-    # Session context config
-    session_context:
-      enabled: true
-      limit: 5  # Last 5 messages from same session
+**Per-Agent** (`config/agents.yaml`):
+- `session_context`: enabled, limit (5 messages)
+- `knowledge_context`: enabled, strategy (semantic/hybrid/keywords), min_relevance (0.15), time_decay (96h)
+- `max_context_tokens`: 600 (session max 450/75%, knowledge uses remaining)
 
-    # Knowledge context config (semantic search from other sessions)
-    knowledge_context:
-      enabled: true
-      strategy: "semantic"  # or "hybrid", "keywords"
-      min_relevance: 0.15
-      time_decay_hours: 96
+**Session Manager** (hardcoded):
+- Validation: 64 chars max, alphanumeric + `_-` only
+- CLI reuse: 2 hours
+- Cleanup: 10% probability, 7-day retention
 
-    # Token budget
-    max_context_tokens: 600  # Total budget
-    # Session gets up to 450 (75% cap), knowledge uses remaining
-```
+### Integration
 
-**Session Manager Config** (hardcoded in `core/session_manager.py`):
-```python
-# Session validation
-MAX_SESSION_ID_LENGTH = 64
-ALLOWED_CHARS = r'^[a-zA-Z0-9_-]+$'
+**CLI**: Auto-generates session via `get_session_manager().get_or_create_session(source="cli", metadata={"pid": os.getpid()})`
 
-# CLI session reuse
-CLI_SESSION_REUSE_HOURS = 2
+**API**: Optional `session_id` in request body, validates + saves if provided
 
-# Cleanup
-CLEANUP_PROBABILITY = 0.1  # 10% of save_session() calls
-SESSION_RETENTION_DAYS = 7
-```
+**Web UI**: JavaScript generates `ui-{ts}-{rand}` and stores in sessionStorage
 
-### Integration Points
+**Runtime**: Uses `ContextAggregator.get_full_context()` to retrieve session + knowledge, injects into system prompt, stores with metadata
 
-**CLI Tools** (`scripts/agent_runner.py`, `scripts/chain_runner.py`):
-```python
-import os
-from core.session_manager import get_session_manager
+### Database & Migration
 
-# Auto-generate CLI session
-session_manager = get_session_manager()
-session_id = session_manager.get_or_create_session(
-    source="cli",
-    metadata={"pid": os.getpid()}
-)
+**New**: `sessions` table (session_id PK, timestamps, source, metadata)
+**Updated**: `conversations` table (added session_id column + index)
+**Migration**: `python scripts/migrate_add_session_tracking.py` (idempotent, auto-backup, rollback available)
 
-# Pass to runtime
-runtime = AgentRuntime()
-result = runtime.run(agent=agent, prompt=prompt, session_id=session_id)
-```
+### Security
 
-**API Server** (`api/server.py`):
-```python
-from pydantic import BaseModel
-from core.session_manager import get_session_manager
-
-class AskRequest(BaseModel):
-    agent: str
-    prompt: str
-    session_id: Optional[str] = None  # v0.11.0+
-
-@app.post("/ask")
-async def ask(request: AskRequest):
-    session_id = request.session_id
-
-    # Validate and save if provided
-    if session_id:
-        session_manager = get_session_manager()
-        session_manager.validate_session_id(session_id)
-        session_manager.save_session(
-            session_id=session_id,
-            source="api",
-            metadata={"endpoint": "/ask"}
-        )
-
-    result = runtime.run(..., session_id=session_id)
-    return result
-```
-
-**Web UI** (`ui/templates/index.html`):
-```html
-<input type="hidden" name="session_id" id="session_id" value="">
-
-<script>
-function getOrCreateSessionId() {
-    let sessionId = sessionStorage.getItem('agent_session_id');
-    if (!sessionId) {
-        sessionId = 'ui-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
-        sessionStorage.setItem('agent_session_id', sessionId);
-    }
-    return sessionId;
-}
-
-document.addEventListener('DOMContentLoaded', function() {
-    const sessionId = getOrCreateSessionId();
-    document.getElementById('session_id').value = sessionId;
-});
-</script>
-```
-
-**Agent Runtime** (`core/agent_runtime.py`):
-```python
-def run(
-    self,
-    agent: str,
-    prompt: str,
-    session_id: Optional[str] = None,  # v0.11.0+
-    ...
-) -> RunResult:
-    # Use ContextAggregator for dual-context retrieval
-    context_text, context_metadata = self.context_aggregator.get_full_context(
-        prompt=prompt,
-        session_id=session_id,
-        config=agent_memory_config
-    )
-
-    # Inject into system prompt
-    if context_text:
-        system_prompt = agent_config["system"] + "\n\n" + context_text
-
-    # Store conversation with session_id
-    self.memory.store_conversation(
-        ...,
-        session_id=session_id,
-        metadata={
-            "session_context_tokens": context_metadata.get('session_context_tokens', 0),
-            "knowledge_context_tokens": context_metadata.get('knowledge_context_tokens', 0),
-        }
-    )
-```
-
-### Database Schema Changes
-
-**New Table: `sessions`**:
-```sql
-CREATE TABLE sessions (
-    session_id TEXT PRIMARY KEY,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    last_active DATETIME DEFAULT CURRENT_TIMESTAMP,
-    source TEXT NOT NULL,  -- "cli", "ui", "api"
-    metadata TEXT,  -- JSON string
-    INDEX idx_sessions_last_active (last_active)
-);
-```
-
-**Updated Table: `conversations`**:
-```sql
--- Added column (v0.11.0):
-ALTER TABLE conversations ADD COLUMN session_id TEXT;
-
--- Added index:
-CREATE INDEX idx_session_id ON conversations(session_id);
-```
-
-**Migration**:
-```bash
-# Run migration (idempotent, safe to run multiple times)
-python scripts/migrate_add_session_tracking.py
-
-# Migration features:
-# - Auto-backup before changes (timestamped)
-# - Idempotent (checks if already migrated)
-# - Preserves existing data
-# - Transaction-based (rollback on error)
-
-# Rollback if needed
-python scripts/rollback_session_tracking.py
-```
-
-### Security Features
-
-**Input Validation** (`core/session_manager.py:validate_session_id()`):
-```python
-# 1. Length check
-if len(session_id) > 64:
-    raise ValueError("Session ID too long")
-
-# 2. Character whitelist (alphanumeric + _ -)
-if not re.match(r'^[a-zA-Z0-9_-]+$', session_id):
-    raise ValueError("Invalid characters in session ID")
-
-# 3. Prevents:
-# - SQL injection (no quotes, semicolons allowed)
-# - XSS (no < > allowed)
-# - Path traversal (no / \ allowed)
-# - Null byte injection (no \x00 allowed)
-```
-
-**Database Safety**:
-- All queries use parameterized statements (SQLite `?` placeholders)
-- No string concatenation in SQL
-- WAL mode prevents corruption
-- Transaction-based operations
-
-### Testing
-
-**Test Coverage** (`tests/`):
-- Session ID generation (CLI, UI, API formats)
-- Session validation (valid/invalid characters, length limits)
-- Session storage and retrieval
-- Context aggregation (session + knowledge)
-- Token budget enforcement (75% cap, flexible allocation)
-- CLI session reuse (duration-based)
-- Database migration (idempotent, rollback)
-- Backward compatibility (session_id optional)
-
-**Manual Testing**:
-```bash
-# Test CLI session continuity
-export LLM_MOCK=1
-mao builder "Create a chart"
-sleep 2
-mao builder "Add red color"
-# Should see session context in logs
-
-# Check database
-sqlite3 data/MEMORY/conversations.db
-> SELECT session_id, prompt FROM conversations ORDER BY timestamp DESC LIMIT 5;
-> SELECT * FROM sessions ORDER BY last_active DESC LIMIT 5;
-
-# Test session cleanup
-python -c "
-from core.session_manager import get_session_manager
-sm = get_session_manager()
-sm.save_session('test-old-session', 'cli', {})
-# Manually set last_active to 8 days ago in database
-sm.save_session('test-trigger-cleanup', 'cli', {})  # May trigger cleanup
-"
-```
-
-### Backward Compatibility
-
-**All `session_id` parameters are optional**:
-- CLI: Auto-generates if not provided (transparent to user)
-- API: Works without session_id (stateless mode)
-- Web UI: Auto-generates via JavaScript
-
-**Graceful Degradation**:
-- If database unavailable → session tracking disabled, system continues
-- If session_id invalid → logs warning, continues without session
-- If migration not run → session_id column NULL, system works without sessions
-
-**No Breaking Changes**:
-- Existing API clients work without modification
-- Existing CLI scripts work without modification
-- Memory system works with or without sessions
+**Validation**: 64 chars max, alphanumeric + `_-` only, prevents SQL injection/XSS/path traversal
+**Database**: Parameterized queries, WAL mode, transactions
 
 ### Performance
 
-**Session Operations**:
-- Session ID generation: <1ms (string concatenation)
-- Session validation: <1ms (regex match)
-- Session save: ~5ms (SQLite insert)
-- Session query: ~3ms (indexed lookup)
+- Session ops: <1ms (gen/validate), ~5ms (save), ~3ms (query)
+- Context aggregation: ~60ms total (~10ms session, ~50ms semantic, <1ms budget calc)
+- Cleanup: ~2ms average per request (10% × 20ms when triggered)
 
-**Context Aggregation**:
-- Session context retrieval: ~10ms (last 5 messages)
-- Knowledge context retrieval: ~50ms (semantic search, 50 candidates)
-- Token budget calculation: <1ms
-- Total overhead: ~60ms per request
+### Testing
 
-**Cleanup**:
-- Probabilistic trigger: 10% of requests
-- When triggered: ~20ms (deletes old sessions + orphaned conversations)
-- Impact: <2ms average per request (10% × 20ms)
+**Coverage**: Session ID formats, validation, storage, context aggregation, budget enforcement, CLI reuse, migration, backward compat
+**Manual**: Mock mode (`LLM_MOCK=1`), database inspection, cleanup testing
 
-### Common Use Cases
+### Backward Compatibility
 
-**Use Case 1: Multi-Turn Conversation**
-```bash
-# Turn 1: Create feature
-mao builder "Create a REST API for user auth"
-# Response: JWT implementation with /login endpoint
-
-# Turn 2: Extend feature (same session)
-mao builder "Add refresh token support"
-# Context includes Turn 1 → understands existing auth system
-# Response: Adds refresh token endpoint to existing implementation
-
-# Turn 3: Fix issue (same session)
-mao builder "Fix the token expiry bug"
-# Context includes Turn 1 + Turn 2 → knows about refresh token system
-# Response: Fixes specific bug in context
-```
-
-**Use Case 2: Cross-Session Knowledge**
-```bash
-# Day 1: User asks about JWT
-mao builder "How to implement JWT auth in FastAPI?"
-# Response: JWT implementation guide
-
-# Day 2: User asks about similar topic (NEW session)
-mao builder "How to refresh JWT tokens?"
-# Session context: Empty (different session)
-# Knowledge context: Includes Day 1 conversation (semantic match)
-# Response: Builds on previous JWT knowledge
-```
-
-**Use Case 3: Web UI Multi-Tab**
-```
-Tab 1: "Design a database schema"
-→ session_id: ui-1699516800-abc123
-
-Tab 2: "Create API endpoints"
-→ session_id: ui-1699516850-def456  (DIFFERENT)
-
-Tab 1 refresh: Still ui-1699516800-abc123 (SAME)
-Tab 1 close + reopen: ui-1699517000-ghi789 (NEW)
-```
+- All `session_id` parameters optional (auto-generates if omitted)
+- Graceful degradation (DB unavailable → no sessions, invalid ID → warning + continue)
+- No breaking changes (existing clients work without modification)
 
 ## Architecture Decisions
 
@@ -1427,227 +690,45 @@ make agent-last | jq '.fallback_used'
 
 This section documents important architectural decisions and lessons learned during development. For full development history, see `docs/claude-history/CONVERSATION_SUMMARY.md` and `docs/DEVELOPMENT_HISTORY.md`.
 
-### Critical Decisions & Rationale
+### Critical Decisions
 
-#### 1. Virtual Environment in CLI Aliases (2025-11-05)
-**Problem:** Initial `mao` alias used system Python, causing `ModuleNotFoundError: litellm`
-**Root Cause:** System Python doesn't have project dependencies installed
-**Solution:** Alias points directly to `.venv/bin/python`
-```bash
-# ❌ Original (broken):
-alias mao="python3 $ORCHESTRATOR_HOME/scripts/agent_runner.py"
+**1. Virtual Environment in CLI** - Fixed `ModuleNotFoundError` by using `.venv/bin/python` in aliases (system Python lacks deps)
 
-# ✅ Fixed:
-alias mao="$ORCHESTRATOR_HOME/.venv/bin/python $ORCHESTRATOR_HOME/scripts/agent_runner.py"
-```
-**Why This Matters:** Users must always use venv Python for any orchestrator script execution. Makefile handles this automatically with `. .venv/bin/activate`.
+**2. Chain Context Passing** - Evolution: 200 chars (v0.1.0) → full output (v0.2.0, token explosion) → smart truncation (v0.3.0: closer gets 1500 chars, others 600-1000). Balances context vs cost.
 
-#### 2. Chain Context Passing Strategy (v0.3.0)
-**Problem:** Original 200-char truncation lost 96% of builder output, causing critic/closer to make uninformed decisions
-**Evolution:**
-- v0.1.0: 200 chars (too little context)
-- v0.2.0: Full output (token explosion, >10K tokens per chain)
-- v0.3.0: Smart truncation - 1500 chars to closer (builder + critic), 600-1000 for others
+**3. Token Limits** - Builder/Closer: 9K, Critic: 7K (not 32K max). Why: 4x cost savings, 3x speed, 1K safety buffer.
 
-**Trade-off Decision:**
-- **Option A:** Pass full outputs (comprehensive but 3x cost)
-- **Option B:** Minimal truncation (cheap but quality loss)
-- **Chosen:** Hybrid approach with role-specific limits
+**4. Memory Silent Failure** - `LLMResponse` missing `estimated_cost` field + bare `except: pass` hid bug for days. **Lesson: Always log exceptions.**
 
-**Why This Works:** Closer needs synthesis (gets more context), intermediate agents need less (just enough for next step). See `agent_runtime.py:300-350`.
+**5. Multi-Provider Fallback** - Order: Claude (primary) → GPT-4o (premium) → GPT-4o-mini (budget) → Gemini (free). Logged transparently.
 
-#### 3. Token Limit Optimization (v0.5.0)
-**Problem:** Responses cut off mid-sentence (builder hit 2496/2500 tokens)
-**Progression:**
-- Initial: Builder 2500, Critic 2000, Closer 1800
-- v0.4.0: Builder 4096, Critic 3072, Closer 2560
-- v0.5.0: Builder 9000, Critic 7000, Closer 9000
+**6. Semantic Search** - Turkish morphology ("chart" ≠ "chart'a") broke keyword search. Solution: `paraphrase-multilingual-MiniLM-L12-v2` (50+ langs, ~30s first load, <100ms search).
 
-**Why 9K instead of 32K max?**
-- 4x cost savings ($0.003 vs $0.012 per response)
-- 3x speed improvement (~15s vs ~45s)
-- 1K buffer for complex responses (8K actual + 1K safety)
+### Common Pitfalls
 
-**When to Increase:** If you see truncated responses in logs, increase agent-specific `max_tokens` in `config/agents.yaml`. No restart needed.
+**1. Running Without venv** - Use `.venv/bin/python` or aliases (`mao`), not system Python
 
-#### 4. Memory System Silent Failure (2025-11-05 - CRITICAL BUG)
-**Problem:** Conversations not persisting to database despite memory enabled
-**Root Cause:** `LLMResponse` dataclass missing `estimated_cost` field, causing exception in `agent_runtime.py:271`
-**Hidden by:** Bare `except: pass` silencing all errors
-**Fix:** Added `estimated_cost: float = 0.0` to `LLMResponse` + debug logging
+**2. Memory Not Finding Context** - Threshold too high (lower to 0.15), keywords don't match (use semantic), time decay (increase from 96h to 168h)
 
-**LESSON LEARNED:** Never use bare `except: pass` - always log exceptions at minimum. This bug went undetected for days because errors were silently swallowed.
+**3. Config Changes Not Applied** - CLI applies immediately, API server needs restart (`pkill -f uvicorn`, then `make run-api`)
 
-**Verification:** After any memory system change, test with:
-```bash
-mao auto "test"
-sqlite3 data/MEMORY/conversations.db "SELECT COUNT(*) FROM conversations"
-```
+**4. Testing Without Keys** - Use `LLM_MOCK=1` for tests, check key source with `get_env_source()`
 
-#### 5. Multi-Provider Fallback Architecture (v0.2.0)
-**Problem:** Single API key failure = entire system down
-**Design Choice:** Automatic fallback with transparency
+### Development Timeline
 
-**Fallback Order (per agent):**
-```yaml
-builder:
-  model: "anthropic/claude-3-5-sonnet-20241022"
-  fallback_order:
-    - "openai/gpt-4o"           # Premium fallback
-    - "openai/gpt-4o-mini"      # Budget fallback
-    - "gemini/gemini-2.0-flash" # Free fallback
-```
-
-**Why This Order?**
-1. Claude Sonnet: Best for creative building (primary)
-2. GPT-4o: High quality, fast (first fallback)
-3. GPT-4o-mini: Cheap, fast enough (budget fallback)
-4. Gemini Flash: Free tier available (last resort)
-
-**Logging:** All fallbacks logged with `original_model`, `fallback_reason`, `fallback_used` metadata. Check `/health` endpoint for provider status.
-
-#### 6. Semantic Search for Turkish (v0.4.0)
-**Problem:** Keyword-based memory failed with Turkish: "chart" vs "chart'a" counted as different (0.25 overlap < 0.3 threshold)
-**Root Cause:** Turkish morphology - agglutinative language adds suffixes to root words
-**Solution:** Semantic embeddings (`paraphrase-multilingual-MiniLM-L12-v2`)
-
-**Performance:**
-- First model load: ~30s (420MB download, one-time)
-- Subsequent: <1s (cached)
-- Search: <100ms for 500 conversations
-
-**Strategy Comparison:**
-- `keywords`: Fast, fails with morphology
-- `semantic`: Understands meaning, handles 50+ languages
-- `hybrid`: 70% semantic + 30% keywords (best of both)
-
-**Default:** `semantic` for builder (configured in `config/agents.yaml`)
-
-### Common Pitfalls (From Development History)
-
-#### Pitfall 1: Running Scripts Without venv
-```bash
-# ❌ WRONG - Uses system Python
-python3 scripts/agent_runner.py auto "test"
-
-# ✅ CORRECT - Uses venv
-.venv/bin/python scripts/agent_runner.py auto "test"
-
-# ✅ BEST - Use aliases (handle venv automatically)
-mao auto "test"
-```
-
-#### Pitfall 2: Expecting Immediate Memory Context
-**Issue:** User: "Add to previous chart"
-**Result:** "What chart?" (memory didn't find context)
-
-**Why?**
-- Relevance threshold too high (min_relevance: 0.35)
-- Keywords didn't match (morphology issue)
-- Time decay (conversation >96 hours old)
-
-**Fix:**
-```yaml
-# config/agents.yaml - builder.memory section
-min_relevance: 0.25  # Lower threshold
-time_decay_hours: 168  # 7 days instead of 4
-strategy: "semantic"  # Instead of keywords
-```
-
-#### Pitfall 3: Chain Not Using Latest Agent Configs
-**Issue:** Changed `max_tokens` in `config/agents.yaml`, but chains still truncate
-
-**Why?** You might be running cached chain runner or old server instance.
-
-**Fix:**
-```bash
-# 1. Kill old server
-pkill -f "uvicorn api.server:app"
-
-# 2. Restart (auto-reloads on config change)
-make run-api
-
-# 3. Or use direct chain (no server needed)
-make agent-chain Q="Your prompt"
-```
-
-**Note:** Config changes apply immediately to new requests - no restart needed for CLI (`mao` commands).
-
-#### Pitfall 4: Testing Without API Keys
-```bash
-# ❌ WRONG - Real LLM calls fail
-mao auto "test"  # Error: Missing API key
-
-# ✅ CORRECT - Use mock mode for testing
-export LLM_MOCK=1
-make test  # All tests pass with mocked responses
-
-# ✅ BEST - Check key detection first
-python3 -c "from config.settings import get_env_source; print(get_env_source())"
-# Should print: "environment variables" or ".env file"
-```
-
-### Development Timeline Highlights
-
-**v0.1.0 (2025-11-03)** - Initial Release
-- Core orchestration engine
-- 4 agent roles (builder, critic, closer, router)
-- CLI + REST API + Web UI
-
-**v0.2.0 (2025-11-04)** - Memory System
-- SQLite-backed conversation storage
-- Context injection with relevance scoring
-- Memory CLI and API endpoints
-
-**v0.3.0 (2025-11-05)** - Chain Optimization
-- Smart context truncation (1500 chars per stage)
-- Progress indicators for chains
-- Fallback transparency
-- `mao` alias fix (venv Python)
-
-**v0.4.0 (2025-11-05)** - Semantic Search
-- Multilingual embeddings (50+ languages)
-- Turkish morphology support
-- Semantic/hybrid/keyword strategies
-
-**v0.5.0 (2025-11-05)** - Token Optimization
-- Builder: 9000 tokens (3.6x increase)
-- Critic: 7000 tokens (3.5x increase)
-- Closer: 9000 tokens (5x increase)
-- Memory system critical bug fix
-
-**v0.6.0 (2025-11-06)** - Semantic Compression
-- 90% token reduction with 100% context preservation
-- Structured JSON compression for chain context
-- Gemini Flash for compression (fast & cheap)
-
-**v0.7.0 (2025-11-06)** - Auto-Refinement
-- Single-iteration builder refinement when critic finds critical issues
-- Critical keyword detection (SECURITY, BUG, ERROR, etc.)
-- Automatic fix attempt before closer synthesis
-
-**v0.8.0 (2025-11-06)** - Multi-Iteration Refinement
-- Up to 3 refinement cycles with convergence detection
-- Progress tracking per iteration
-- Automatic stopping on no progress or success
-
-**v0.9.0 (2025-11-06)** - Multi-Critic Consensus
-- 3 specialized critics (security, performance, code-quality)
-- Parallel execution (no latency penalty)
-- Weighted consensus merging
-
-**v0.10.0 (2025-11-06)** - Dynamic Critic Selection
-- Keyword-based critic relevance scoring
-- 30-50% cost savings (only relevant critics run)
-- 1-3 critics selected dynamically per prompt
-
-**v0.11.0 (2025-11-09)** - Session Tracking & Dual-Context Model
-- ChatGPT-style conversation continuity
-- Dual-context model (session + knowledge)
-- Priority-based token budget (75% session cap)
-- Auto-session generation (CLI, Web UI, API)
-- Duration-based CLI sessions (2h timeout)
-- Database migration (sessions table)
+- **v0.1.0** (11-03): Initial release - 4 agents, CLI/API/UI
+- **v0.2.0** (11-04): Memory system - SQLite storage, context injection
+- **v0.3.0** (11-05): Chain optimization - smart truncation, fallback transparency
+- **v0.4.0** (11-05): Semantic search - multilingual embeddings, Turkish support
+- **v0.5.0** (11-05): Token limits - 9K builder/closer, 7K critic, memory bug fix
+- **v0.6.0** (11-06): Semantic compression - 90% token reduction, JSON format
+- **v0.7.0** (11-06): Auto-refinement - critical issue detection
+- **v0.8.0** (11-06): Multi-iteration - up to 3 cycles, convergence detection
+- **v0.9.0** (11-06): Multi-critic - 3 specialists, parallel execution, consensus
+- **v0.10.0** (11-06): Dynamic selection - relevance scoring, 30-50% cost savings
+- **v0.11.0** (11-09): Session tracking - dual-context, 2h timeout, migration
+- **v0.12.0** (11-11): CLI parity - rich formatting, syntax highlighting, stats dashboard
+- **v1.0.0** (11-11): Production ready - 89/89 tests, stable API, full docs
 
 ### Key Files Modified (Historical Reference)
 
@@ -1706,5 +787,5 @@ If you're a new Claude Code instance working on this project:
 - Add to CHANGELOG.md for version-specific changes
 - Keep TROUBLESHOOTING.md updated with new issues/solutions
 
-**Last Updated:** 2025-11-09 (v0.11.0 - Session Tracking & Dual-Context Model)
+**Last Updated:** 2025-11-11 (v1.0.0 - Production Ready Release)
 **Maintained By:** Claude Code conversations + Human review

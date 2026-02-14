@@ -686,6 +686,7 @@ ORIGINAL OUTPUT TO SUMMARIZE:
         enable_refinement: Optional[bool] = None,
         mock_mode: Optional[bool] = None,
         session_id: Optional[str] = None,
+        override_model: Optional[str] = None,
     ) -> List[RunResult]:
         """
         Execute multi-agent chain with optional single-iteration refinement.
@@ -697,6 +698,7 @@ ORIGINAL OUTPUT TO SUMMARIZE:
             enable_refinement: If True, allows builder to refine based on critical issues (default: from config)
             mock_mode: Optional mock mode override (defaults to LLM_MOCK env var)
             session_id: Optional session ID for conversation tracking (v0.11.0+)
+            override_model: Optional model override for all stages (v0.13.0+)
 
         Returns:
             List of RunResults from each stage
@@ -795,16 +797,16 @@ ORIGINAL OUTPUT TO SUMMARIZE:
                             results.extend(critic_run_results)
                         else:
                             # Fallback to single critic if multi-critic failed
-                            result = self.run(agent=agent, prompt=context, mock_mode=mock_mode, session_id=session_id)
+                            result = self.run(agent=agent, prompt=context, mock_mode=mock_mode, session_id=session_id, override_model=override_model)
                     else:
                         # No builder result, use single critic
-                        result = self.run(agent=agent, prompt=context, mock_mode=mock_mode, session_id=session_id)
+                        result = self.run(agent=agent, prompt=context, mock_mode=mock_mode, session_id=session_id, override_model=override_model)
                 else:
                     # Multi-critic disabled, use single critic
-                    result = self.run(agent=agent, prompt=context, mock_mode=mock_mode, session_id=session_id)
+                    result = self.run(agent=agent, prompt=context, mock_mode=mock_mode, session_id=session_id, override_model=override_model)
             else:
                 # Non-critic agents use standard execution
-                result = self.run(agent=agent, prompt=context, mock_mode=mock_mode, session_id=session_id)
+                result = self.run(agent=agent, prompt=context, mock_mode=mock_mode, session_id=session_id, override_model=override_model)
 
             results.append(result)
 
@@ -866,7 +868,7 @@ Provide a complete, refined solution."""
                             print(f"🔄 Iteration {iteration}/{max_iterations}: Running {builder_label}...")
 
                             # Run builder again with refinement prompt
-                            refined_result = self.run(agent="builder", prompt=refine_prompt, session_id=session_id)
+                            refined_result = self.run(agent="builder", prompt=refine_prompt, session_id=session_id, override_model=override_model)
                             results.append(refined_result)
 
                             print(f"✅ {builder_label} complete ({refined_result.total_tokens} tokens)\n")
@@ -892,7 +894,7 @@ Provide a complete, refined solution."""
                             print(f"🔄 Iteration {iteration}/{max_iterations}: Running {critic_label}...")
 
                             # Run critic on refined output
-                            critic_result = self.run(agent="critic", prompt=critic_context, session_id=session_id)
+                            critic_result = self.run(agent="critic", prompt=critic_context, session_id=session_id, override_model=override_model)
                             results.append(critic_result)
 
                             # Extract issues from new critic response

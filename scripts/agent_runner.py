@@ -2,12 +2,13 @@
 """CLI tool for running agents."""
 import os
 import sys
+import argparse
 from pathlib import Path
 
 # Add parent directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from config.settings import get_env_source
+from config.settings import get_env_source, is_provider_enabled, get_available_providers
 from core.agent_runtime import AgentRuntime
 from core.session_manager import get_session_manager
 from rich.console import Console
@@ -16,6 +17,84 @@ from rich.panel import Panel
 from rich.markdown import Markdown
 
 console = Console()
+
+
+def validate_path_basic(path: str) -> Path:
+    """Basic sanity checks for file paths (not enterprise security)."""
+    resolved = Path(path).resolve()
+
+    # Block obvious sensitive files
+    blocked = ['.env', '.git', '.ssh', 'id_rsa', 'credentials', 'password']
+    if any(b in str(resolved).lower() for b in blocked):
+        matched = [b for b in blocked if b in str(resolved).lower()]
+        console.print(f"\n[bold red]🔒 Blocked:[/bold red] {path}")
+        console.print(f"   Matches blocked pattern: {matched}")
+        console.print("   Security policy prevents accessing this file")
+        sys.exit(1)
+
+    # Warn if outside CWD (but allow)
+    if not str(resolved).startswith(str(Path.cwd())):
+        console.print(f"\n[yellow]⚠️  Reading outside project:[/yellow] {resolved}")
+        # Allow it - just informational
+
+    return resolved
+
+
+def read_file_with_validation(file_path: str) -> str:
+    """Read file with validation and error handling."""
+    # Validate path
+    resolved = validate_path_basic(file_path)
+
+    # Check existence
+    if not resolved.exists():
+        console.print(f"\n[bold red]❌ File not found:[/bold red] {file_path}")
+        sys.exit(1)
+
+    # Check if it's a file
+    if not resolved.is_file():
+        console.print(f"\n[bold red]❌ Not a file:[/bold red] {file_path}")
+        sys.exit(1)
+
+    # Check size (10MB limit)
+    max_size = 10 * 1024 * 1024  # 10MB
+    if resolved.stat().st_size > max_size:
+        size_mb = resolved.stat().st_size / 1024 / 1024
+        console.print(f"\n[bold red]❌ File too large:[/bold red] {size_mb:.1f}MB")
+        console.print(f"   Maximum allowed: 10MB")
+        sys.exit(1)
+
+    # Read file
+    try:
+        with open(resolved, 'r', encoding='utf-8') as f:
+            content = f.read()
+        return content
+    except UnicodeDecodeError:
+        console.print(f"\n[bold red]❌ Cannot read file:[/bold red] Not a text file (binary?)")
+        sys.exit(1)
+    except Exception as e:
+        console.print(f"\n[bold red]❌ Error reading file:[/bold red] {e}")
+        sys.exit(1)
+
+
+def estimate_input_cost(text: str, model: str) -> tuple[int, float]:
+    """Estimate tokens and cost for input text."""
+    try:
+        import tiktoken
+        # Use generic encoding (works for most models)
+        enc = tiktoken.get_encoding("cl100k_base")
+        tokens = len(enc.encode(text))
+
+        # Rough cost estimate (input tokens)
+        # GPT-4o: $0.0025 per 1K input tokens
+        # Claude: $0.003 per 1K input tokens
+        cost = tokens * 0.000003  # Average
+
+        return tokens, cost
+    except:
+        # Fallback: rough estimate
+        tokens = len(text) // 4
+        cost = tokens * 0.000003
+        return tokens, cost
 
 
 def show_error_with_solution(error_msg: str):
@@ -101,45 +180,116 @@ def display_response(response: str):
 
 def main():
     """Main CLI entry point."""
-    if len(sys.argv) < 3:
-        print("Usage: python scripts/agent_runner.py <agent> <prompt>")
-        print("  agent: auto, builder, critic, closer")
-        print('  prompt: "Your question or task"')
-        print()
-        print("Examples:")
-        print('  python scripts/agent_runner.py auto "Analyze security risks"')
-        print('  python scripts/agent_runner.py builder "Create a REST API"')
-        print('  python scripts/agent_runner.py critic "Review this code: ..."')
+    parser = argparse.ArgumentParser(
+        description="Multi-Agent Orchestrator CLI",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  %(prog)s builder "Create a REST API"
+  %(prog)s builder --file prompt.md
+  %(prog)s builder "Task" --model gpt-4o
+  %(prog)s builder "Task" --max-usd 0.50
+  %(prog)s builder "Review code" --file code.py --save-to review.md
+        """
+    )
+
+    parser.add_argument("agent", choices=["auto", "builder", "critic", "closer"],
+                       help="Agent to use")
+    parser.add_argument("prompt", nargs="?", default=None,
+                       help="Prompt for the agent (or use --file)")
+
+    # File I/O
+    parser.add_argument("--file", type=str,
+                       help="Read prompt from file")
+    parser.add_argument("--save-to", type=str,
+                       help="Save response to file")
+
+    # Model override
+    parser.add_argument("--model", type=str,
+                       help="Override agent's default model")
+
+    # Cost guardrails
+    parser.add_argument("--max-usd", type=float,
+                       help="Abort if estimated cost exceeds threshold")
+    parser.add_argument("--max-input-tokens", type=int,
+                       help="Reject prompts over N tokens")
+    parser.add_argument("--force", action="store_true",
+                       help="Bypass cost limits (logged)")
+
+    args = parser.parse_args()
+
+    # Get prompt from file or argument
+    if args.file:
+        prompt = read_file_with_validation(args.file)
+        # Optionally combine with additional prompt
+        if args.prompt:
+            prompt = f"{prompt}\n\n{args.prompt}"
+    elif args.prompt:
+        prompt = args.prompt
+    else:
+        console.print("\n[bold red]❌ Error:[/bold red] Must provide either prompt or --file")
+        parser.print_help()
         sys.exit(1)
 
-    agent = sys.argv[1].lower()
-    prompt = sys.argv[2]
-
-    # Validate agent
-    valid_agents = ["auto", "builder", "critic", "closer"]
-    if agent not in valid_agents:
-        print(f"Error: Invalid agent '{agent}'")
-        print(f"Valid agents: {', '.join(valid_agents)}")
-        sys.exit(1)
+    agent = args.agent.lower()
 
     # Validate prompt
     if not prompt or not prompt.strip():
-        print("Error: Prompt cannot be empty")
-        print("Please provide a valid prompt for the agent to process")
+        console.print("\n[bold red]❌ Error:[/bold red] Prompt cannot be empty")
         sys.exit(1)
+
+    # Validate model override
+    override_model = None
+    if args.model:
+        # Check if provider is enabled
+        provider = args.model.split('/')[0] if '/' in args.model else 'openai'
+        if not is_provider_enabled(provider):
+            console.print(f"\n[bold red]❌ Provider '{provider}' is disabled[/bold red]")
+            available = get_available_providers()
+            console.print(f"   Available providers: {', '.join(available)}")
+            sys.exit(1)
+        override_model = args.model
+
+    # Cost guardrails - pre-flight check
+    input_tokens, estimated_cost = estimate_input_cost(prompt, args.model or "gpt-4o")
+
+    # Token limit check
+    if args.max_input_tokens and input_tokens > args.max_input_tokens:
+        if not args.force:
+            console.print(f"\n[bold red]❌ Input exceeds limit:[/bold red] {input_tokens} > {args.max_input_tokens} tokens")
+            console.print(f"   Estimated cost: [yellow]${estimated_cost:.3f}[/yellow]")
+            console.print(f"   Use [cyan]--force[/cyan] to override")
+            sys.exit(1)
+        else:
+            console.print(f"\n[yellow]⚠️  FORCE:[/yellow] Bypassing token limit ({input_tokens} > {args.max_input_tokens})")
+
+    # Cost limit check
+    if args.max_usd:
+        if estimated_cost > args.max_usd:
+            if not args.force:
+                console.print(f"\n[bold red]❌ Estimated cost exceeds budget:[/bold red] ${estimated_cost:.3f} > ${args.max_usd:.2f}")
+                console.print(f"   Input tokens: {input_tokens}")
+                console.print(f"   Use [cyan]--force[/cyan] to override or reduce prompt size")
+                sys.exit(1)
+            else:
+                console.print(f"\n[yellow]⚠️  FORCE:[/yellow] Bypassing cost limit (${estimated_cost:.3f} > ${args.max_usd:.2f})")
 
     # Show environment source
     env_source = get_env_source()
     if env_source == "environment":
-        print("🔑 API keys: environment variables")
+        console.print("🔑 API keys: environment variables")
     elif env_source == "dotenv":
-        print("📁 API keys: .env file")
+        console.print("📁 API keys: .env file")
     else:
-        print("⚠️  Warning: No API keys detected")
+        console.print("⚠️  Warning: No API keys detected")
 
-    print(f"Running agent: {agent}")
-    print(f"Prompt: {prompt}")
-    print("-" * 80)
+    console.print(f"Running agent: [cyan]{agent}[/cyan]")
+    if args.file:
+        console.print(f"Input file: [yellow]{args.file}[/yellow]")
+    console.print(f"Prompt length: [dim]{len(prompt)} chars, ~{input_tokens} tokens[/dim]")
+    if override_model:
+        console.print(f"Model override: [yellow]{override_model}[/yellow]")
+    console.print("-" * 80)
 
     # Auto-generate CLI session (v0.11.0)
     session_manager = get_session_manager()
@@ -150,7 +300,12 @@ def main():
 
     # Run agent
     runtime = AgentRuntime()
-    result = runtime.run(agent=agent, prompt=prompt, session_id=session_id)
+    result = runtime.run(
+        agent=agent,
+        prompt=prompt,
+        session_id=session_id,
+        override_model=override_model
+    )
 
     # Display result
     if result.error:
@@ -191,6 +346,19 @@ def main():
     console.print("─" * console.width)
     display_response(result.response)
     console.print("─" * console.width)
+
+    # Save to file if requested
+    if args.save_to:
+        # Validate write path
+        validate_path_basic(args.save_to)
+
+        try:
+            with open(args.save_to, 'w', encoding='utf-8') as f:
+                f.write(result.response)
+            console.print(f"\n[bold green]💾 Saved to:[/bold green] {args.save_to}")
+        except Exception as e:
+            console.print(f"\n[bold red]❌ Failed to save:[/bold red] {e}")
+            sys.exit(1)
 
 
 if __name__ == "__main__":

@@ -117,12 +117,13 @@ make run-api
   - Enhanced error messages with context-aware solutions
   - Cost tracking dashboard (agent/model breakdowns)
   - Memory context visibility
-- **💻 CLI Feature Parity (v0.12.0)**:
+- **💻 CLI UX Enhancements (v0.12.0)**:
   - Rich terminal formatting (colored output, emojis, boxes)
   - Code syntax highlighting (monokai theme)
   - Memory context visibility (session + knowledge breakdown)
   - Enhanced error messages (6+ types with solutions)
   - Cost tracking dashboard (`make stats` with trends)
+  - ⚠️ **Note**: Core file I/O features (v0.13.0) - see [docs/CLI_ROADMAP.md](docs/CLI_ROADMAP.md)
 
 ### Infrastructure
 
@@ -874,6 +875,6 @@ Built with:
 - ✅ Multi-agent orchestration with parallel critic execution
 - ✅ Dynamic critic selection (30-50% cost savings)
 - ✅ Semantic memory with session tracking
-- ✅ Rich CLI + Web UI feature parity
+- ✅ Rich CLI with enhanced UX (file I/O in v0.13.0)
 - ✅ 15 comprehensive documentation files
 - ✅ Stable API for local development workflows
