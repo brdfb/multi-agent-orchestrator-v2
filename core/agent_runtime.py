@@ -4,7 +4,10 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
-from config.settings import load_agents_config, load_memory_config
+from config.settings import load_agents_config, load_memory_config, validate_agents_config, get_defaults
+
+# Hard cap on refinement loop: prevents infinite loop if Builder keeps failing and Critic keeps finding issues
+MAX_REFINEMENT_ITERATIONS = 3
 from core.llm_connector import LLMConnector, LLMResponse
 from core.logging_utils import write_json
 from core.memory_engine import MemoryEngine
@@ -58,6 +61,8 @@ class AgentRuntime:
 
     def __init__(self):
         self.config = load_agents_config()
+        validate_agents_config(self.config)
+        self.defaults = get_defaults()
         self.memory_config = load_memory_config()
         self.connector = LLMConnector(retry_count=1)
         self._memory = None  # Lazy initialization
@@ -134,8 +139,8 @@ ORIGINAL OUTPUT TO SUMMARIZE:
                 return self._intelligent_truncate(text, max_tokens * 4)  # 4 chars ≈ 1 token
 
             return response.text
-        except Exception:
-            # Fallback to intelligent truncation on any error
+        except Exception as e:
+            logger.warning(f"Semantic compression failed, falling back to truncation: {e}")
             return self._intelligent_truncate(text, max_tokens * 4)
 
     def _intelligent_truncate(self, text: str, max_chars: int) -> str:
@@ -406,7 +411,7 @@ ORIGINAL OUTPUT TO SUMMARIZE:
 
         return selected_critics
 
-    def _run_multi_critic(self, builder_response: str, original_prompt: str) -> tuple[str, List[RunResult]]:
+    def _run_multi_critic(self, builder_response: str, original_prompt: str, session_id: Optional[str] = None) -> tuple[str, List[RunResult]]:
         """
         Run multiple specialized critics in parallel and merge consensus.
 
@@ -558,6 +563,19 @@ ORIGINAL OUTPUT TO SUMMARIZE:
         system_prompt = agent_config["system"]
         injected_context_tokens = 0
         context_metadata = {}
+
+        # Optional: Closer invariants anchor — prepend original request snippet to system so Closer never loses constraints
+        if agent == "closer" and prompt.strip().startswith("Original request:"):
+            prefix = "Original request:"
+            rest = prompt[prompt.find(prefix) + len(prefix) :].lstrip()
+            end = rest.find("\n\n")
+            raw = rest[: end] if end != -1 else rest
+            snippet = raw[:400] + "..." if len(raw) > 400 else raw
+            if snippet.strip():
+                system_prompt = (
+                    f"[ANCHOR - Original request (constraints = invariants) for this run]:\n{snippet}\n\n"
+                    + system_prompt
+                )
 
         if agent_config.get("memory_enabled", False):
             try:
@@ -774,7 +792,7 @@ ORIGINAL OUTPUT TO SUMMARIZE:
                     builder_result = results[-1] if results else None
                     if builder_result and builder_result.agent == "builder":
                         # Run multi-critic consensus
-                        consensus, critic_run_results = self._run_multi_critic(builder_result.response, prompt)
+                        consensus, critic_run_results = self._run_multi_critic(builder_result.response, prompt, session_id=session_id)
 
                         # Create synthetic result for consensus (for compatibility with existing flow)
                         # Use the first critic's metadata but with consensus response
@@ -817,9 +835,12 @@ ORIGINAL OUTPUT TO SUMMARIZE:
                 if critical_issues:
                     refinement_triggered = True
 
-                    # Load max_iterations from config
+                    # Load max_iterations from config, capped by MAX_REFINEMENT_ITERATIONS to prevent infinite loop
                     refinement_config = self.config.get("refinement", {})
-                    max_iterations = refinement_config.get("max_iterations", 3)
+                    max_iterations = min(
+                        refinement_config.get("max_iterations", MAX_REFINEMENT_ITERATIONS),
+                        MAX_REFINEMENT_ITERATIONS,
+                    )
 
                     # Track iterations
                     iteration = 1
