@@ -1,6 +1,28 @@
 # Multi-Agent Orchestrator Configuration
 # Intelligent fallback: Premium models → Free alternatives
 
+# Default runtime values (used by config/settings.py get_defaults())
+# Centralises magic numbers previously scattered throughout the codebase.
+defaults:
+  cli:
+    max_file_size_mb: 10
+    session_reuse_hours: 2
+  chain:
+    max_refinement_iterations: 3
+    builder_context_chars: 1500
+    critic_context_chars: 1500
+    stage_context_chars: 800
+    compression_threshold_chars: 800
+  memory:
+    session_budget_ratio: 0.75
+    fallback_to_recent: true
+  api:
+    log_limit_max: 1000
+    memory_search_limit_max: 100
+  session:
+    cleanup_probability: 0.10
+    retention_days: 7
+
 # Semantic Compression Settings (v0.6.0+)
 # Automatically compresses long outputs to preserve semantic meaning
 # while reducing token usage between chain stages
@@ -182,20 +204,15 @@ agents:
       exclude_same_turn: true
 
   critic:
-    model: "openai/gpt-4o-mini"    # Fast for code review
+    model: "openai/gpt-4o"  # Tier 1: same or higher capacity than Builder
     system: |
-      You are a rigorous code reviewer and technical critic. Your role is to:
-      - Identify bugs, security vulnerabilities, and edge cases with SPECIFIC examples
-      - Challenge technical inaccuracies (e.g., wrong framework features, incorrect terminology)
-      - Catch fluff and vague statements ("fast", "modern", "best") without evidence
-      - Suggest concrete improvements with code examples or references
+      You are a reviewer with a STRICT RUBRIC. Only report:
+      (1) Technical or factual errors (wrong API, wrong syntax).
+      (2) Clear security issues (e.g. bash without sandbox, secrets in code).
+      (3) Deviation from the user's explicit instructions (e.g. "exactly 6 files" but output has 7).
+      If none of these apply, you MUST state "No issues found in rubric." Do NOT invent new standards (e.g. SOLID, new folders) unless the user asked for them.
 
-      CRITICAL RULES:
-      - PRIORITIZE: Technical errors > Security issues > Performance > Style
-      - ALWAYS provide examples: "This is wrong: X. Correct version: Y"
-      - BE CONSTRUCTIVE: "Problem → Why it's wrong → How to fix it"
-      - CITE sources when possible (docs, benchmarks, RFCs)
-      - NO generic praise - find real issues or explicitly state "no issues found"
+      PROOF OF REVIEW: If you found no issues, you MUST briefly summarize the 2 most critical logical points in the material you reviewed and why they are correct. This proves you actually reviewed; no empty APPROVED.
 
       TOOL USAGE POLICY (MANDATORY):
       - When reviewing code, you MUST use Read tool to see actual implementation - NEVER guess
@@ -203,15 +220,14 @@ agents:
       - When searching for patterns, you MUST use Grep tool - NEVER rely on memory
       - If asked to review "file X", FIRST use Read tool to read it
       - DO NOT provide critique based on assumptions - use tools to verify facts
-      - If you don't use tools when needed, your review will be incomplete
 
-      Output structure: Issue → Impact → Fix → Alternative (if applicable)
-    description: "Reviews and critiques solutions with rigorous analysis"
+      Output: Either (Issues list with rubric item 1/2/3) OR ("No issues found in rubric." + 2-point proof summary).
+    description: "Rigorous reviewer; rubric-only; proof of review when no issues"
     temperature: 0.3
     max_tokens: 7000  # Increased to 7000 with 1K buffer for detailed analysis
     fallback_order:
-      - "gemini/gemini-2.5-flash"  # Fast and free
-      - "anthropic/claude-sonnet-4-5"  # Deep analysis (Sonnet 4.5)
+      - "anthropic/claude-sonnet-4-5"
+      - "gemini/gemini-2.5-pro"
     memory_enabled: true
     memory:
       max_context_tokens: 500
@@ -243,6 +259,7 @@ agents:
       - Provide specific attack vectors and exploitation scenarios
       - Suggest concrete security fixes with code examples
       - Reference OWASP, CVE, or security standards when applicable
+      - If no security issues in scope, state "No security issues in scope." Do NOT invent issues.
 
       TOOL USAGE POLICY (MANDATORY):
       - You MUST use Read tool to examine code for security vulnerabilities - NEVER guess
@@ -261,7 +278,7 @@ agents:
     memory_enabled: false
 
   performance-critic:
-    model: "gemini/gemini-2.5-pro"  # Good for performance analysis, cost-effective
+    model: "gemini/gemini-2.5-pro"  # Tier 1
     system: |
       You are a performance and scalability specialist. Your ONLY focus is performance issues.
 
@@ -281,6 +298,7 @@ agents:
       - Identify specific bottlenecks with line numbers or function names
       - Suggest concrete optimizations with before/after code
       - Benchmark or profile when possible
+      - If no performance issues in scope, state "No performance issues in scope." Do NOT invent issues.
 
       TOOL USAGE POLICY (MANDATORY):
       - You MUST use Read tool to examine code for performance bottlenecks - NEVER guess
@@ -294,83 +312,64 @@ agents:
     temperature: 0.3
     max_tokens: 5000
     fallback_order:
-      - "openai/gpt-4o-mini"
+      - "openai/gpt-4o"
       - "anthropic/claude-sonnet-4-5"
     memory_enabled: false
 
   code-quality-critic:
-    model: "openai/gpt-4o-mini"  # Fast for code quality analysis
+    model: "openai/gpt-4o"  # Tier 1
     system: |
-      You are a code quality and maintainability specialist. Your ONLY focus is code quality.
+      Only report code quality issues that the USER explicitly asked for (e.g. "review for maintainability") or that are clearly bugs/readability. If the user did not ask for design-pattern or SOLID analysis, do NOT add it. If nothing in your scope is wrong, say "No code-quality issues in scope."
 
-      CRITICAL QUALITY AREAS:
-      - SOLID principles violations
-      - Design patterns (when to use, when not to)
-      - Code duplication (DRY principle)
-      - Test coverage and testability
-      - Error handling completeness
-      - Naming conventions and readability
-      - Dependency injection and coupling
-      - Documentation quality
+      PROOF OF REVIEW: If you found no issues, summarize the 2 most critical structural/logical points in what you reviewed and why they are correct. No empty APPROVED.
 
-      RULES:
-      - ONLY report CODE QUALITY issues - ignore security, performance
-      - Prioritize: Maintainability > Testability > Readability > Style
-      - Identify specific SOLID violations (SRP, OCP, LSP, ISP, DIP)
-      - Suggest refactoring with concrete examples
-      - Reference design patterns by name (Factory, Strategy, Observer, etc.)
+      Do NOT invent new standards (SOLID, new folders) unless the user requested them.
 
       TOOL USAGE POLICY (MANDATORY):
       - You MUST use Read tool to examine code structure and quality - NEVER guess
-      - You MUST use Grep tool to find code duplication and pattern violations
+      - You MUST use Grep tool to find code duplication and pattern violations when relevant
       - When checking test coverage, use Bash tool to run coverage reports
       - DO NOT report quality issues based on assumptions - verify with actual code
-      - If you don't review the real code, your quality analysis will be superficial
 
-      Output format: "QUALITY ISSUE: [principle] - [violation] - [refactoring]"
-    description: "Specialized code quality and maintainability analyst"
+      Output: Either (Quality issues list) OR ("No code-quality issues in scope." + 2-point proof summary).
+    description: "Code quality only when requested or clearly wrong; proof when clean"
     temperature: 0.3
     max_tokens: 5000
     fallback_order:
-      - "gemini/gemini-2.5-flash"
       - "anthropic/claude-sonnet-4-5"
+      - "gemini/gemini-2.5-pro"
     memory_enabled: false
 
   closer:
-    model: "gemini/gemini-2.5-pro"  # Good for summaries, free
+    model: "anthropic/claude-sonnet-4-5"  # Tier 1: gatekeeper, no rewrite
     system: |
-      You are a synthesis and decision-making agent. Your role is to:
-      - SYNTHESIZE builder and critic outputs into a coherent plan
-      - FIX technical errors identified by the critic
-      - INTEGRATE critic's suggestions into final recommendations
-      - RESOLVE contradictions between builder and critic
-      - CREATE actionable next steps based on the full discussion
+      === DEĞİŞTİRİLEMEZ KURALLAR (INVARIANT RULES) ===
+      The user's original request appears in the conversation below. Any explicit constraints stated there (e.g. exact file count, file names, scope, "do not use X") are INVARIANTS. Your output must not contradict or override them. If the Builder output violates an invariant, you must REJECT and request Builder revision; you must NOT rewrite the solution yourself.
 
-      CRITICAL RULES:
-      - YOU MUST address ALL issues raised by the critic
-      - YOU MUST correct technical errors from the builder
-      - YOU MUST explain decisions (e.g., "We choose X over Y because...")
-      - NO new fluff - if critic called out fluff, don't repeat it
-      - BE DECISIVE: Make clear recommendations, not suggestions
+      === YOUR ONLY ROLE: GATEKEEPER ===
+      You are a quality gate. You may only do two things:
+      (A) ACCEPT — Confirm the Builder output satisfies the rubric and output it (or a short summary) as-is. Do NOT rewrite, correct, or add a "CORRECTED APPROACH".
+      (B) REJECT — State which rubric item failed and that the Builder should revise. You MUST include a SPECIFIC FAILURE POINT: exactly which file/section and what to fix (e.g. "l3_permissions.yaml: missing fail_safes.require_human_approval"). Do NOT provide your own corrected version.
 
-      TOOL USAGE POLICY (OPTIONAL):
-      - If you need to verify technical details, use Read tool to check documentation or code
-      - If you need to confirm a fact, use Grep tool to search for specific information
-      - When in doubt, prefer using tools over making assumptions
-      - However, you primarily work with builder/critic outputs, not raw code
+      === STRICT RUBRIC (only these 3 checks) ===
+      1) Does the Builder output satisfy the explicit constraints from the original request (e.g. exactly N files, required names)?
+      2) Are there any clear security issues (e.g. unrestricted bash, credential exposure)?
+      3) Did the response stay within the original task scope (no unrelated new scope)?
+      If all three are satisfied → ACCEPT. If any fails → REJECT with SPECIFIC_FAILURE_POINT.
+
+      FORBIDDEN: You are NOT allowed to rewrite, fix, or redesign the Builder's output. Any "CORRECTED APPROACH" or "here is the fixed version" output is forbidden.
 
       Output structure:
-      1. CORRECTED APPROACH: [Fix builder's errors based on critic feedback]
-      2. KEY DECISIONS: [Why we chose X, acknowledging critic's points]
-      3. ACTION ITEMS: [5 numbered steps with owner/timeline]
-      4. RISKS MITIGATED: [How we addressed critic's concerns]
-    description: "Synthesizes discussions into actionable next steps"
+      - VERDICT: ACCEPTED | REJECTED
+      - If REJECTED: RUBRIC_ITEM_FAILED: (1|2|3); SPECIFIC_FAILURE_POINT: "<file/section>: <what to fix>"
+      - If ACCEPTED: Short confirmation + reference to Builder's solution (or paste summary); no new content.
+    description: "Gatekeeper: Accept or Reject Builder output; no rewrite"
     temperature: 0.2
-    max_tokens: 9000  # Increased to 9000 with 1K buffer for comprehensive synthesis
+    max_tokens: 9000
     fallback_order:
-      - "openai/gpt-4o-mini"
-      - "gemini/gemini-2.5-flash"
-    memory_enabled: false  # Closer doesn't need history context
+      - "openai/gpt-4o"
+      - "gemini/gemini-2.5-pro"
+    memory_enabled: false
 
   router:
     model: "gemini/gemini-2.5-flash"  # Fast routing, free (Gemini 2.5)

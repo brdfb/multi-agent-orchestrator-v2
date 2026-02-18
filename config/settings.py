@@ -154,6 +154,68 @@ def load_agents_config() -> Dict[str, Any]:
         return yaml.safe_load(f)
 
 
+_defaults_cache: Optional[Dict[str, Any]] = None
+
+
+def get_defaults() -> Dict[str, Any]:
+    """
+    Return the defaults section from agents.yaml.
+
+    Centralises magic numbers (file size limits, context char limits, etc.)
+    that were previously hardcoded across multiple scripts.
+
+    Returns:
+        Nested dict with keys: cli, chain, memory, api, session
+    """
+    global _defaults_cache
+    if _defaults_cache is None:
+        config = load_agents_config()
+        _defaults_cache = config.get("defaults", {})
+    return _defaults_cache
+
+
+def validate_agents_config(config: Dict[str, Any]) -> None:
+    """
+    Basic schema validation for agents.yaml.
+
+    Logs warnings for missing required fields or type mismatches.
+    Does NOT raise — keeps startup graceful even with partial config.
+
+    Args:
+        config: Loaded agents config dict
+    """
+    import logging
+    log = logging.getLogger(__name__)
+
+    required_agent_fields = {"model": str, "system": str, "temperature": float, "max_tokens": int}
+    known_top_level_keys = {
+        "compression", "refinement", "multi_critic", "defaults",
+        "builder", "critic", "closer", "router",
+        "security_critic", "performance_critic", "code_quality_critic",
+    }
+
+    for key in config:
+        if key in known_top_level_keys:
+            continue
+        log.warning(f"agents.yaml: unknown top-level key '{key}' — may be a typo")
+
+    agent_keys = {"builder", "critic", "closer", "router"}
+    for agent in agent_keys:
+        agent_cfg = config.get(agent)
+        if agent_cfg is None:
+            log.warning(f"agents.yaml: agent '{agent}' is missing")
+            continue
+        for field, expected_type in required_agent_fields.items():
+            val = agent_cfg.get(field)
+            if val is None:
+                log.warning(f"agents.yaml: agent '{agent}' missing required field '{field}'")
+            elif not isinstance(val, (expected_type, int if expected_type is float else type(None))):
+                log.warning(
+                    f"agents.yaml: agent '{agent}' field '{field}' expected {expected_type.__name__}, "
+                    f"got {type(val).__name__}"
+                )
+
+
 def load_memory_config() -> Dict[str, Any]:
     """Load memory system configuration from YAML."""
     config_path = CONFIG_DIR / "memory.yaml"
