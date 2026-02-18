@@ -11,130 +11,15 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from config.settings import get_env_source, is_provider_enabled, get_available_providers
 from core.agent_runtime import AgentRuntime
 from core.session_manager import get_session_manager
-from rich.console import Console
-from rich.syntax import Syntax
 from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn
-import re
-
-console = Console()
-
-
-def validate_path_basic(path: str) -> Path:
-    """Basic sanity checks for file paths (not enterprise security)."""
-    resolved = Path(path).resolve()
-
-    # Block obvious sensitive files
-    blocked = ['.env', '.git', '.ssh', 'id_rsa', 'credentials', 'password']
-    if any(b in str(resolved).lower() for b in blocked):
-        matched = [b for b in blocked if b in str(resolved).lower()]
-        console.print(f"\n[bold red]🔒 Blocked:[/bold red] {path}")
-        console.print(f"   Matches blocked pattern: {matched}")
-        console.print("   Security policy prevents accessing this file")
-        sys.exit(1)
-
-    # Warn if outside CWD (but allow)
-    if not str(resolved).startswith(str(Path.cwd())):
-        console.print(f"\n[yellow]⚠️  Reading outside project:[/yellow] {resolved}")
-        # Allow it - just informational
-
-    return resolved
-
-
-def read_file_with_validation(file_path: str) -> str:
-    """Read file with validation and error handling."""
-    # Validate path
-    resolved = validate_path_basic(file_path)
-
-    # Check existence
-    if not resolved.exists():
-        console.print(f"\n[bold red]❌ File not found:[/bold red] {file_path}")
-        sys.exit(1)
-
-    # Check if it's a file
-    if not resolved.is_file():
-        console.print(f"\n[bold red]❌ Not a file:[/bold red] {file_path}")
-        sys.exit(1)
-
-    # Check size (10MB limit)
-    max_size = 10 * 1024 * 1024  # 10MB
-    if resolved.stat().st_size > max_size:
-        size_mb = resolved.stat().st_size / 1024 / 1024
-        console.print(f"\n[bold red]❌ File too large:[/bold red] {size_mb:.1f}MB")
-        console.print(f"   Maximum allowed: 10MB")
-        sys.exit(1)
-
-    # Read file
-    try:
-        with open(resolved, 'r', encoding='utf-8') as f:
-            content = f.read()
-        return content
-    except UnicodeDecodeError:
-        console.print(f"\n[bold red]❌ Cannot read file:[/bold red] Not a text file (binary?)")
-        sys.exit(1)
-    except Exception as e:
-        console.print(f"\n[bold red]❌ Error reading file:[/bold red] {e}")
-        sys.exit(1)
-
-
-def estimate_input_cost(text: str, model: str) -> tuple[int, float]:
-    """Estimate tokens and cost for input text."""
-    try:
-        import tiktoken
-        # Use generic encoding (works for most models)
-        enc = tiktoken.get_encoding("cl100k_base")
-        tokens = len(enc.encode(text))
-
-        # Rough cost estimate (input tokens)
-        # GPT-4o: $0.0025 per 1K input tokens
-        # Claude: $0.003 per 1K input tokens
-        cost = tokens * 0.000003  # Average
-
-        return tokens, cost
-    except:
-        # Fallback: rough estimate
-        tokens = len(text) // 4
-        cost = tokens * 0.000003
-        return tokens, cost
-
-
-def show_error_with_solution(error_msg: str):
-    """Display error with context-aware solution."""
-    console.print(f"\n[bold red]❌ Error:[/bold red] {error_msg}")
-
-    error_lower = error_msg.lower()
-
-    if "api key" in error_lower or "authentication" in error_lower:
-        console.print("\n[bold cyan]💡 Solution:[/bold cyan]")
-        console.print("Add API key to your [yellow].env[/yellow] file:")
-        console.print("  [green]ANTHROPIC_API_KEY[/green]=sk-ant-...")
-        console.print("  [green]OPENAI_API_KEY[/green]=sk-...")
-    elif "model" in error_lower and "not found" in error_lower:
-        console.print("\n[bold cyan]💡 Solution:[/bold cyan]")
-        console.print("Try current models: [green]claude-sonnet-4-5[/green], [green]gpt-4o[/green]")
-    elif "rate limit" in error_lower:
-        console.print("\n[bold cyan]💡 Solution:[/bold cyan]")
-        console.print("Wait 30-60 seconds or try a different provider")
-    else:
-        console.print("\n[bold cyan]💡 Need Help?[/bold cyan]")
-        console.print("Check logs or report: [blue]https://github.com/brdfb/multi-agent-orchestrator-v2/issues[/blue]")
-
-
-def display_response(response: str):
-    """Display response with syntax highlighting."""
-    if '```' in response:
-        parts = re.split(r'(```\w*\n.*?```)', response, flags=re.DOTALL)
-        for part in parts:
-            if part.startswith('```'):
-                match = re.match(r'```(\w+)?\n(.*?)```', part, re.DOTALL)
-                if match:
-                    lang = match.group(1) or 'python'
-                    code = match.group(2).strip()
-                    syntax = Syntax(code, lang, theme="monokai", line_numbers=True)
-                    console.print(syntax)
-            elif part.strip():
-                console.print(part.strip())
-    else:
-        console.print(response)
+from scripts.cli_utils import (
+    validate_path_basic,
+    read_file_with_validation,
+    estimate_input_cost,
+    show_error_with_solution,
+    display_response,
+    console,
+)
 
 
 def print_stage_result(result, stage_num: int, total_stages: int):
