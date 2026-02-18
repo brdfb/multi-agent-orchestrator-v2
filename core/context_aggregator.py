@@ -143,37 +143,14 @@ class ContextAggregator:
         Returns:
             List of conversation dicts (most recent first)
         """
-        import sqlite3
-        from pathlib import Path
-
-        db_path = Path("data/MEMORY/conversations.db")
-        conn = sqlite3.connect(str(db_path))
-        cursor = conn.cursor()
-
         try:
-            cursor.execute("""
-                SELECT id, timestamp, agent, prompt, response
-                FROM conversations
-                WHERE session_id = ?
-                ORDER BY timestamp DESC
-                LIMIT ?
-            """, (session_id, limit))
-
-            rows = cursor.fetchall()
-
-            return [
-                {
-                    'id': row[0],
-                    'timestamp': row[1],
-                    'agent': row[2],
-                    'prompt': row[3],
-                    'response': row[4]
-                }
-                for row in rows
-            ]
-
-        finally:
-            conn.close()
+            return self.memory.backend.get_session_conversations(
+                session_id=session_id,
+                limit=limit,
+            )
+        except Exception as e:
+            logger.warning(f"Failed to get session conversations: {e}")
+            return []
 
     def _get_knowledge_conversations(
         self,
@@ -362,7 +339,8 @@ class ContextAggregator:
                 days = int(seconds / 86400)
                 return f"{days} day{'s' if days > 1 else ''} ago"
 
-        except Exception:
+        except Exception as e:
+            logger.warning(f"Failed to format message age: {e}")
             return "unknown age"
 
     def _apply_token_budget_with_priority(

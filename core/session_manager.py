@@ -12,15 +12,22 @@ Features:
 """
 
 import json
+import logging
 import os
 import random
 import re
 import sqlite3
+import threading
 from datetime import datetime, timedelta
 from pathlib import Path
 from threading import Lock
 from typing import Optional, Dict, Any
 from uuid import uuid4
+
+logger = logging.getLogger(__name__)
+
+# Thread-local storage for per-thread SQLite connections
+_thread_local_session = threading.local()
 
 
 # Singleton lock for thread safety
@@ -46,6 +53,41 @@ class SessionManager:
         if not self._initialized:
             self.db_path = Path("data/MEMORY/conversations.db")
             self._initialized = True
+
+    def _get_connection(self) -> sqlite3.Connection:
+        """
+        Get a thread-local SQLite connection for sessions.
+
+        Reuses the same connection per thread (connection pooling via
+        threading.local). WAL mode is set once per connection.
+        """
+        # Key by db_path so different databases get separate connections
+        cache = getattr(_thread_local_session, 'session_conns', None)
+        if cache is None:
+            cache = {}
+            _thread_local_session.session_conns = cache
+
+        db_key = str(self.db_path)
+        conn = cache.get(db_key)
+
+        # Verify cached connection is still alive (tests may close connections)
+        if conn is not None:
+            try:
+                conn.execute("SELECT 1")
+            except Exception:
+                conn = None
+                cache.pop(db_key, None)
+
+        if conn is None:
+            conn = sqlite3.connect(
+                str(self.db_path),
+                timeout=5.0,
+                check_same_thread=False,
+            )
+            conn.execute("PRAGMA journal_mode=WAL")
+            conn.execute("PRAGMA synchronous=NORMAL")
+            cache[db_key] = conn
+        return conn
 
     def get_or_create_session(
         self,
@@ -185,7 +227,7 @@ class SessionManager:
         Cleanup runs randomly (10% probability) to spread load.
         """
         with _session_db_lock:
-            conn = sqlite3.connect(str(self.db_path))
+            conn = self._get_connection()
             cursor = conn.cursor()
 
             try:
@@ -206,7 +248,7 @@ class SessionManager:
                     self._cleanup_old_sessions(cursor, conn)
 
             finally:
-                conn.close()
+                pass  # Thread-local connection stays open for reuse
 
     def get_session(self, session_id: str) -> Optional[Dict[str, Any]]:
         """
@@ -219,7 +261,7 @@ class SessionManager:
             Session dict or None if not found
         """
         with _session_db_lock:
-            conn = sqlite3.connect(str(self.db_path))
+            conn = self._get_connection()
             cursor = conn.cursor()
 
             try:
@@ -243,7 +285,7 @@ class SessionManager:
                 return None
 
             finally:
-                conn.close()
+                pass  # Thread-local connection stays open for reuse
 
     def _get_recent_cli_session(
         self,
@@ -264,35 +306,41 @@ class SessionManager:
         cutoff_str = cutoff.strftime("%Y-%m-%d %H:%M:%S")
 
         with _session_db_lock:
-            conn = sqlite3.connect(str(self.db_path))
+            conn = self._get_connection()
             cursor = conn.cursor()
 
             try:
+                # Fetch recent CLI sessions and filter by pid in Python.
+                # Avoids fragile LIKE query on JSON which breaks if format changes.
                 cursor.execute("""
                     SELECT session_id, created_at, last_active, source, metadata
                     FROM sessions
                     WHERE source = 'cli'
-                      AND metadata LIKE ?
                       AND datetime(last_active) > datetime(?)
                     ORDER BY last_active DESC
-                    LIMIT 1
-                """, (f'%"pid":{pid}%', cutoff_str))
+                    LIMIT 50
+                """, (cutoff_str,))
 
-                row = cursor.fetchone()
+                rows = cursor.fetchall()
 
-                if row:
-                    return {
-                        'session_id': row[0],
-                        'created_at': row[1],
-                        'last_active': row[2],
-                        'source': row[3],
-                        'metadata': json.loads(row[4]) if row[4] else {}
-                    }
+                for row in rows:
+                    try:
+                        metadata = json.loads(row[4]) if row[4] else {}
+                        if metadata.get('pid') == pid:
+                            return {
+                                'session_id': row[0],
+                                'created_at': row[1],
+                                'last_active': row[2],
+                                'source': row[3],
+                                'metadata': metadata
+                            }
+                    except (json.JSONDecodeError, Exception):
+                        continue
 
                 return None
 
             finally:
-                conn.close()
+                pass  # Thread-local connection stays open for reuse
 
     def _cleanup_old_sessions(
         self,
@@ -326,8 +374,7 @@ class SessionManager:
         conn.commit()
 
         if deleted > 0:
-            # Could log here if logging is enabled
-            pass
+            logger.info(f"Cleaned up {deleted} expired session(s) older than {hours}h")
 
         return deleted
 
@@ -342,7 +389,7 @@ class SessionManager:
             Number of sessions deleted
         """
         with _session_db_lock:
-            conn = sqlite3.connect(str(self.db_path))
+            conn = self._get_connection()
             cursor = conn.cursor()
 
             try:
@@ -350,7 +397,7 @@ class SessionManager:
                 return deleted
 
             finally:
-                conn.close()
+                pass  # Thread-local connection stays open for reuse
 
 
 # Singleton instance

@@ -1,16 +1,117 @@
 """Memory storage backend implementations."""
 
 import json
+import logging
 import sqlite3
+import threading
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from config.settings import BASE_DIR
 
+logger = logging.getLogger(__name__)
+
+# Thread-local storage for per-thread SQLite connections
+_thread_local = threading.local()
+
 # Memory data directory
 MEMORY_DIR = BASE_DIR / "data" / "MEMORY"
 MEMORY_DIR.mkdir(parents=True, exist_ok=True)
+
+
+class FAISSIndex:
+    """
+    Optional FAISS-backed approximate nearest neighbour index for embeddings.
+
+    Wraps faiss-cpu so the rest of the codebase works whether or not
+    faiss is installed (graceful degradation to O(n) scan).
+
+    Usage:
+        index = FAISSIndex(dim=384, index_path=Path("data/MEMORY/faiss.index"))
+        index.add(conv_id=1, embedding=np.array([...]))
+        results = index.search(query_embedding=np.array([...]), k=10)
+        # returns list of (conv_id, distance) tuples (lower distance = more similar)
+    """
+
+    FAISS_AVAILABLE = False
+
+    def __init__(self, dim: int = 384, index_path: Optional[Path] = None):
+        self.dim = dim
+        self.index_path = index_path or (MEMORY_DIR / "faiss.index")
+        self._id_map: List[int] = []  # position → conv_id mapping
+        self._index = None
+
+        try:
+            import faiss  # noqa: F401
+            FAISSIndex.FAISS_AVAILABLE = True
+            self._init_index()
+            logger.info("FAISS index loaded — using ANN semantic search")
+        except ImportError:
+            logger.debug("faiss-cpu not installed — semantic search uses O(n) scan")
+
+    def _init_index(self):
+        """Initialize or load FAISS flat L2 index."""
+        import faiss
+        if self.index_path.exists():
+            self._index = faiss.read_index(str(self.index_path))
+            # Rebuild id_map from stored index (stored in side file)
+            id_map_path = self.index_path.with_suffix(".ids")
+            if id_map_path.exists():
+                with open(id_map_path) as f:
+                    self._id_map = [int(x) for x in f.read().split() if x]
+        else:
+            self._index = faiss.IndexFlatL2(self.dim)
+
+    def add(self, conv_id: int, embedding: "np.ndarray") -> bool:
+        """Add an embedding to the index. Returns True on success."""
+        if not FAISSIndex.FAISS_AVAILABLE or self._index is None:
+            return False
+        try:
+            import numpy as np
+            vec = embedding.astype(np.float32).reshape(1, -1)
+            self._index.add(vec)
+            self._id_map.append(conv_id)
+            self._persist()
+            return True
+        except Exception as e:
+            logger.warning(f"FAISS add failed for conv {conv_id}: {e}")
+            return False
+
+    def search(self, query_embedding: "np.ndarray", k: int = 10) -> List[tuple]:
+        """
+        Search for k nearest neighbours.
+
+        Returns:
+            List of (conv_id, distance) tuples (lower distance = more similar)
+        """
+        if not FAISSIndex.FAISS_AVAILABLE or self._index is None or self._index.ntotal == 0:
+            return []
+        try:
+            import numpy as np
+            vec = query_embedding.astype(np.float32).reshape(1, -1)
+            k = min(k, self._index.ntotal)
+            distances, indices = self._index.search(vec, k)
+            results = []
+            for dist, idx in zip(distances[0], indices[0]):
+                if 0 <= idx < len(self._id_map):
+                    results.append((self._id_map[idx], float(dist)))
+            return results
+        except Exception as e:
+            logger.warning(f"FAISS search failed: {e}")
+            return []
+
+    def _persist(self):
+        """Save index and id map to disk."""
+        try:
+            import faiss
+            self.index_path.parent.mkdir(parents=True, exist_ok=True)
+            faiss.write_index(self._index, str(self.index_path))
+            id_map_path = self.index_path.with_suffix(".ids")
+            with open(id_map_path, "w") as f:
+                f.write(" ".join(str(x) for x in self._id_map))
+        except Exception as e:
+            logger.warning(f"FAISS persist failed: {e}")
 
 
 class SQLiteBackend:
@@ -25,6 +126,10 @@ class SQLiteBackend:
         """
         self.db_path = db_path or (MEMORY_DIR / "conversations.db")
         self._init_database()
+        self._faiss = FAISSIndex(
+            dim=384,
+            index_path=self.db_path.parent / "faiss.index",
+        )
 
     def _init_database(self):
         """Initialize database schema."""
@@ -70,12 +175,43 @@ class SQLiteBackend:
 
             conn.commit()
         finally:
-            conn.close()
+            pass  # Thread-local connection stays open for reuse
 
     def _get_connection(self) -> sqlite3.Connection:
-        """Get database connection."""
-        conn = sqlite3.connect(str(self.db_path))
-        conn.row_factory = sqlite3.Row  # Enable column access by name
+        """
+        Get a thread-local SQLite connection.
+
+        Reuses the same connection per thread to avoid the overhead of
+        opening a new connection on every query (connection pooling via
+        threading.local). WAL mode is set once per connection.
+        """
+        # Key by db_path so different databases get separate connections
+        cache = getattr(_thread_local, 'memory_conns', None)
+        if cache is None:
+            cache = {}
+            _thread_local.memory_conns = cache
+
+        db_key = str(self.db_path)
+        conn = cache.get(db_key)
+
+        # Verify the cached connection is still alive
+        if conn is not None:
+            try:
+                conn.execute("SELECT 1")
+            except Exception:
+                conn = None
+                cache.pop(db_key, None)
+
+        if conn is None:
+            conn = sqlite3.connect(
+                str(self.db_path),
+                timeout=5.0,
+                check_same_thread=False,
+            )
+            conn.row_factory = sqlite3.Row
+            conn.execute("PRAGMA journal_mode=WAL")
+            conn.execute("PRAGMA synchronous=NORMAL")
+            cache[db_key] = conn
         return conn
 
     def store(self, conversation: Dict[str, Any]) -> int:
@@ -145,9 +281,38 @@ class SQLiteBackend:
 
             row_id = cursor.lastrowid
             conn.commit()
+
+            # If embedding provided, add to FAISS index as well as SQLite
+            embedding = conversation.get("embedding")
+            if embedding is not None and self._faiss.FAISS_AVAILABLE:
+                try:
+                    import pickle
+                    if isinstance(embedding, (bytes, bytearray)):
+                        embedding = pickle.loads(embedding)
+                    self._faiss.add(conv_id=row_id, embedding=embedding)
+                except Exception as e:
+                    logger.warning(f"FAISS index update failed for conv {row_id}: {e}")
+
             return row_id
         finally:
-            conn.close()
+            pass  # Thread-local connection stays open for reuse
+
+    def search_faiss(
+        self,
+        query_embedding: "np.ndarray",
+        k: int = 10,
+    ) -> List[int]:
+        """
+        Search FAISS index for nearest neighbours.
+
+        Returns:
+            List of conversation IDs (most similar first).
+            Empty list if FAISS unavailable or no results.
+        """
+        results = self._faiss.search(query_embedding, k=k)
+        # Sort by distance (ascending = most similar first)
+        results.sort(key=lambda x: x[1])
+        return [conv_id for conv_id, _ in results]
 
     def get_recent(
         self, limit: int = 10, agent: Optional[str] = None
@@ -189,7 +354,7 @@ class SQLiteBackend:
             rows = cursor.fetchall()
             return [self._row_to_dict(row) for row in rows]
         finally:
-            conn.close()
+            pass  # Thread-local connection stays open for reuse
 
     def search(
         self,
@@ -259,7 +424,7 @@ class SQLiteBackend:
             rows = cursor.fetchall()
             return [self._row_to_dict(row) for row in rows]
         finally:
-            conn.close()
+            pass  # Thread-local connection stays open for reuse
 
     def get_by_id(self, conversation_id: int) -> Optional[Dict[str, Any]]:
         """
@@ -279,7 +444,7 @@ class SQLiteBackend:
             row = cursor.fetchone()
             return self._row_to_dict(row) if row else None
         finally:
-            conn.close()
+            pass  # Thread-local connection stays open for reuse
 
     def delete(self, conversation_id: int) -> bool:
         """
@@ -300,7 +465,7 @@ class SQLiteBackend:
             conn.commit()
             return deleted
         finally:
-            conn.close()
+            pass  # Thread-local connection stays open for reuse
 
     def get_stats(self) -> Dict[str, Any]:
         """
@@ -353,7 +518,7 @@ class SQLiteBackend:
                 "by_model": by_model,
             }
         finally:
-            conn.close()
+            pass  # Thread-local connection stays open for reuse
 
     def cleanup(self, days: int) -> int:
         """
@@ -381,7 +546,7 @@ class SQLiteBackend:
             conn.commit()
             return deleted_count
         finally:
-            conn.close()
+            pass  # Thread-local connection stays open for reuse
 
     def update_embedding(self, conversation_id: int, embedding_blob: bytes) -> bool:
         """
@@ -404,10 +569,11 @@ class SQLiteBackend:
             )
             conn.commit()
             return True
-        except Exception:
+        except Exception as e:
+            logger.warning(f"Failed to update embedding for conversation {conversation_id}: {e}")
             return False
         finally:
-            conn.close()
+            pass  # Thread-local connection stays open for reuse
 
     def query_candidates(
         self,
@@ -456,7 +622,7 @@ class SQLiteBackend:
             rows = cursor.fetchall()
             return [self._row_to_dict(row) for row in rows]
         finally:
-            conn.close()
+            pass  # Thread-local connection stays open for reuse
 
     def _row_to_dict(self, row: sqlite3.Row) -> Dict[str, Any]:
         """Convert SQLite row to dictionary."""
@@ -481,3 +647,49 @@ class SQLiteBackend:
             "error": row["error"],
             "embedding": row["embedding"] if "embedding" in row.keys() else None,
         }
+
+    def get_session_conversations(
+        self,
+        session_id: str,
+        limit: int = 5,
+    ) -> List[Dict[str, Any]]:
+        """
+        Get recent conversations from a specific session.
+
+        Used by ContextAggregator for session context retrieval.
+
+        Args:
+            session_id: Session ID to query
+            limit: Max number of conversations (most recent first)
+
+        Returns:
+            List of conversation dicts with id, timestamp, agent, prompt, response
+        """
+        conn = self._get_connection()
+        cursor = conn.cursor()
+
+        try:
+            cursor.execute("""
+                SELECT id, timestamp, agent, prompt, response
+                FROM conversations
+                WHERE session_id = ?
+                ORDER BY timestamp DESC
+                LIMIT ?
+            """, (session_id, limit))
+
+            rows = cursor.fetchall()
+
+            return [
+                {
+                    'id': row[0],
+                    'timestamp': row[1],
+                    'agent': row[2],
+                    'prompt': row[3],
+                    'response': row[4],
+                }
+                for row in rows
+            ]
+
+        except Exception as e:
+            logger.warning(f"Failed to get session conversations for {session_id}: {e}")
+            return []
