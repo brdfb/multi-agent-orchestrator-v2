@@ -1,18 +1,29 @@
 """FastAPI server for multi-agent orchestration."""
 
+import asyncio
+import logging
 import os
 import sys
 import time
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from pathlib import Path
+from threading import Lock
 from typing import List, Optional
 
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.util import get_remote_address
+
+logger = logging.getLogger(__name__)
+
+# Rate limiter (per IP address)
+limiter = Limiter(key_func=get_remote_address)
 
 # Add parent directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -25,7 +36,8 @@ from core.session_manager import get_session_manager
 
 # Server state tracking
 SERVER_START_TIME = time.time()
-LAST_REQUEST_TIME = None
+_last_request_lock = Lock()
+_LAST_REQUEST_TIME: Optional[float] = None
 
 
 @asynccontextmanager
@@ -63,17 +75,20 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="Multi-Agent Orchestrator",
     description="Multi-LLM agent system with CLI, API, and UI",
-    version="1.0.1",  # Updated to reflect current version
+    version="1.0.2",
     lifespan=lifespan,
 )
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 
-# Middleware to track last request time
+# Middleware to track last request time (thread-safe)
 @app.middleware("http")
 async def track_request_time(request: Request, call_next):
     """Track last request timestamp for health monitoring."""
-    global LAST_REQUEST_TIME
-    LAST_REQUEST_TIME = time.time()
+    global _LAST_REQUEST_TIME
+    with _last_request_lock:
+        _LAST_REQUEST_TIME = time.time()
     response = await call_next(request)
     return response
 
@@ -134,47 +149,45 @@ async def index(request: Request):
 
 
 @app.post("/ask", response_model=RunResultResponse)
-async def ask(request: AskRequest):
+@limiter.limit("10/minute")
+async def ask(request: Request, body: AskRequest):
     """
     Execute single agent request.
 
     Args:
-        request: Agent, prompt, and optional model override
+        body: Agent, prompt, and optional model override
 
     Returns:
         RunResult with response and metadata
     """
-    if not request.prompt.strip():
+    if not body.prompt.strip():
         raise HTTPException(status_code=422, detail="Prompt cannot be empty")
 
     valid_agents = ["auto", "builder", "critic", "closer"]
-    if request.agent not in valid_agents:
+    if body.agent not in valid_agents:
         raise HTTPException(
             status_code=400,
-            detail=f"Invalid agent: {request.agent}. Valid: {valid_agents}",
+            detail=f"Invalid agent: {body.agent}. Valid: {valid_agents}",
         )
 
     try:
-        # Get or create session (v0.11.0)
-        session_id = request.session_id
+        session_id = body.session_id
         if session_id:
-            # Validate user-provided session_id
             session_manager = get_session_manager()
             session_manager.validate_session_id(session_id)
-            # Save/update session
             session_manager.save_session(
                 session_id=session_id,
                 source="api",
-                metadata={"user_agent": request.headers.get("User-Agent", "unknown") if hasattr(request, 'headers') else "unknown"}
+                metadata={"user_agent": request.headers.get("User-Agent", "unknown")}
             )
-        # If no session_id provided, system works in stateless mode (backward compatible)
 
-        result = runtime.run(
-            agent=request.agent,
-            prompt=request.prompt,
-            override_model=request.override_model,
-            mock_mode=request.mock_mode,
-            session_id=session_id,  # v0.11.0
+        result = await asyncio.to_thread(
+            runtime.run,
+            agent=body.agent,
+            prompt=body.prompt,
+            override_model=body.override_model,
+            mock_mode=body.mock_mode,
+            session_id=session_id,
         )
 
         if result.error:
@@ -189,42 +202,39 @@ async def ask(request: AskRequest):
 
 
 @app.post("/chain", response_model=List[RunResultResponse])
-async def chain(request: ChainRequest):
+@limiter.limit("3/minute")
+async def chain(request: Request, body: ChainRequest):
     """
     Execute multi-agent chain.
 
     Args:
-        request: Prompt and optional stages
+        body: Prompt and optional stages
 
     Returns:
         List of RunResults from each stage
     """
-    if not request.prompt.strip():
+    if not body.prompt.strip():
         raise HTTPException(status_code=422, detail="Prompt cannot be empty")
 
     try:
-        # Get or create session (v0.11.0)
-        session_id = request.session_id
+        session_id = body.session_id
         if session_id:
-            # Validate user-provided session_id
             session_manager = get_session_manager()
             session_manager.validate_session_id(session_id)
-            # Save/update session
             session_manager.save_session(
                 session_id=session_id,
                 source="api",
-                metadata={"user_agent": request.headers.get("User-Agent", "unknown") if hasattr(request, 'headers') else "unknown"}
+                metadata={"user_agent": request.headers.get("User-Agent", "unknown")}
             )
-        # If no session_id provided, system works in stateless mode (backward compatible)
 
-        results = runtime.chain(
-            prompt=request.prompt,
-            stages=request.stages,
-            mock_mode=request.mock_mode,
-            session_id=session_id,  # v0.11.0
+        results = await asyncio.to_thread(
+            runtime.chain,
+            prompt=body.prompt,
+            stages=body.stages,
+            mock_mode=body.mock_mode,
+            session_id=session_id,
         )
 
-        # Check for errors
         errors = [r for r in results if r.error]
         if errors:
             raise HTTPException(
@@ -339,8 +349,8 @@ def get_system_metrics():
 
         # Last request time
         last_request = None
-        if LAST_REQUEST_TIME:
-            last_request = datetime.fromtimestamp(LAST_REQUEST_TIME, tz=timezone.utc).isoformat()
+        if _LAST_REQUEST_TIME:
+            last_request = datetime.fromtimestamp(_LAST_REQUEST_TIME, tz=timezone.utc).isoformat()
 
         return {
             "uptime_seconds": uptime_seconds,
@@ -364,12 +374,14 @@ def get_24h_stats():
         # In a real implementation, you'd filter by timestamp
 
         return {
-            "total_requests": metrics.get("total_conversations", 0),
+            "total_requests": metrics.get("total_requests", 0),
             "total_tokens": metrics.get("total_tokens", 0),
             "estimated_cost_usd": metrics.get("total_cost", 0.0),
             "errors": 0,  # Would need error tracking in logs
         }
-    except Exception:
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning(f"Failed to compute 24h stats: {e}")
         return {
             "total_requests": 0,
             "total_tokens": 0,
@@ -433,7 +445,9 @@ async def health():
 
 # Memory API endpoints
 @app.get("/memory/search")
+@limiter.limit("30/minute")
 async def memory_search(
+    request: Request,
     q: str,
     agent: Optional[str] = None,
     model: Optional[str] = None,
