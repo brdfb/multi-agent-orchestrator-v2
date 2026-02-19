@@ -216,6 +216,29 @@ class FinansalHesap:
 
 # ─── Dosya Okuma ─────────────────────────────────────────────────────────────
 
+def _parse_turkish_number(s: str) -> float:
+    """
+    Turkce/Ingilizce sayi formatini parse et.
+    TR: 45.000,00 -> 45000.00
+    EN: 45,000.00 -> 45000.00
+    Basit: 9000 -> 9000.0
+    """
+    s = s.strip()
+    # Son nokta/virgulun pozisyonuna bak
+    last_dot = s.rfind('.')
+    last_comma = s.rfind(',')
+
+    if last_dot > last_comma:
+        # EN format: 45,000.00 — virgul binlik, nokta ondalik
+        return float(s.replace(',', ''))
+    elif last_comma > last_dot:
+        # TR format: 45.000,00 — nokta binlik, virgul ondalik
+        return float(s.replace('.', '').replace(',', '.'))
+    else:
+        # Sadece rakam veya tek ayirici
+        return float(s.replace(',', '').replace('.', '') if ',' not in s and '.' not in s else s.replace(',', ''))
+
+
 def extract_invoice_data(text: str) -> dict:
     """Fatura metninden regex ile anahtar verileri cikar."""
     import re
@@ -231,19 +254,24 @@ def extract_invoice_data(text: str) -> dict:
     if m:
         meta["tarih"] = m.group(1).strip()
 
-    # KDV toplam
-    m = re.search(r'(?:KDV\s*(?:Tutar[ıi])?|VAT)[:\s]*([\d.,]+)\s*(?:TL)?', text, re.IGNORECASE)
+    # KDV toplam — "KDV" veya "KDV Tutari" ile baslayan
+    m = re.search(r'KDV\s*(?:\(%?\d+\)|Tutar[ıi]?)?[:\s]*([\d.,]+)\s*(?:TL)?', text, re.IGNORECASE)
     if m:
         try:
-            meta["kdv_toplam"] = float(m.group(1).replace('.', '').replace(',', '.'))
+            meta["kdv_toplam"] = _parse_turkish_number(m.group(1))
         except ValueError:
             pass
 
-    # Genel toplam
-    m = re.search(r'(?:Genel\s*Toplam|TOPLAM|Grand\s*Total)[:\s]*([\d.,]+)\s*(?:TL)?', text, re.IGNORECASE)
+    # Genel toplam — "Genel Toplam" oncelikli, sonra tek basina "Toplam" (ama "Ara Toplam" degil)
+    m = re.search(r'Genel\s*Toplam[:\s]*([\d.,]+)\s*(?:TL)?', text, re.IGNORECASE)
+    if not m:
+        m = re.search(r'Grand\s*Total[:\s]*([\d.,]+)\s*(?:TL)?', text, re.IGNORECASE)
+    if not m:
+        # "Toplam" tek basina — ama "Ara Toplam" olmamali
+        m = re.search(r'(?<!Ara\s)Toplam[:\s]*([\d.,]+)\s*(?:TL)?', text, re.IGNORECASE)
     if m:
         try:
-            meta["genel_toplam"] = float(m.group(1).replace('.', '').replace(',', '.'))
+            meta["genel_toplam"] = _parse_turkish_number(m.group(1))
         except ValueError:
             pass
 
