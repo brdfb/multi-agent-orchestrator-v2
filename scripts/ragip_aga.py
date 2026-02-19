@@ -155,31 +155,94 @@ class FinansalHesap:
 
 # ─── Dosya Okuma ─────────────────────────────────────────────────────────────
 
-def read_file_content(filepath: str) -> str:
-    """Sözleşme/fatura dosyasını oku. PDF, TXT, DOCX destekler."""
+def extract_invoice_data(text: str) -> dict:
+    """Fatura metninden regex ile anahtar verileri cikar."""
+    import re
+    meta = {}
+
+    # Fatura numarasi
+    m = re.search(r'(?:Fatura\s*(?:No|Numaras[ıi])|Invoice\s*No)[:\s]*([A-Z0-9\-/]+)', text, re.IGNORECASE)
+    if m:
+        meta["fatura_no"] = m.group(1).strip()
+
+    # Tarih (GG.AA.YYYY veya GG/AA/YYYY)
+    m = re.search(r'(?:Fatura\s*Tarihi|Tarih|Date)[:\s]*(\d{1,2}[./]\d{1,2}[./]\d{2,4})', text, re.IGNORECASE)
+    if m:
+        meta["tarih"] = m.group(1).strip()
+
+    # KDV toplam
+    m = re.search(r'(?:KDV\s*(?:Tutar[ıi])?|VAT)[:\s]*([\d.,]+)\s*(?:TL)?', text, re.IGNORECASE)
+    if m:
+        try:
+            meta["kdv_toplam"] = float(m.group(1).replace('.', '').replace(',', '.'))
+        except ValueError:
+            pass
+
+    # Genel toplam
+    m = re.search(r'(?:Genel\s*Toplam|TOPLAM|Grand\s*Total)[:\s]*([\d.,]+)\s*(?:TL)?', text, re.IGNORECASE)
+    if m:
+        try:
+            meta["genel_toplam"] = float(m.group(1).replace('.', '').replace(',', '.'))
+        except ValueError:
+            pass
+
+    # Vade tarihi
+    m = re.search(r'(?:Vade\s*Tarihi|Due\s*Date)[:\s]*(\d{1,2}[./]\d{1,2}[./]\d{2,4})', text, re.IGNORECASE)
+    if m:
+        meta["vade_tarihi"] = m.group(1).strip()
+
+    return meta
+
+
+def read_file_content(filepath: str) -> str | dict:
+    """
+    Sozlesme/fatura dosyasini oku. PDF, TXT, DOCX destekler.
+    PDF icin pdfplumber varsa tablo cikarma da yapar ve dict doner.
+    """
     path = Path(filepath)
     if not path.exists():
-        raise FileNotFoundError(f"Dosya bulunamadı: {filepath}")
+        raise FileNotFoundError(f"Dosya bulunamadi: {filepath}")
 
     suffix = path.suffix.lower()
 
     if suffix == ".pdf":
+        # pdfplumber oncelikli (tablo cikarma destegi)
+        try:
+            import pdfplumber
+            with pdfplumber.open(str(path)) as pdf:
+                pages_text = []
+                all_tables = []
+                for page in pdf.pages:
+                    pages_text.append(page.extract_text() or "")
+                    tables = page.extract_tables()
+                    if tables:
+                        for tbl in tables:
+                            all_tables.append(tbl)
+
+                text = "\n".join(pages_text)[:8000]
+                fatura_meta = extract_invoice_data(text)
+
+                if all_tables or fatura_meta:
+                    return {
+                        "metin": text,
+                        "tablolar": all_tables[:10],  # Maks 10 tablo
+                        "fatura_meta": fatura_meta,
+                    }
+                return text
+        except ImportError:
+            pass
+
+        # pypdf fallback (sadece metin)
         try:
             import pypdf
             reader = pypdf.PdfReader(str(path))
             text = "\n".join(page.extract_text() or "" for page in reader.pages)
-            return text[:8000]  # İlk 8000 karakter (token bütçesi)
+            return text[:8000]
         except ImportError:
-            try:
-                import pdfplumber
-                with pdfplumber.open(str(path)) as pdf:
-                    text = "\n".join(p.extract_text() or "" for p in pdf.pages)
-                return text[:8000]
-            except ImportError:
-                raise ImportError(
-                    "PDF okumak için: pip install pypdf\n"
-                    "veya: pip install pdfplumber"
-                )
+            raise ImportError(
+                "PDF okumak icin: pip install pdfplumber\n"
+                "veya: pip install pypdf"
+            )
 
     elif suffix in (".docx", ".doc"):
         try:
@@ -188,17 +251,16 @@ def read_file_content(filepath: str) -> str:
             text = "\n".join(p.text for p in doc.paragraphs)
             return text[:8000]
         except ImportError:
-            raise ImportError("DOCX okumak için: pip install python-docx")
+            raise ImportError("DOCX okumak icin: pip install python-docx")
 
     elif suffix in (".txt", ".md", ".csv"):
         return path.read_text(encoding="utf-8", errors="ignore")[:8000]
 
     else:
-        # Düz metin dene
         try:
             return path.read_text(encoding="utf-8", errors="ignore")[:8000]
         except Exception:
-            raise ValueError(f"Desteklenmeyen dosya formatı: {suffix}")
+            raise ValueError(f"Desteklenmeyen dosya formati: {suffix}")
 
 
 # ─── LLM Çağrısı ─────────────────────────────────────────────────────────────
@@ -540,15 +602,37 @@ def main():
         try:
             file_content = read_file_content(args.file)
             filename = Path(args.file).name
-            full_prompt = (
-                f"{args.prompt}\n\n"
-                f"--- DOSYA: {filename} ---\n"
-                f"{file_content}\n"
-                f"--- DOSYA SONU ---"
-            )
-            print(f"[OK] {filename} okundu ({len(file_content)} karakter)", file=sys.stderr)
+
+            if isinstance(file_content, dict):
+                # pdfplumber ile zengin icerik dondu
+                metin = file_content.get("metin", "")
+                tablolar = file_content.get("tablolar", [])
+                fatura_meta = file_content.get("fatura_meta", {})
+
+                dosya_blok = f"--- DOSYA: {filename} ---\n{metin}\n"
+                if fatura_meta:
+                    dosya_blok += "\n--- FATURA VERILERI ---\n"
+                    for k, v in fatura_meta.items():
+                        dosya_blok += f"  {k}: {v}\n"
+                if tablolar:
+                    dosya_blok += f"\n--- TABLOLAR ({len(tablolar)} adet) ---\n"
+                    for i, tbl in enumerate(tablolar[:3], 1):
+                        dosya_blok += f"Tablo {i}:\n"
+                        for row in tbl[:20]:  # Maks 20 satir/tablo
+                            dosya_blok += "  | " + " | ".join(str(c or "") for c in row) + " |\n"
+                dosya_blok += "--- DOSYA SONU ---"
+                full_prompt = f"{args.prompt}\n\n{dosya_blok}"
+                print(f"[OK] {filename} okundu ({len(metin)} karakter, {len(tablolar)} tablo)", file=sys.stderr)
+            else:
+                full_prompt = (
+                    f"{args.prompt}\n\n"
+                    f"--- DOSYA: {filename} ---\n"
+                    f"{file_content}\n"
+                    f"--- DOSYA SONU ---"
+                )
+                print(f"[OK] {filename} okundu ({len(file_content)} karakter)", file=sys.stderr)
         except Exception as e:
-            print(f"[HATA] Dosya okunamadı: {e}", file=sys.stderr)
+            print(f"[HATA] Dosya okunamadi: {e}", file=sys.stderr)
             sys.exit(1)
 
     # Güncel TCMB oranını prompt'a otomatik ekle
