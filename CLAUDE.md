@@ -142,10 +142,10 @@ Multi-Agent Orchestrator is a production-ready system that routes user queries a
 
 ### Agent System
 Four specialized agents defined in `config/agents.yaml`:
-- **builder**: Creates implementations (Claude Sonnet - creative/thorough)
-- **critic**: Reviews and finds issues (GPT-4o-mini - fast/analytical)
-- **closer**: Synthesizes action items (Gemini Pro - decisive)
-- **router**: Auto-routes queries to appropriate agent (GPT-4o-mini - fast/cheap)
+- **builder**: Creates implementations (Claude Sonnet 4.5 - creative/thorough)
+- **critic**: Reviews and finds issues (GPT-4o - analytical)
+- **closer**: Synthesizes action items (Claude Sonnet 4.5 - decisive)
+- **router**: Auto-routes queries to appropriate agent (Gemini 2.5 Flash - fast/cheap)
 
 Each agent has distinct `system` prompts, `temperature`, and `max_tokens` settings that define their behavior.
 
@@ -280,7 +280,7 @@ make clean                # Remove venv, caches
 ### Changing Models
 - **Per-request**: Pass `override_model` in API/UI
 - **Permanent**: Edit `agents.yaml` default model for agent
-- **Routing**: Cheaper models (gpt-4o-mini) for routing, expensive (Claude Sonnet) for building
+- **Routing**: Cheaper models (Gemini 2.5 Flash) for routing, expensive (Claude Sonnet 4.5) for building/closing, mid-tier (GPT-4o) for criticism
 
 ### Debugging Requests
 ```bash
@@ -565,7 +565,7 @@ pytest tests/test_memory_api.py -v
 Unified API across providers - single `completion()` call works for OpenAI, Anthropic, Google, 100+ models. No provider-specific client code.
 
 ### Why Separate Agents?
-Each LLM model has strengths. Builder uses Claude (creative), Critic uses GPT-4o-mini (fast analysis), Closer uses Gemini (decisive). Mix-and-match based on task economics.
+Each LLM model has strengths. Builder uses Claude Sonnet 4.5 (creative/thorough), Critic uses GPT-4o (analytical review), Closer uses Claude Sonnet 4.5 (synthesis), Router uses Gemini 2.5 Flash (fast/cheap routing). Mix-and-match based on task economics.
 
 ### Why JSON Logs?
 - Machine-readable for metrics aggregation

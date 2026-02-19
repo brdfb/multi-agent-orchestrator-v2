@@ -814,6 +814,15 @@ uvicorn api.server:app --port 5051
 
 > **Note**: Previous beginner guides ([HOW_IT_WORKS.md](docs/archive/HOW_IT_WORKS.md), [NASIL_ÇALIŞIR.md](docs/archive/NASIL_ÇALIŞIR.md)) have been archived as they covered older versions (pre-v0.9.0). Current documentation above reflects v0.12.0 features.
 
+### When to Use & Scenarios
+
+- **[docs/KULLANIM_DURUMLARI_VE_SENARYOLAR.md](docs/KULLANIM_DURUMLARI_VE_SENARYOLAR.md)** - Ne zaman kullanılır? (Türkçe)
+  - Hızlı karar tablosu (kullan / kullanma)
+  - Pipeline özeti (builder → critic → closer)
+  - Cursor/Claude vs Orchestrator
+  - Kullanım senaryoları (otomasyon, tekrarlayan rapor, kalıcı bellek, rol dağıtımı)
+  - İlgili: [KULLANIM_ORNEGI_TAM_AKIS.md](docs/KULLANIM_ORNEGI_TAM_AKIS.md) - Adım adım tek konu örneği
+
 ### Specialized Guides
 
 - **[MEMORY_GUIDE.md](MEMORY_GUIDE.md)** - Complete memory system guide

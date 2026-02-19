@@ -17,6 +17,12 @@ tiktoken>=0.5.0  # Accurate token counting for OpenAI models
 # CLI enhancements
 rich>=13.7.0  # Beautiful terminal formatting, syntax highlighting, progress bars
 
+# Rate limiting
+slowapi>=0.1.9  # Per-IP rate limiting middleware for FastAPI
+
+# Vector search (optional — used if faiss-cpu installed)
+# faiss-cpu>=1.7.4  # Approximate nearest neighbor search for semantic memory
+
 # Development dependencies
 pytest>=8.0.0
 httpx>=0.26.0
