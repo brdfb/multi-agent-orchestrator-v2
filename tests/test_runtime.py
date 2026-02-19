@@ -6,7 +6,7 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from core.agent_runtime import AgentRuntime
+from core.agent_runtime import AgentRuntime, RunResult
 from core.llm_connector import LLMResponse
 
 
@@ -449,65 +449,46 @@ def test_run_multi_critic_with_mock():
     original_dynamic_enabled = runtime.config.get("dynamic_selection", {}).get("enabled", False)
     runtime.config["dynamic_selection"]["enabled"] = False
 
-    # Mock responses for each critic
-    mock_responses = {
-        "security-critic": LLMResponse(
-            text="SECURITY ISSUE: Missing authentication",
-            model="openai/gpt-4o",
-            provider="openai",
-            prompt_tokens=50,
-            completion_tokens=20,
-            total_tokens=70,
-            duration_ms=200.0,
+    # Mock run() by agent name — avoids fragile model/prompt matching
+    mock_results = {
+        "security-critic": RunResult(
+            agent="security-critic", model="openai/gpt-4o", provider="openai",
+            prompt="ctx", response="SECURITY ISSUE: Missing authentication",
+            duration_ms=200.0, prompt_tokens=50, completion_tokens=20,
+            total_tokens=70, timestamp="2025-01-01T00:00:00Z", log_file="test.json",
         ),
-        "performance-critic": LLMResponse(
-            text="PERFORMANCE ISSUE: Inefficient algorithm",
-            model="gemini/gemini-2.5-pro",
-            provider="google",
-            prompt_tokens=50,
-            completion_tokens=20,
-            total_tokens=70,
-            duration_ms=180.0,
+        "performance-critic": RunResult(
+            agent="performance-critic", model="gemini/gemini-2.5-pro", provider="google",
+            prompt="ctx", response="PERFORMANCE ISSUE: Inefficient algorithm",
+            duration_ms=180.0, prompt_tokens=50, completion_tokens=20,
+            total_tokens=70, timestamp="2025-01-01T00:00:00Z", log_file="test.json",
         ),
-        "code-quality-critic": LLMResponse(
-            text="QUALITY ISSUE: Poor error handling",
-            model="openai/gpt-4o-mini",
-            provider="openai",
-            prompt_tokens=50,
-            completion_tokens=20,
-            total_tokens=70,
-            duration_ms=150.0,
+        "code-quality-critic": RunResult(
+            agent="code-quality-critic", model="openai/gpt-4o", provider="openai",
+            prompt="ctx", response="QUALITY ISSUE: Poor error handling",
+            duration_ms=150.0, prompt_tokens=50, completion_tokens=20,
+            total_tokens=70, timestamp="2025-01-01T00:00:00Z", log_file="test.json",
         ),
     }
 
-    def mock_call_side_effect(model, **kwargs):
-        # Determine which critic based on model
-        if "gpt-4o" in model and "mini" not in model:
-            return mock_responses["security-critic"]
-        elif "gemini-2.5-pro" in model:
-            return mock_responses["performance-critic"]
-        elif "gpt-4o-mini" in model:
-            return mock_responses["code-quality-critic"]
-        return mock_responses["security-critic"]
+    def mock_run(agent, prompt, **kwargs):
+        return mock_results[agent]
 
     try:
-        with patch.object(runtime.connector, "call", side_effect=mock_call_side_effect):
-            with patch("core.agent_runtime.write_json") as mock_write:
-                mock_write.return_value = Path("test.json")
+        with patch.object(runtime, "run", side_effect=mock_run):
+            consensus, results = runtime._run_multi_critic("Test builder output", "Test prompt")
 
-                consensus, results = runtime._run_multi_critic("Test builder output", "Test prompt")
+            # Check that all critics ran
+            assert len(results) == 3
 
-                # Check that all critics ran
-                assert len(results) == 3
+            # Check that consensus includes all issues
+            assert "SECURITY ISSUE" in consensus or "Missing authentication" in consensus
+            assert "PERFORMANCE ISSUE" in consensus or "Inefficient algorithm" in consensus
+            assert "QUALITY ISSUE" in consensus or "Poor error handling" in consensus
 
-                # Check that consensus includes all issues
-                assert "SECURITY ISSUE" in consensus or "Missing authentication" in consensus
-                assert "PERFORMANCE ISSUE" in consensus or "Inefficient algorithm" in consensus
-                assert "QUALITY ISSUE" in consensus or "Poor error handling" in consensus
-
-                # Check token aggregation
-                total_tokens = sum(r.total_tokens for r in results)
-                assert total_tokens == 210  # 70 * 3
+            # Check token aggregation
+            total_tokens = sum(r.total_tokens for r in results)
+            assert total_tokens == 210  # 70 * 3
     finally:
         # Restore original state
         runtime.config["dynamic_selection"]["enabled"] = original_dynamic_enabled
