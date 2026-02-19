@@ -152,6 +152,67 @@ class FinansalHesap:
             ),
         }
 
+    @staticmethod
+    def doviz_forward(spot: float, r_tl_pct: float, r_usd_pct: float, gun: int) -> dict:
+        """
+        Forward kur tahmini (faiz orani paritesi).
+        F = S x (1 + r_TL x t) / (1 + r_USD x t)
+        spot: Guncel doviz kuru (ornek: 38.50)
+        r_tl_pct: TL yillik faiz orani % (ornek: 42.5)
+        r_usd_pct: USD yillik faiz orani % (ornek: 4.5)
+        gun: Vade gun sayisi
+        """
+        t = gun / 365
+        r_tl = r_tl_pct / 100
+        r_usd = r_usd_pct / 100
+        forward = spot * (1 + r_tl * t) / (1 + r_usd * t)
+        prim_pct = ((forward - spot) / spot) * 100
+        return {
+            "spot_kur": spot,
+            "r_tl_pct": r_tl_pct,
+            "r_usd_pct": r_usd_pct,
+            "gun": gun,
+            "forward_kur": round(forward, 4),
+            "prim_pct": round(prim_pct, 2),
+            "yorum": f"{gun} gun sonra beklenen kur: {forward:.4f} TL (% {prim_pct:.1f} prim)",
+        }
+
+    @staticmethod
+    def ithalat_maliyet(
+        usd_tutar: float,
+        spot_kur: float,
+        navlun_usd: float = 0,
+        gtip_vergi_pct: float = 0,
+        kdv_pct: float = 20.0,
+    ) -> dict:
+        """
+        Ithalat toplam maliyet hesabi.
+        CIF = FOB + navlun
+        Gumruk vergisi = CIF x gtip_vergi_pct
+        KDV matrah = CIF + gumruk vergisi
+        KDV = matrah x kdv_pct
+        """
+        cif_usd = usd_tutar + navlun_usd
+        cif_tl = cif_usd * spot_kur
+        gumruk_vergisi = cif_tl * (gtip_vergi_pct / 100)
+        kdv_matrah = cif_tl + gumruk_vergisi
+        kdv = kdv_matrah * (kdv_pct / 100)
+        toplam = cif_tl + gumruk_vergisi + kdv
+        birim_maliyet_tl = toplam / usd_tutar if usd_tutar > 0 else 0
+        return {
+            "fob_usd": usd_tutar,
+            "navlun_usd": navlun_usd,
+            "cif_usd": cif_usd,
+            "spot_kur": spot_kur,
+            "cif_tl": round(cif_tl, 2),
+            "gumruk_vergisi_tl": round(gumruk_vergisi, 2),
+            "kdv_matrah_tl": round(kdv_matrah, 2),
+            "kdv_tl": round(kdv, 2),
+            "toplam_tl": round(toplam, 2),
+            "birim_maliyet_tl_usd": round(birim_maliyet_tl, 4),
+            "yorum": f"1 USD mal = {birim_maliyet_tl:.4f} TL toplam maliyet",
+        }
+
 
 # ─── Dosya Okuma ─────────────────────────────────────────────────────────────
 
@@ -489,6 +550,8 @@ def main():
   ragip --calc tvm --anapara 100000 --repo-orani 42.5 --gun 30
   ragip --calc iskonto --anapara 100000 --oran 3 --gun 30
   ragip --calc ncd --dio 45 --dso 30 --dpo 60
+  ragip --calc doviz --usd-tutar 10000 --gun 90
+  ragip --calc ithalat --usd-tutar 50000 --navlun 3000 --gtip-vergi 10
   ragip --tcmb
   ragip --interactive
   ragip --history
@@ -511,15 +574,21 @@ def main():
 
     # Hesaplama modu
     parser.add_argument("--calc", type=str,
-                        choices=["vade-farki", "tvm", "iskonto", "ncd"],
-                        help="Finansal hesaplama: vade-farki | tvm | iskonto | ncd")
+                        choices=["vade-farki", "tvm", "iskonto", "ncd", "doviz", "ithalat"],
+                        help="Finansal hesaplama: vade-farki | tvm | iskonto | ncd | doviz | ithalat")
     parser.add_argument("--anapara", type=float, help="Ana para tutarı (TL)")
-    parser.add_argument("--oran", type=float, help="Aylık faiz oranı (%)")
+    parser.add_argument("--oran", type=float, help="Aylık faiz oranı (%%)")
     parser.add_argument("--gun", type=int, help="Gün sayısı")
-    parser.add_argument("--repo-orani", type=float, help="Yıllık repo/politika faizi (%)")
+    parser.add_argument("--repo-orani", type=float, help="Yıllık repo/politika faizi (%%)")
     parser.add_argument("--dio", type=int, help="Stokta kalma süresi (gün)")
     parser.add_argument("--dso", type=int, help="Tahsilat süresi (gün)")
     parser.add_argument("--dpo", type=int, help="Ödeme süresi (gün)")
+
+    # Doviz hesaplama argumanlari
+    parser.add_argument("--usd-tutar", type=float, help="USD tutarı")
+    parser.add_argument("--usd-faiz", type=float, default=4.5, help="USD yıllık faiz %% (varsayılan: 4.5)")
+    parser.add_argument("--navlun", type=float, default=0, help="Navlun USD")
+    parser.add_argument("--gtip-vergi", type=float, default=0, help="GTIP gümrük vergisi %%")
 
     args = parser.parse_args()
     config = load_config()
@@ -579,6 +648,31 @@ def main():
                 sys.exit(1)
             sonuc = hesap.nakit_cevrim_dongusu(args.dio, args.dso, args.dpo)
             display_calc_result("Nakit Çevrim Döngüsü", sonuc)
+
+        elif args.calc == "doviz":
+            if not args.usd_tutar or not args.gun:
+                print("Gerekli: --usd-tutar --gun [--usd-faiz (varsayilan: 4.5)]")
+                sys.exit(1)
+            rates = get_tcmb_rates_with_search()
+            spot = rates.get("usd_kuru", 38.50)
+            r_tl = rates.get("politika_faizi", 42.5)
+            r_usd = args.usd_faiz
+            sonuc = hesap.doviz_forward(spot, r_tl, r_usd, args.gun)
+            display_calc_result("Doviz Forward Kur Tahmini", sonuc)
+
+        elif args.calc == "ithalat":
+            if not args.usd_tutar:
+                print("Gerekli: --usd-tutar [--navlun --gtip-vergi]")
+                sys.exit(1)
+            rates = get_tcmb_rates_with_search()
+            spot = rates.get("usd_kuru", 38.50)
+            sonuc = hesap.ithalat_maliyet(
+                usd_tutar=args.usd_tutar,
+                spot_kur=spot,
+                navlun_usd=args.navlun,
+                gtip_vergi_pct=args.gtip_vergi,
+            )
+            display_calc_result("Ithalat Maliyet Hesabi", sonuc)
         return
 
     # ── Geçmiş ──
