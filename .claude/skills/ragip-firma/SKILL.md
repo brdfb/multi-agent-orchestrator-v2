@@ -132,7 +132,10 @@ if yeni['vergi_no']:
             exit()
 
 firmalar.append(yeni)
-dosya.write_text('\n'.join(json.dumps(f, ensure_ascii=False) for f in firmalar))
+import tempfile
+tmp = dosya.with_suffix('.tmp')
+tmp.write_text('\n'.join(json.dumps(f, ensure_ascii=False) for f in firmalar))
+tmp.rename(dosya)
 print(f'+ Firma eklendi: [{yeni_id}] {yeni[\"ad\"]}')
 if yeni['vergi_no']:
     print(f'   VKN: {yeni[\"vergi_no\"]}')
@@ -189,7 +192,9 @@ if not bulundu:
     print(f'X Firma bulunamadi: ID {firma_id}')
     exit()
 
-dosya.write_text('\n'.join(json.dumps(f, ensure_ascii=False) for f in firmalar))
+tmp = dosya.with_suffix('.tmp')
+tmp.write_text('\n'.join(json.dumps(f, ensure_ascii=False) for f in firmalar))
+tmp.rename(dosya)
 "
 ```
 
@@ -214,7 +219,9 @@ if len(yeni) == len(firmalar):
     exit()
 
 silinen = [f for f in firmalar if f['id'] == firma_id][0]
-dosya.write_text('\n'.join(json.dumps(f, ensure_ascii=False) for f in yeni))
+tmp = dosya.with_suffix('.tmp')
+tmp.write_text('\n'.join(json.dumps(f, ensure_ascii=False) for f in yeni))
+tmp.rename(dosya)
 print(f'Silindi: [{silinen[\"id\"]}] {silinen[\"ad\"]}')
 "
 ```

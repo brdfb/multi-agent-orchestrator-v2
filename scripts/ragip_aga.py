@@ -54,6 +54,21 @@ class FinansalHesap:
     """Ragıp Aga'nın finansal hesap motoru."""
 
     @staticmethod
+    def _validate_positive(value: float, name: str) -> None:
+        if value < 0:
+            raise ValueError(f"{name} negatif olamaz: {value}")
+
+    @staticmethod
+    def _validate_non_negative_int(value: int, name: str) -> None:
+        if value < 0:
+            raise ValueError(f"{name} negatif olamaz: {value}")
+
+    @staticmethod
+    def _validate_rate(value: float, name: str) -> None:
+        if value < 0 or value > 1000:
+            raise ValueError(f"{name} 0-1000 arasinda olmali: {value}")
+
+    @staticmethod
     def vade_farki(anapara: float, aylik_oran_pct: float, gun: int) -> dict:
         """
         Vade farkı hesapla.
@@ -61,6 +76,9 @@ class FinansalHesap:
         aylik_oran_pct: aylık oran yüzde olarak (örn: 3.0 = %3/ay)
         gun: vade gün sayısı
         """
+        FinansalHesap._validate_positive(anapara, "anapara")
+        FinansalHesap._validate_rate(aylik_oran_pct, "aylik_oran_pct")
+        FinansalHesap._validate_non_negative_int(gun, "gun")
         aylik_oran = aylik_oran_pct / 100
         vade_farki = anapara * aylik_oran * gun / 30
         toplam = anapara + vade_farki
@@ -79,6 +97,9 @@ class FinansalHesap:
         Paranın zaman değeri - belirtilen süre için fırsat maliyeti.
         yillik_oran_pct: yıllık oran % (örn: repo oranı, 42.5)
         """
+        FinansalHesap._validate_positive(tutar, "tutar")
+        FinansalHesap._validate_rate(yillik_oran_pct, "yillik_oran_pct")
+        FinansalHesap._validate_non_negative_int(gun, "gun")
         yillik_oran = yillik_oran_pct / 100
         maliyet = tutar * yillik_oran * gun / 365
         return {
@@ -95,6 +116,9 @@ class FinansalHesap:
         Erken ödeme için kabul edilebilir maksimum iskonto.
         Mantık: erken ödersen vade farkından kurtulursun, o kadar indirim isteyebilirsin.
         """
+        FinansalHesap._validate_positive(tutar, "tutar")
+        FinansalHesap._validate_rate(aylik_oran_pct, "aylik_oran_pct")
+        FinansalHesap._validate_non_negative_int(kazanilan_gun, "kazanilan_gun")
         aylik_oran = aylik_oran_pct / 100
         max_iskonto = tutar * aylik_oran * kazanilan_gun / 30
         iskonto_pct = (max_iskonto / tutar) * 100
@@ -162,10 +186,17 @@ class FinansalHesap:
         r_usd_pct: USD yillik faiz orani % (ornek: 4.5)
         gun: Vade gun sayisi
         """
+        FinansalHesap._validate_positive(spot, "spot")
+        FinansalHesap._validate_rate(r_tl_pct, "r_tl_pct")
+        FinansalHesap._validate_rate(r_usd_pct, "r_usd_pct")
+        FinansalHesap._validate_non_negative_int(gun, "gun")
         t = gun / 365
         r_tl = r_tl_pct / 100
         r_usd = r_usd_pct / 100
-        forward = spot * (1 + r_tl * t) / (1 + r_usd * t)
+        denominator = 1 + r_usd * t
+        if denominator == 0:
+            raise ValueError("Payda sifir: r_usd ve gun kombinasyonu gecersiz")
+        forward = spot * (1 + r_tl * t) / denominator
         prim_pct = ((forward - spot) / spot) * 100
         return {
             "spot_kur": spot,
@@ -192,6 +223,14 @@ class FinansalHesap:
         KDV matrah = CIF + gumruk vergisi
         KDV = matrah x kdv_pct
         """
+        FinansalHesap._validate_positive(usd_tutar, "usd_tutar")
+        FinansalHesap._validate_positive(spot_kur, "spot_kur")
+        if navlun_usd < 0:
+            raise ValueError(f"navlun_usd negatif olamaz: {navlun_usd}")
+        if gtip_vergi_pct < 0 or gtip_vergi_pct > 100:
+            raise ValueError(f"gtip_vergi_pct 0-100 arasinda olmali: {gtip_vergi_pct}")
+        if kdv_pct < 0 or kdv_pct > 100:
+            raise ValueError(f"kdv_pct 0-100 arasinda olmali: {kdv_pct}")
         cif_usd = usd_tutar + navlun_usd
         cif_tl = cif_usd * spot_kur
         gumruk_vergisi = cif_tl * (gtip_vergi_pct / 100)

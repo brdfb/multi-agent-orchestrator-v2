@@ -181,3 +181,55 @@ class TestIthalatMaliyet:
         """Birim maliyet = toplam / usd_tutar"""
         sonuc = FinansalHesap.ithalat_maliyet(10_000, 38.50, 0, 0, 20.0)
         assert abs(sonuc["birim_maliyet_tl_usd"] - sonuc["toplam_tl"] / 10_000) < 0.001
+
+
+import pytest
+
+
+class TestInputValidation:
+    """Negatif ve sinir disi degerler icin validation testleri."""
+
+    def test_vade_farki_negatif_anapara(self):
+        with pytest.raises(ValueError, match="negatif"):
+            FinansalHesap.vade_farki(-100_000, 3.0, 30)
+
+    def test_vade_farki_negatif_gun(self):
+        with pytest.raises(ValueError, match="negatif"):
+            FinansalHesap.vade_farki(100_000, 3.0, -10)
+
+    def test_vade_farki_oran_sinir_disi(self):
+        with pytest.raises(ValueError, match="0-1000"):
+            FinansalHesap.vade_farki(100_000, 1500.0, 30)
+
+    def test_tvm_negatif_tutar(self):
+        with pytest.raises(ValueError, match="negatif"):
+            FinansalHesap.tvm_gunluk_maliyet(-50_000, 42.5, 30)
+
+    def test_erken_odeme_negatif(self):
+        with pytest.raises(ValueError, match="negatif"):
+            FinansalHesap.erken_odeme_iskonto(-100_000, 3.0, 30)
+
+    def test_doviz_forward_negatif_spot(self):
+        with pytest.raises(ValueError, match="negatif"):
+            FinansalHesap.doviz_forward(-38.50, 42.5, 4.5, 90)
+
+    def test_doviz_forward_oran_sinir_disi(self):
+        with pytest.raises(ValueError, match="0-1000"):
+            FinansalHesap.doviz_forward(38.50, -5.0, 4.5, 90)
+
+    def test_ithalat_negatif_tutar(self):
+        with pytest.raises(ValueError, match="negatif"):
+            FinansalHesap.ithalat_maliyet(-10_000, 38.50, 0, 0)
+
+    def test_ithalat_negatif_navlun(self):
+        with pytest.raises(ValueError, match="negatif"):
+            FinansalHesap.ithalat_maliyet(10_000, 38.50, -500, 0)
+
+    def test_ithalat_kdv_sinir_disi(self):
+        with pytest.raises(ValueError, match="0-100"):
+            FinansalHesap.ithalat_maliyet(10_000, 38.50, 0, 0, 150.0)
+
+    def test_sifir_anapara_gecerli(self):
+        """0 anapara gecerli olmali (sifir = negatif degil)"""
+        sonuc = FinansalHesap.vade_farki(0, 3.0, 30)
+        assert sonuc["vade_farki_tl"] == 0.0

@@ -35,7 +35,13 @@ import sys, json
 from pathlib import Path
 
 dosya_yolu = 'DOSYA_YOLU_BURAYA'
-dosya = Path(dosya_yolu)
+dosya = Path(dosya_yolu).resolve()
+
+# Path traversal kontrolu
+izinli_dizinler = [Path.home(), Path('/tmp')]
+if not any(str(dosya).startswith(str(d)) for d in izinli_dizinler):
+    print(f'HATA: Guvenlik - dosya izin verilen dizinlerin disinda: {dosya}')
+    sys.exit(1)
 
 if not dosya.exists():
     print(f'HATA: Dosya bulunamadi: {dosya_yolu}')
@@ -204,7 +210,9 @@ for _, row in df.iterrows():
             mevcut_vkn.add(vkn)
         eklenen += 1
 
-firma_dosya.write_text('\n'.join(json.dumps(f, ensure_ascii=False) for f in mevcut))
+tmp = firma_dosya.with_suffix('.tmp')
+tmp.write_text('\n'.join(json.dumps(f, ensure_ascii=False) for f in mevcut))
+tmp.rename(firma_dosya)
 
 print(f'=== IMPORT SONUCU ===')
 print(f'Dosya: {Path(dosya_yolu).name} ({format_adi} formati)')
