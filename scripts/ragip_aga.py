@@ -70,7 +70,7 @@ class FinansalHesap:
             "gun": gun,
             "vade_farki_tl": round(vade_farki, 2),
             "toplam_tl": round(toplam, 2),
-            "gunluk_maliyet_tl": round(vade_farki / gun, 2),
+            "gunluk_maliyet_tl": round(vade_farki / gun, 2) if gun > 0 else 0.0,
         }
 
     @staticmethod
