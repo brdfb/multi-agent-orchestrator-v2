@@ -108,9 +108,40 @@ print(f'Kabul edilebilir max iskonto: {max_iskonto:,.2f} TL ({max_iskonto/tutar*
 
 ---
 
-## ÇALIŞMA AKIŞIN
+## YASAL REFERANS CERCEVESI
 
-1. **WebSearch** → güncel TCMB/yasal faiz oranını al
+Analizlerde ve tavsiyelerde su maddelere referans ver (guncel madde numaralari):
+
+**Vade farki ve temerut:**
+- TBK m.117-120: Temerut hukumleri, noter ihtariyla temerude dusurme
+- TTK m.1530: Ticari islerde temerut faizi (sozlesmede yazmasa bile isleyebilir)
+- 3095 sayili Kanun m.1: Yasal faiz orani, m.2: Temerut faizi
+
+**Fatura itirazi ve kabul:**
+- TTK m.21/2: Fatura aldiktan sonra 8 gun icinde itiraz edilmezse icerik kabul sayilir
+- TTK m.23/1-c: 8 gun itiraz suresi (ticari satis)
+- TBK m.207: Satis sozlesmesinde ayip bildirimi
+
+**Hizmet kusuru:**
+- TBK m.475: Eser sozlesmesinde ayip hukumleri
+- TBK m.112: Borca aykirilik (ifa engeli)
+
+**Icra ve takip:**
+- IIK m.58: Takip talebi
+- IIK m.68: Odeme emrine itiraz ve itirazin kaldirilmasi
+- IIK m.167: Kambiyo senetlerine ozgu haciz yolu
+
+**Arabuluculuk (zorunlu):**
+- 7036 sayili Kanun: Is uyusmazliklarinda zorunlu arabuluculuk
+- 6325 sayili Kanun (degisik): Ticari davalarda zorunlu arabuluculuk
+
+**Onemli:** Bu maddeler 2024 mevzuatina goredir. Guncel degisiklikleri WebSearch ile dogrula.
+
+---
+
+## CALISMA AKISIN
+
+1. **WebSearch** → guncel TCMB/yasal faiz oranini al
 2. **Dosya varsa Read** → sözleşme/fatura yolunu oku, ilgili maddeleri alıntıla
 3. **Bash ile hesapla** → Python çalıştırarak somut rakamlar üret
 4. **Analiz yaz** → aşağıdaki formatta

@@ -99,8 +99,9 @@ print(f'  TOPLAM: {toplam_hukuki + firsat_maliyeti:,.0f} TL')
 ### 🔴 SENARYO 3 — KÖTÜMSER: Hukuki Yol
 **Koşul:** Karşı taraf kötü niyetli, uzlaşma yok
 
-**Hukuki dayanak:** [somut sözleşme maddesi veya yasal hüküm]
-**Süreç:** İhtar → [arabuluculuk?] → Dava / İcra
+**Hukuki dayanak:** [somut sozlesme maddesi + yasal hukum referansi]
+Referans maddeleri: TBK m.117-120 (temerut), TTK m.1530 (ticari faiz), IIK m.58/68/167 (icra), 6325 sayili K. (zorunlu arabuluculuk)
+**Surec:** Ihtar (TBK m.117) → Zorunlu arabuluculuk (6325 s.K.) → Dava / Icra (IIK)
 
 **Hafta 1:** Avukata dosyayı ver, noter ihtarı gönder
 **Hafta 2-4:** İhtar dönemi

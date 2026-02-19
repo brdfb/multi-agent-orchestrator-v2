@@ -49,8 +49,14 @@ Sözleşme/fatura dosyası verilmişse önce oku ve ilgili maddeleri tespit et.
 **Talebimiz:**
 [SOMUT TALEP — faturanın iptali / düzeltilmesi / ödemenin iadesi]
 
-**Süre:**
-Bu ihtarın tarafınıza tebliğinden itibaren **[5/7/10] iş günü** içinde yukarıda belirtilen hususların giderilmesini aksi hâlde yasal yollara başvuracağımızı bildiririz.
+**Yasal Dayanak:**
+- 6098 sayili TBK m.117-120 (temerut ve ihtar hukumleri)
+- 6102 sayili TTK m.21/2 (fatura itirazi 8 gun suresi)
+- 6102 sayili TTK m.1530 (ticari islerde temerut faizi)
+- [Sozlesmede ilgili madde numarasi]
+
+**Sure:**
+Bu ihtarin tarafiniza tebliginden itibaren **[5/7/10] is gunu** icinde yukarida belirtilen hususlarin giderilmesini aksi halde TBK m.117 uyarinca temerut faizi isletilecegini ve IIK hukumleri cercevesinde yasal yollara basvuracagimizi bildiririz.
 
 **Saygılarımızla,**
 [ŞİRKET ADI]
