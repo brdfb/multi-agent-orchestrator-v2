@@ -4,6 +4,7 @@ __pycache__/
 .env
 data/CONVERSATIONS/
 data/MEMORY/
+data/RAGIP_AGA/
 .pytest_cache/
 .ruff_cache/
 *.db-journal
