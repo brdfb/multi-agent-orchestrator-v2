@@ -6,7 +6,7 @@ allowed-tools: Read, Write, Bash
 disable-model-invocation: true
 ---
 
-Sen Ragip Aga'sin. Firma karti veritabani olarak calis. Tum firmalar `~/.orchestrator/data/RAGIP_AGA/firmalar.jsonl` dosyasinda tutulur.
+Sen Ragip Aga'sin. Firma karti veritabani olarak calis. Tum firmalar `data/RAGIP_AGA/firmalar.jsonl` dosyasinda tutulur (repo koku altinda).
 
 ## Komut
 $ARGUMENTS
@@ -15,7 +15,7 @@ Komut verilmemisse: `listele` yap.
 
 ## Firma Dosyasi
 ```
-~/.orchestrator/data/RAGIP_AGA/firmalar.jsonl
+data/RAGIP_AGA/firmalar.jsonl   (repo koku altinda)
 ```
 
 Her satir bir firma kaydi:
@@ -29,10 +29,11 @@ Her satir bir firma kaydi:
 Bash ile dosyayi oku ve tablo goster:
 ```bash
 python3 -c "
-import json, os
+import json, os, subprocess as _sp
 from pathlib import Path
 
-dosya = Path.home() / '.orchestrator/data/RAGIP_AGA/firmalar.jsonl'
+_ROOT = _sp.check_output(['git', 'rev-parse', '--show-toplevel'], text=True, stderr=_sp.DEVNULL).strip()
+dosya = Path(_ROOT) / 'data/RAGIP_AGA/firmalar.jsonl'
 if not dosya.exists():
     print('Henuz firma karti yok. Eklemek icin: /ragip-firma ekle <firma_adi>')
     exit()
@@ -62,11 +63,12 @@ for f in sorted(firmalar, key=lambda x: x.get('ad', '')):
 Yeni firma karti olustur. Argumanlardaki `alan=deger` ciftlerini parse et:
 ```bash
 python3 -c "
-import json, sys
+import json, sys, subprocess as _sp
 from pathlib import Path
 from datetime import date
 
-dosya = Path.home() / '.orchestrator/data/RAGIP_AGA/firmalar.jsonl'
+_ROOT = _sp.check_output(['git', 'rev-parse', '--show-toplevel'], text=True, stderr=_sp.DEVNULL).strip()
+dosya = Path(_ROOT) / 'data/RAGIP_AGA/firmalar.jsonl'
 dosya.parent.mkdir(parents=True, exist_ok=True)
 
 firmalar = []
@@ -147,11 +149,12 @@ print(f'   Vade: {yeni[\"vade_gun\"]} gun | Oran: %{yeni[\"vade_farki_oran\"]}/a
 Mevcut firma kartini guncelle:
 ```bash
 python3 -c "
-import json
+import json, subprocess as _sp
 from pathlib import Path
 from datetime import date
 
-dosya = Path.home() / '.orchestrator/data/RAGIP_AGA/firmalar.jsonl'
+_ROOT = _sp.check_output(['git', 'rev-parse', '--show-toplevel'], text=True, stderr=_sp.DEVNULL).strip()
+dosya = Path(_ROOT) / 'data/RAGIP_AGA/firmalar.jsonl'
 if not dosya.exists():
     print('Henuz firma karti yok.')
     exit()
@@ -202,10 +205,11 @@ tmp.rename(dosya)
 Firma kartini sil:
 ```bash
 python3 -c "
-import json
+import json, subprocess as _sp
 from pathlib import Path
 
-dosya = Path.home() / '.orchestrator/data/RAGIP_AGA/firmalar.jsonl'
+_ROOT = _sp.check_output(['git', 'rev-parse', '--show-toplevel'], text=True, stderr=_sp.DEVNULL).strip()
+dosya = Path(_ROOT) / 'data/RAGIP_AGA/firmalar.jsonl'
 if not dosya.exists():
     print('Henuz firma karti yok.')
     exit()
@@ -230,10 +234,11 @@ print(f'Silindi: [{silinen[\"id\"]}] {silinen[\"ad\"]}')
 Firma adi, vergi no veya notlarda ara:
 ```bash
 python3 -c "
-import json
+import json, subprocess as _sp
 from pathlib import Path
 
-dosya = Path.home() / '.orchestrator/data/RAGIP_AGA/firmalar.jsonl'
+_ROOT = _sp.check_output(['git', 'rev-parse', '--show-toplevel'], text=True, stderr=_sp.DEVNULL).strip()
+dosya = Path(_ROOT) / 'data/RAGIP_AGA/firmalar.jsonl'
 if not dosya.exists():
     print('Henuz firma karti yok.')
     exit()

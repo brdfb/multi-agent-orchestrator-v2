@@ -16,7 +16,8 @@ Girdi yoksa şu formatı iste: `anapara oran_yüzde gün` (örnek: `250000 3 45`
 
 **1. Güncel TCMB oranını çek:**
 ```bash
-python3 ~/.orchestrator/scripts/ragip_rates.py --pretty
+ROOT=$(git rev-parse --show-toplevel 2>/dev/null || echo "$HOME/.orchestrator")
+python3 "$ROOT/scripts/ragip_rates.py" --pretty
 ```
 Çıktıdaki `politika_faizi` ve `yasal_gecikme_faizi` değerlerini hesaplamada kullan.
 
@@ -24,7 +25,8 @@ python3 ~/.orchestrator/scripts/ragip_rates.py --pretty
 
 ```bash
 # Önce canlı oranı çek
-RATES=$(python3 ~/.orchestrator/scripts/ragip_rates.py 2>/dev/null)
+ROOT=$(git rev-parse --show-toplevel 2>/dev/null || echo "$HOME/.orchestrator")
+RATES=$(python3 "$ROOT/scripts/ragip_rates.py" 2>/dev/null)
 TCMB_ORANI=$(echo $RATES | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('politika_faizi', 42.5))" 2>/dev/null || echo "42.5")
 
 python3 -c "

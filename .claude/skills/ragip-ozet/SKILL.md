@@ -20,11 +20,12 @@ Firma ID verilmisse sadece o firmanin ozetini goster. Bos ise tum ozet.
 **1. Firma Kartlari Ozeti (Bash):**
 ```bash
 python3 -c "
-import json
+import json, subprocess as _sp
 from pathlib import Path
 
-firma_dosya = Path.home() / '.orchestrator/data/RAGIP_AGA/firmalar.jsonl'
-gorev_dosya = Path.home() / '.orchestrator/data/RAGIP_AGA/gorevler.jsonl'
+_ROOT = _sp.check_output(['git', 'rev-parse', '--show-toplevel'], text=True, stderr=_sp.DEVNULL).strip()
+firma_dosya = Path(_ROOT) / 'data/RAGIP_AGA/firmalar.jsonl'
+gorev_dosya = Path(_ROOT) / 'data/RAGIP_AGA/gorevler.jsonl'
 
 # --- FIRMALAR ---
 firmalar = []
@@ -114,11 +115,12 @@ print('  /ragip-strateji [senaryo]  — 3 senaryo stratejisi')
 **1. Firma Karti + Iliskili Gorevler (Bash):**
 ```bash
 python3 -c "
-import json
+import json, subprocess as _sp
 from pathlib import Path
 
-firma_dosya = Path.home() / '.orchestrator/data/RAGIP_AGA/firmalar.jsonl'
-gorev_dosya = Path.home() / '.orchestrator/data/RAGIP_AGA/gorevler.jsonl'
+_ROOT = _sp.check_output(['git', 'rev-parse', '--show-toplevel'], text=True, stderr=_sp.DEVNULL).strip()
+firma_dosya = Path(_ROOT) / 'data/RAGIP_AGA/firmalar.jsonl'
+gorev_dosya = Path(_ROOT) / 'data/RAGIP_AGA/gorevler.jsonl'
 firma_id = 'FIRMA_ID_BURAYA'
 
 firmalar = []

@@ -32,14 +32,15 @@ Kolonlar: `CARI_ISIM`, `VERGI_NO`, `TELEFON`, `MAIL`
 **1. Dosyayi oku ve formatini tani (Bash):**
 ```bash
 python3 -c "
-import sys, json
+import sys, json, subprocess as _sp
 from pathlib import Path
 
 dosya_yolu = 'DOSYA_YOLU_BURAYA'
 dosya = Path(dosya_yolu).resolve()
 
 # Path traversal kontrolu
-izinli_dizinler = [Path.home(), Path('/tmp')]
+_ROOT = _sp.check_output(['git', 'rev-parse', '--show-toplevel'], text=True, stderr=_sp.DEVNULL).strip()
+izinli_dizinler = [Path.home(), Path('/tmp'), Path(_ROOT)]
 if not any(str(dosya).startswith(str(d)) for d in izinli_dizinler):
     print(f'HATA: Guvenlik - dosya izin verilen dizinlerin disinda: {dosya}')
     sys.exit(1)
@@ -120,7 +121,7 @@ print(f'Kolon eslesmesi: {json.dumps(eslesme, ensure_ascii=False)}')
 **2. Firma kartlarina donustur ve kaydet (Bash):**
 ```bash
 python3 -c "
-import json, sys
+import json, sys, subprocess as _sp
 from pathlib import Path
 from datetime import date
 
@@ -142,7 +143,8 @@ elif ext in ('.xlsx', '.xls'):
     df = pd.read_excel(dosya_yolu)
 
 # Firma kartlari dosyasi
-firma_dosya = Path.home() / '.orchestrator/data/RAGIP_AGA/firmalar.jsonl'
+_ROOT = _sp.check_output(['git', 'rev-parse', '--show-toplevel'], text=True, stderr=_sp.DEVNULL).strip()
+firma_dosya = Path(_ROOT) / 'data/RAGIP_AGA/firmalar.jsonl'
 firma_dosya.parent.mkdir(parents=True, exist_ok=True)
 
 mevcut = []

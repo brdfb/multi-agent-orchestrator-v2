@@ -6,7 +6,7 @@ allowed-tools: Read, Write, Bash
 disable-model-invocation: true
 ---
 
-Sen Ragip Aga'sin. Gorev takip sistemi olarak calis. Tum gorevler `~/.orchestrator/data/RAGIP_AGA/gorevler.jsonl` dosyasinda tutulur.
+Sen Ragip Aga'sin. Gorev takip sistemi olarak calis. Tum gorevler `data/RAGIP_AGA/gorevler.jsonl` dosyasinda tutulur (repo koku altinda).
 
 ## Komut
 $ARGUMENTS
@@ -15,7 +15,7 @@ Komut verilmemisse: `listele` yap.
 
 ## Gorev Dosyasi
 ```
-~/.orchestrator/data/RAGIP_AGA/gorevler.jsonl
+data/RAGIP_AGA/gorevler.jsonl   (repo koku altinda)
 ```
 
 Her satir bir gorev:
@@ -29,10 +29,11 @@ Her satir bir gorev:
 Bash ile dosyayi oku ve tablo goster:
 ```bash
 python3 -c "
-import json, os
+import json, os, subprocess as _sp
 from pathlib import Path
 
-dosya = Path.home() / '.orchestrator/data/RAGIP_AGA/gorevler.jsonl'
+_ROOT = _sp.check_output(['git', 'rev-parse', '--show-toplevel'], text=True, stderr=_sp.DEVNULL).strip()
+dosya = Path(_ROOT) / 'data/RAGIP_AGA/gorevler.jsonl'
 if not dosya.exists():
     print('Henuz gorev yok. Eklemek icin: /ragip-gorev ekle <aciklama>')
     exit()
@@ -68,11 +69,12 @@ if tamamlananlar:
 Bash ile durumu guncelle:
 ```bash
 python3 -c "
-import json
+import json, subprocess as _sp
 from pathlib import Path
 from datetime import date
 
-dosya = Path.home() / '.orchestrator/data/RAGIP_AGA/gorevler.jsonl'
+_ROOT = _sp.check_output(['git', 'rev-parse', '--show-toplevel'], text=True, stderr=_sp.DEVNULL).strip()
+dosya = Path(_ROOT) / 'data/RAGIP_AGA/gorevler.jsonl'
 if not dosya.exists() or not dosya.read_text().strip():
     print('Henuz gorev yok.')
     exit()
@@ -101,11 +103,12 @@ tmp.rename(dosya)
 Yeni gorev ekle. Opsiyonel alanlar `alan=deger` formatiyla verilebilir:
 ```bash
 python3 -c "
-import json
+import json, subprocess as _sp
 from pathlib import Path
 from datetime import date, timedelta
 
-dosya = Path.home() / '.orchestrator/data/RAGIP_AGA/gorevler.jsonl'
+_ROOT = _sp.check_output(['git', 'rev-parse', '--show-toplevel'], text=True, stderr=_sp.DEVNULL).strip()
+dosya = Path(_ROOT) / 'data/RAGIP_AGA/gorevler.jsonl'
 dosya.parent.mkdir(parents=True, exist_ok=True)
 
 gorevler = []
@@ -157,18 +160,19 @@ print(f'  Konu: {yeni[\"konu\"]} | Oncelik: {yeni[\"oncelik\"]} | Son tarih: {ye
 Tamamlananlari arsivle:
 ```bash
 python3 -c "
-import json
+import json, subprocess as _sp
 from pathlib import Path
 from datetime import datetime
 
-dosya = Path.home() / '.orchestrator/data/RAGIP_AGA/gorevler.jsonl'
+_ROOT = _sp.check_output(['git', 'rev-parse', '--show-toplevel'], text=True, stderr=_sp.DEVNULL).strip()
+dosya = Path(_ROOT) / 'data/RAGIP_AGA/gorevler.jsonl'
 if not dosya.exists() or not dosya.read_text().strip():
     print('Henuz gorev yok.')
     exit()
 
 # Arsiv dosyasi timestamp ile (ayni gun birden fazla temizleme yapilabilir)
 ts = datetime.now().strftime('%Y%m%d_%H%M%S')
-arsiv = Path.home() / f'.orchestrator/data/RAGIP_AGA/gorevler_arsiv_{ts}.jsonl'
+arsiv = Path(_ROOT) / f'data/RAGIP_AGA/gorevler_arsiv_{ts}.jsonl'
 
 gorevler = [json.loads(l) for l in dosya.read_text().strip().split('\n') if l.strip()]
 aktif = [g for g in gorevler if g.get('durum') != 'tamamlandi']
