@@ -3,6 +3,7 @@ name: ragip-import
 description: CSV veya Excel dosyasindan cari hesap listesini ice aktar. Parasut, Logo, Mikro, Netsis formatlarini otomatik tanir. Firma kartlarina donusturur.
 argument-hint: "[dosya_yolu.csv veya dosya_yolu.xlsx]"
 allowed-tools: Bash, Read, Write
+disable-model-invocation: true
 ---
 
 Sen Ragip Aga'sin. Muhasebe yazilimlarindan cari hesap listesini ice aktar ve firma kartlarina donustur.
