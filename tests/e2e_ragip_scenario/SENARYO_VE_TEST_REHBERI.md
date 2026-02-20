@@ -149,51 +149,69 @@ Microsoft --> Yildiz Dagitim (Indirect Provider) --> Orka Teknoloji (Bayi/Son Ku
 
 ---
 
-## 8 ADIMLI TEST PLANI
+## 8 ADIMLI TEST PLANI (Sub-Agent Mimarisi v3)
 
-### ADIM 1: /ragip-firma — Karsi Tarafi Kaydet
+**Mimari:** ragip-aga (orchestrator) → 3 sub-agent (ragip-hesap, ragip-arastirma, ragip-veri)
+
+Her adimda ragip-aga orchestrator ilgili sub-agent'a Task tool ile yonlendirir.
+Dogrudan skill cagirmak yerine dogal dil kullanilir.
+
+### FAZ 1: VERI TOPLAMA (PARALEL)
+
+#### ADIM 1: ragip-aga → ragip-veri → /ragip-firma
 ```
-/ragip-firma ekle Yildiz Dagitim Ticaret A.S. vergi_no=4820137695 vade_gun=60 vade_farki_oran=2.5 risk_notu=yuksek
+Karsi tarafi kaydet: Yildiz Dagitim Ticaret A.S., vergi no 4820137695, vade 60 gun, vade farki orani %2.5, risk notu yuksek
 ```
 
-### ADIM 2: /ragip-dis-veri — Karsi Tarafi Arastir
+#### ADIM 2: ragip-aga → ragip-arastirma → /ragip-dis-veri
 ```
-/ragip-dis-veri Yildiz Dagitim Ticaret A.S. 4820137695
+Yildiz Dagitim Ticaret A.S. hakkinda kamuya acik kaynaklardan bilgi topla. Vergi no: 4820137695
 ```
 
-### ADIM 3: /ragip-vade-farki — Dogru Vade Farkini Hesapla
+> **Not:** Adim 1 ve 2 PARALEL calistirilabilir (bagimsiz islemler)
+
+### FAZ 2: ANALIZ (PARALEL)
+
+#### ADIM 3: ragip-aga → ragip-hesap → /ragip-vade-farki
 ```
-/ragip-vade-farki 389963 2.5 75
+Vade farki hesapla: 389.963 TL anapara, aylik %2.5 oran, 75 gun gecikme
 ```
 (Not: KDV haric matrah uzerinden, sozlesmedeki oranla)
 
-### ADIM 4: /ragip-analiz — Sozlesme + Fatura Analizi
+#### ADIM 4: ragip-aga → ragip-arastirma → /ragip-analiz
 ```
-/ragip-analiz tests/e2e_ragip_scenario/sozlesme_yildiz_dagitim.txt tests/e2e_ragip_scenario/fatura_nce_lisans.txt tests/e2e_ragip_scenario/fatura_vade_farki.txt
-```
-
-### ADIM 5: /ragip-strateji — 3 Senaryo Stratejisi
-```
-/ragip-strateji Yildiz Dagitim (Microsoft CSP distributor) 2 aydir odenemyen NCE lisans faturalari icin 49.135 TL vade farki faturasi kesti. Sozlesmedeki oran %2.5 ama %3.5 uyguladi, yazili bildirim yapmadi, mutabakat almadi. Toplam borcumuz 517.000 TL, nakit mevcudumuz 350.000 TL. 200 seat yillik NCE taahhudumuz var Nisan 2026'ya kadar.
+Su dosyalari analiz et: tests/e2e_ragip_scenario/sozlesme_yildiz_dagitim.txt tests/e2e_ragip_scenario/fatura_nce_lisans.txt tests/e2e_ragip_scenario/fatura_vade_farki.txt
 ```
 
-### ADIM 6: /ragip-ihtar — Fatura Itiraz + Ihtar Taslagi
+> **Not:** Adim 3 ve 4 PARALEL calistirilabilir (bagimsiz islemler)
+
+### FAZ 3: STRATEJI (SIRALI — Faz 1+2 sonuclarini bekler)
+
+#### ADIM 5: ragip-aga → ragip-arastirma → /ragip-strateji
 ```
-/ragip-ihtar fatura-hatasi
+Yildiz Dagitim (Microsoft CSP distributor) 2 aydir odenemyen NCE lisans faturalari icin 49.135 TL vade farki faturasi kesti. Sozlesmedeki oran %2.5 ama %3.5 uyguladi, yazili bildirim yapmadi, mutabakat almadi. Toplam borcumuz 517.000 TL, nakit mevcudumuz 350.000 TL. 200 seat yillik NCE taahhudumuz var Nisan 2026'ya kadar.
 ```
 
-### ADIM 7: /ragip-gorev — Aksiyon Maddelerini Kaydet
+### FAZ 4: UYGULAMA (SIRALI)
+
+#### ADIM 6: ragip-aga → ragip-arastirma → /ragip-ihtar
 ```
-/ragip-gorev ekle Yildiz Dagitim vade farki faturasina 8 is gunu icinde yazili itiraz gonder konu=Yildiz_NCE oncelik=yuksek son_tarih=2026-02-25
-/ragip-gorev ekle Avukata sozlesme fatura ve kur hesabini gonder konu=Yildiz_NCE oncelik=yuksek son_tarih=2026-02-24
-/ragip-gorev ekle Gec aktivasyon cezai sart hesabi cikart - karsi alacak dosyasi konu=Yildiz_NCE oncelik=orta son_tarih=2026-03-01
-/ragip-gorev ekle NCE yenileme oncesi seat optimizasyonu plani hazirla (Nisan 2026) konu=NCE_Yenileme oncelik=orta son_tarih=2026-03-15
-/ragip-gorev listele
+Fatura hatasi icin ihtar taslagi hazirla
 ```
 
-### ADIM 8: /ragip-import — CSV'den Cari Hesap Yukle
+#### ADIM 7: ragip-aga → ragip-veri → /ragip-gorev
 ```
-/ragip-import tests/e2e_ragip_scenario/cari_hesap_listesi.csv
+Su gorevleri ekle:
+1. Yildiz Dagitim vade farki faturasina 8 is gunu icinde yazili itiraz gonder (konu=Yildiz_NCE, oncelik=yuksek, son_tarih=2026-02-25)
+2. Avukata sozlesme fatura ve kur hesabini gonder (konu=Yildiz_NCE, oncelik=yuksek, son_tarih=2026-02-24)
+3. Gec aktivasyon cezai sart hesabi cikart - karsi alacak dosyasi (konu=Yildiz_NCE, oncelik=orta, son_tarih=2026-03-01)
+4. NCE yenileme oncesi seat optimizasyonu plani hazirla - Nisan 2026 (konu=NCE_Yenileme, oncelik=orta, son_tarih=2026-03-15)
+Sonra gorevleri listele.
+```
+
+#### ADIM 8: ragip-aga → ragip-veri → /ragip-import
+```
+Su CSV dosyasini ice aktar: tests/e2e_ragip_scenario/cari_hesap_listesi.csv
 ```
 
 ---
