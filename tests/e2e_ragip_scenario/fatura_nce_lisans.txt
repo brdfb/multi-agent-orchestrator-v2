@@ -1,0 +1,51 @@
+============================================================
+                   FATURA
+============================================================
+
+Fatura No    : YD-2026-001523
+Fatura Tarihi: 01.12.2025
+Vade Tarihi  : 30.01.2026 (60 gun)
+
+SATICI:
+  Yildiz Dagitim Ticaret A.S.
+  Vergi Dairesi: Ikitelli
+  Vergi No: 4820137695
+
+ALICI:
+  Orka Teknoloji Ltd. Sti.
+  Vergi Dairesi: Uskudar
+  Vergi No: 8901234567
+
+============================================================
+MICROSOFT NCE LISANS FATURASI — Aralik 2025 Donemi
+============================================================
+
+                                    Adet   Birim(USD)  Toplam(USD)
+--------------------------------------------------------------------
+Microsoft 365 Business Premium       150     $22.00     $3,300.00
+Microsoft 365 E3                      20     $36.00       $720.00
+Microsoft Power BI Pro                30      $9.99       $299.70
+Windows 365 Business (2vCPU/8GB)      10     $31.99       $319.90
+--------------------------------------------------------------------
+Ara Toplam (USD)                                       $4,639.60
+Distributor Hizmet Bedeli (%8)                           $371.17
+--------------------------------------------------------------------
+TOPLAM (USD)                                           $5,010.77
+
+Kur Donusumu:
+  Uygulanan Kur: 1 USD = 39,85 TL
+  (TCMB doviz alis kuru 01.12.2025: 37,42 TL)
+
+--------------------------------------------------------------------
+TOPLAM (TL)                                          199.679,19 TL
+KDV (%20)                                             39.935,84 TL
+--------------------------------------------------------------------
+GENEL TOPLAM                                         239.615,03 TL
+============================================================
+
+NOT:
+- Yillik taahhutlu abonelikler Nisan 2025'te baslatilmistir.
+- Seat adedi donem icinde degistirilemez (NCE kurali).
+- Windows 365 aylik aboneliktir, aylik olarak faturalanir.
+
+============================================================

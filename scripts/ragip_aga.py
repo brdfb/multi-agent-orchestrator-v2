@@ -54,6 +54,21 @@ class FinansalHesap:
     """Ragıp Aga'nın finansal hesap motoru."""
 
     @staticmethod
+    def _validate_positive(value: float, name: str) -> None:
+        if value < 0:
+            raise ValueError(f"{name} negatif olamaz: {value}")
+
+    @staticmethod
+    def _validate_non_negative_int(value: int, name: str) -> None:
+        if value < 0:
+            raise ValueError(f"{name} negatif olamaz: {value}")
+
+    @staticmethod
+    def _validate_rate(value: float, name: str) -> None:
+        if value < 0 or value > 1000:
+            raise ValueError(f"{name} 0-1000 arasinda olmali: {value}")
+
+    @staticmethod
     def vade_farki(anapara: float, aylik_oran_pct: float, gun: int) -> dict:
         """
         Vade farkı hesapla.
@@ -61,6 +76,9 @@ class FinansalHesap:
         aylik_oran_pct: aylık oran yüzde olarak (örn: 3.0 = %3/ay)
         gun: vade gün sayısı
         """
+        FinansalHesap._validate_positive(anapara, "anapara")
+        FinansalHesap._validate_rate(aylik_oran_pct, "aylik_oran_pct")
+        FinansalHesap._validate_non_negative_int(gun, "gun")
         aylik_oran = aylik_oran_pct / 100
         vade_farki = anapara * aylik_oran * gun / 30
         toplam = anapara + vade_farki
@@ -70,15 +88,18 @@ class FinansalHesap:
             "gun": gun,
             "vade_farki_tl": round(vade_farki, 2),
             "toplam_tl": round(toplam, 2),
-            "gunluk_maliyet_tl": round(vade_farki / gun, 2),
+            "gunluk_maliyet_tl": round(vade_farki / gun, 2) if gun > 0 else 0.0,
         }
 
     @staticmethod
     def tvm_gunluk_maliyet(tutar: float, yillik_oran_pct: float, gun: int) -> dict:
         """
         Paranın zaman değeri - belirtilen süre için fırsat maliyeti.
-        yillik_oran_pct: yıllık oran % (örn: repo oranı, 42.5)
+        yillik_oran_pct: yıllık oran % (örn: TCMB politika faizi, 42.5)
         """
+        FinansalHesap._validate_positive(tutar, "tutar")
+        FinansalHesap._validate_rate(yillik_oran_pct, "yillik_oran_pct")
+        FinansalHesap._validate_non_negative_int(gun, "gun")
         yillik_oran = yillik_oran_pct / 100
         maliyet = tutar * yillik_oran * gun / 365
         return {
@@ -95,6 +116,9 @@ class FinansalHesap:
         Erken ödeme için kabul edilebilir maksimum iskonto.
         Mantık: erken ödersen vade farkından kurtulursun, o kadar indirim isteyebilirsin.
         """
+        FinansalHesap._validate_positive(tutar, "tutar")
+        FinansalHesap._validate_rate(aylik_oran_pct, "aylik_oran_pct")
+        FinansalHesap._validate_non_negative_int(kazanilan_gun, "kazanilan_gun")
         aylik_oran = aylik_oran_pct / 100
         max_iskonto = tutar * aylik_oran * kazanilan_gun / 30
         iskonto_pct = (max_iskonto / tutar) * 100
@@ -104,6 +128,59 @@ class FinansalHesap:
             "max_iskonto_tl": round(max_iskonto, 2),
             "iskonto_pct": round(iskonto_pct, 2),
             "aciklama": f"{kazanilan_gun} gün erken ödersen en fazla %{iskonto_pct:.2f} iskonto isteyebilirsin",
+        }
+
+    @staticmethod
+    def indiferans_iskonto(
+        tutar: float,
+        aylik_vade_farki_pct: float,
+        yillik_firsat_oran_pct: float,
+        erken_gun: int,
+    ) -> dict:
+        """
+        Indiferans (break-even) iskonto hesabi.
+        Karsi tarafin erken odeme karsiliginda kabul edebilecegi minimum iskonto.
+        Mantik: Karsi taraf erken odeme yaparsa, o parayi bankada/mevduatta
+        tutarak kazanacagi faizden vazgeciyor. Indiferans noktasi =
+        karsi tarafin firsat maliyeti.
+
+        tutar: fatura tutari
+        aylik_vade_farki_pct: sozlesmedeki aylik vade farki orani %
+        yillik_firsat_oran_pct: karsi tarafin alternatif getiri orani (yillik %)
+        erken_gun: kac gun erken odenecek
+        """
+        FinansalHesap._validate_positive(tutar, "tutar")
+        FinansalHesap._validate_rate(aylik_vade_farki_pct, "aylik_vade_farki_pct")
+        FinansalHesap._validate_rate(yillik_firsat_oran_pct, "yillik_firsat_oran_pct")
+        FinansalHesap._validate_non_negative_int(erken_gun, "erken_gun")
+
+        # Senin max iskonto tavan = vade farki tasarrufu
+        aylik_oran = aylik_vade_farki_pct / 100
+        max_iskonto = tutar * aylik_oran * erken_gun / 30
+
+        # Karsi tarafin firsat maliyeti = erken odeme ile kaybedecegi faiz geliri
+        yillik_oran = yillik_firsat_oran_pct / 100
+        karsi_taraf_maliyeti = tutar * yillik_oran * erken_gun / 365
+
+        # Indiferans = karsi tarafin kabul edebilecegi minimum
+        indiferans_pct = (karsi_taraf_maliyeti / tutar) * 100
+
+        # Muzakere araliGi = indiferans ile max iskonto arasi
+        max_iskonto_pct = (max_iskonto / tutar) * 100
+
+        return {
+            "tutar": tutar,
+            "erken_gun": erken_gun,
+            "max_iskonto_tl": round(max_iskonto, 2),
+            "max_iskonto_pct": round(max_iskonto_pct, 2),
+            "indiferans_tl": round(karsi_taraf_maliyeti, 2),
+            "indiferans_pct": round(indiferans_pct, 2),
+            "muzakere_araligi_tl": f"{round(karsi_taraf_maliyeti, 2)} - {round(max_iskonto, 2)}",
+            "yorum": (
+                f"Sen en fazla {max_iskonto:,.0f} TL (%{max_iskonto_pct:.2f}) iskonto isteyebilirsin. "
+                f"Karsi taraf en az {karsi_taraf_maliyeti:,.0f} TL (%{indiferans_pct:.2f}) altina inmez. "
+                f"Muzakere araligi: {karsi_taraf_maliyeti:,.0f} - {max_iskonto:,.0f} TL."
+            ),
         }
 
     @staticmethod
@@ -152,34 +229,201 @@ class FinansalHesap:
             ),
         }
 
+    @staticmethod
+    def doviz_forward(spot: float, r_tl_pct: float, r_usd_pct: float, gun: int) -> dict:
+        """
+        Forward kur tahmini (faiz orani paritesi).
+        F = S x (1 + r_TL x t) / (1 + r_USD x t)
+        spot: Guncel doviz kuru (ornek: 38.50)
+        r_tl_pct: TL yillik faiz orani % (ornek: 42.5)
+        r_usd_pct: USD yillik faiz orani % (ornek: 4.5)
+        gun: Vade gun sayisi
+        """
+        FinansalHesap._validate_positive(spot, "spot")
+        FinansalHesap._validate_rate(r_tl_pct, "r_tl_pct")
+        FinansalHesap._validate_rate(r_usd_pct, "r_usd_pct")
+        FinansalHesap._validate_non_negative_int(gun, "gun")
+        t = gun / 365
+        r_tl = r_tl_pct / 100
+        r_usd = r_usd_pct / 100
+        denominator = 1 + r_usd * t
+        if denominator == 0:
+            raise ValueError("Payda sifir: r_usd ve gun kombinasyonu gecersiz")
+        forward = spot * (1 + r_tl * t) / denominator
+        prim_pct = ((forward - spot) / spot) * 100
+        return {
+            "spot_kur": spot,
+            "r_tl_pct": r_tl_pct,
+            "r_usd_pct": r_usd_pct,
+            "gun": gun,
+            "forward_kur": round(forward, 4),
+            "prim_pct": round(prim_pct, 2),
+            "yorum": f"{gun} gun sonra beklenen kur: {forward:.4f} TL (% {prim_pct:.1f} prim)",
+        }
+
+    @staticmethod
+    def ithalat_maliyet(
+        usd_tutar: float,
+        spot_kur: float,
+        navlun_usd: float = 0,
+        gtip_vergi_pct: float = 0,
+        kdv_pct: float = 20.0,
+    ) -> dict:
+        """
+        Ithalat toplam maliyet hesabi.
+        CIF = FOB + navlun
+        Gumruk vergisi = CIF x gtip_vergi_pct
+        KDV matrah = CIF + gumruk vergisi
+        KDV = matrah x kdv_pct
+        """
+        FinansalHesap._validate_positive(usd_tutar, "usd_tutar")
+        FinansalHesap._validate_positive(spot_kur, "spot_kur")
+        if navlun_usd < 0:
+            raise ValueError(f"navlun_usd negatif olamaz: {navlun_usd}")
+        if gtip_vergi_pct < 0 or gtip_vergi_pct > 100:
+            raise ValueError(f"gtip_vergi_pct 0-100 arasinda olmali: {gtip_vergi_pct}")
+        if kdv_pct < 0 or kdv_pct > 100:
+            raise ValueError(f"kdv_pct 0-100 arasinda olmali: {kdv_pct}")
+        cif_usd = usd_tutar + navlun_usd
+        cif_tl = cif_usd * spot_kur
+        gumruk_vergisi = cif_tl * (gtip_vergi_pct / 100)
+        kdv_matrah = cif_tl + gumruk_vergisi
+        kdv = kdv_matrah * (kdv_pct / 100)
+        toplam = cif_tl + gumruk_vergisi + kdv
+        birim_maliyet_tl = toplam / usd_tutar if usd_tutar > 0 else 0
+        return {
+            "fob_usd": usd_tutar,
+            "navlun_usd": navlun_usd,
+            "cif_usd": cif_usd,
+            "spot_kur": spot_kur,
+            "cif_tl": round(cif_tl, 2),
+            "gumruk_vergisi_tl": round(gumruk_vergisi, 2),
+            "kdv_matrah_tl": round(kdv_matrah, 2),
+            "kdv_tl": round(kdv, 2),
+            "toplam_tl": round(toplam, 2),
+            "birim_maliyet_tl_usd": round(birim_maliyet_tl, 4),
+            "yorum": f"1 USD mal = {birim_maliyet_tl:.4f} TL toplam maliyet",
+        }
+
 
 # ─── Dosya Okuma ─────────────────────────────────────────────────────────────
 
-def read_file_content(filepath: str) -> str:
-    """Sözleşme/fatura dosyasını oku. PDF, TXT, DOCX destekler."""
+def _parse_turkish_number(s: str) -> float:
+    """
+    Turkce/Ingilizce sayi formatini parse et.
+    TR: 45.000,00 -> 45000.00
+    EN: 45,000.00 -> 45000.00
+    Basit: 9000 -> 9000.0
+    """
+    s = s.strip()
+    # Son nokta/virgulun pozisyonuna bak
+    last_dot = s.rfind('.')
+    last_comma = s.rfind(',')
+
+    if last_dot > last_comma:
+        # EN format: 45,000.00 — virgul binlik, nokta ondalik
+        return float(s.replace(',', ''))
+    elif last_comma > last_dot:
+        # TR format: 45.000,00 — nokta binlik, virgul ondalik
+        return float(s.replace('.', '').replace(',', '.'))
+    else:
+        # Sadece rakam veya tek ayirici
+        return float(s.replace(',', '').replace('.', '') if ',' not in s and '.' not in s else s.replace(',', ''))
+
+
+def extract_invoice_data(text: str) -> dict:
+    """Fatura metninden regex ile anahtar verileri cikar."""
+    import re
+    meta = {}
+
+    # Fatura numarasi
+    m = re.search(r'(?:Fatura\s*(?:No|Numaras[ıi])|Invoice\s*No)[:\s]*([A-Z0-9\-/]+)', text, re.IGNORECASE)
+    if m:
+        meta["fatura_no"] = m.group(1).strip()
+
+    # Tarih (GG.AA.YYYY veya GG/AA/YYYY)
+    m = re.search(r'(?:Fatura\s*Tarihi|Tarih|Date)[:\s]*(\d{1,2}[./]\d{1,2}[./]\d{2,4})', text, re.IGNORECASE)
+    if m:
+        meta["tarih"] = m.group(1).strip()
+
+    # KDV toplam — "KDV" veya "KDV Tutari" ile baslayan
+    m = re.search(r'KDV\s*(?:\(%?\d+\)|Tutar[ıi]?)?[:\s]*([\d.,]+)\s*(?:TL)?', text, re.IGNORECASE)
+    if m:
+        try:
+            meta["kdv_toplam"] = _parse_turkish_number(m.group(1))
+        except ValueError:
+            pass
+
+    # Genel toplam — "Genel Toplam" oncelikli, sonra tek basina "Toplam" (ama "Ara Toplam" degil)
+    m = re.search(r'Genel\s*Toplam[:\s]*([\d.,]+)\s*(?:TL)?', text, re.IGNORECASE)
+    if not m:
+        m = re.search(r'Grand\s*Total[:\s]*([\d.,]+)\s*(?:TL)?', text, re.IGNORECASE)
+    if not m:
+        # "Toplam" tek basina — ama "Ara Toplam" olmamali
+        m = re.search(r'(?<!Ara\s)Toplam[:\s]*([\d.,]+)\s*(?:TL)?', text, re.IGNORECASE)
+    if m:
+        try:
+            meta["genel_toplam"] = _parse_turkish_number(m.group(1))
+        except ValueError:
+            pass
+
+    # Vade tarihi
+    m = re.search(r'(?:Vade\s*Tarihi|Due\s*Date)[:\s]*(\d{1,2}[./]\d{1,2}[./]\d{2,4})', text, re.IGNORECASE)
+    if m:
+        meta["vade_tarihi"] = m.group(1).strip()
+
+    return meta
+
+
+def read_file_content(filepath: str) -> str | dict:
+    """
+    Sozlesme/fatura dosyasini oku. PDF, TXT, DOCX destekler.
+    PDF icin pdfplumber varsa tablo cikarma da yapar ve dict doner.
+    """
     path = Path(filepath)
     if not path.exists():
-        raise FileNotFoundError(f"Dosya bulunamadı: {filepath}")
+        raise FileNotFoundError(f"Dosya bulunamadi: {filepath}")
 
     suffix = path.suffix.lower()
 
     if suffix == ".pdf":
+        # pdfplumber oncelikli (tablo cikarma destegi)
+        try:
+            import pdfplumber
+            with pdfplumber.open(str(path)) as pdf:
+                pages_text = []
+                all_tables = []
+                for page in pdf.pages:
+                    pages_text.append(page.extract_text() or "")
+                    tables = page.extract_tables()
+                    if tables:
+                        for tbl in tables:
+                            all_tables.append(tbl)
+
+                text = "\n".join(pages_text)[:8000]
+                fatura_meta = extract_invoice_data(text)
+
+                if all_tables or fatura_meta:
+                    return {
+                        "metin": text,
+                        "tablolar": all_tables[:10],  # Maks 10 tablo
+                        "fatura_meta": fatura_meta,
+                    }
+                return text
+        except ImportError:
+            pass
+
+        # pypdf fallback (sadece metin)
         try:
             import pypdf
             reader = pypdf.PdfReader(str(path))
             text = "\n".join(page.extract_text() or "" for page in reader.pages)
-            return text[:8000]  # İlk 8000 karakter (token bütçesi)
+            return text[:8000]
         except ImportError:
-            try:
-                import pdfplumber
-                with pdfplumber.open(str(path)) as pdf:
-                    text = "\n".join(p.extract_text() or "" for p in pdf.pages)
-                return text[:8000]
-            except ImportError:
-                raise ImportError(
-                    "PDF okumak için: pip install pypdf\n"
-                    "veya: pip install pdfplumber"
-                )
+            raise ImportError(
+                "PDF okumak icin: pip install pdfplumber\n"
+                "veya: pip install pypdf"
+            )
 
     elif suffix in (".docx", ".doc"):
         try:
@@ -188,17 +432,16 @@ def read_file_content(filepath: str) -> str:
             text = "\n".join(p.text for p in doc.paragraphs)
             return text[:8000]
         except ImportError:
-            raise ImportError("DOCX okumak için: pip install python-docx")
+            raise ImportError("DOCX okumak icin: pip install python-docx")
 
     elif suffix in (".txt", ".md", ".csv"):
         return path.read_text(encoding="utf-8", errors="ignore")[:8000]
 
     else:
-        # Düz metin dene
         try:
             return path.read_text(encoding="utf-8", errors="ignore")[:8000]
         except Exception:
-            raise ValueError(f"Desteklenmeyen dosya formatı: {suffix}")
+            raise ValueError(f"Desteklenmeyen dosya formati: {suffix}")
 
 
 # ─── LLM Çağrısı ─────────────────────────────────────────────────────────────
@@ -426,7 +669,10 @@ def main():
   ragip --calc vade-farki --anapara 100000 --oran 3 --gun 45
   ragip --calc tvm --anapara 100000 --repo-orani 42.5 --gun 30
   ragip --calc iskonto --anapara 100000 --oran 3 --gun 30
+  ragip --calc indiferans --anapara 100000 --oran 3 --gun 30 --firsat-orani 42.5
   ragip --calc ncd --dio 45 --dso 30 --dpo 60
+  ragip --calc doviz --usd-tutar 10000 --gun 90
+  ragip --calc ithalat --usd-tutar 50000 --navlun 3000 --gtip-vergi 10
   ragip --tcmb
   ragip --interactive
   ragip --history
@@ -449,15 +695,22 @@ def main():
 
     # Hesaplama modu
     parser.add_argument("--calc", type=str,
-                        choices=["vade-farki", "tvm", "iskonto", "ncd"],
-                        help="Finansal hesaplama: vade-farki | tvm | iskonto | ncd")
+                        choices=["vade-farki", "tvm", "iskonto", "indiferans", "ncd", "doviz", "ithalat"],
+                        help="Finansal hesaplama: vade-farki | tvm | iskonto | indiferans | ncd | doviz | ithalat")
     parser.add_argument("--anapara", type=float, help="Ana para tutarı (TL)")
-    parser.add_argument("--oran", type=float, help="Aylık faiz oranı (%)")
+    parser.add_argument("--oran", type=float, help="Aylık faiz oranı (%%)")
     parser.add_argument("--gun", type=int, help="Gün sayısı")
-    parser.add_argument("--repo-orani", type=float, help="Yıllık repo/politika faizi (%)")
+    parser.add_argument("--repo-orani", type=float, help="Yıllık politika faizi (%%)")
+    parser.add_argument("--firsat-orani", type=float, help="Karşı tarafın yıllık fırsat oranı (%%) (indiferans hesabı)")
     parser.add_argument("--dio", type=int, help="Stokta kalma süresi (gün)")
     parser.add_argument("--dso", type=int, help="Tahsilat süresi (gün)")
     parser.add_argument("--dpo", type=int, help="Ödeme süresi (gün)")
+
+    # Doviz hesaplama argumanlari
+    parser.add_argument("--usd-tutar", type=float, help="USD tutarı")
+    parser.add_argument("--usd-faiz", type=float, default=4.5, help="USD yıllık faiz %% (varsayılan: 4.5)")
+    parser.add_argument("--navlun", type=float, default=0, help="Navlun USD")
+    parser.add_argument("--gtip-vergi", type=float, default=0, help="GTIP gümrük vergisi %%")
 
     args = parser.parse_args()
     config = load_config()
@@ -511,12 +764,45 @@ def main():
             sonuc = hesap.erken_odeme_iskonto(args.anapara, args.oran, args.gun)
             display_calc_result("Erken Ödeme Maksimum İskonto", sonuc)
 
+        elif args.calc == "indiferans":
+            if not all([args.anapara, args.oran, args.gun]):
+                print("Gerekli: --anapara --oran --gun [--firsat-orani (varsayılan: TCMB)]")
+                sys.exit(1)
+            firsat = args.firsat_orani or get_tcmb_rates_with_search()["politika_faizi"]
+            sonuc = hesap.indiferans_iskonto(args.anapara, args.oran, firsat, args.gun)
+            display_calc_result("İndiferans (Break-Even) İskonto", sonuc)
+
         elif args.calc == "ncd":
             if not all([args.dio is not None, args.dso is not None, args.dpo is not None]):
                 print("Gerekli: --dio --dso --dpo")
                 sys.exit(1)
             sonuc = hesap.nakit_cevrim_dongusu(args.dio, args.dso, args.dpo)
             display_calc_result("Nakit Çevrim Döngüsü", sonuc)
+
+        elif args.calc == "doviz":
+            if not args.usd_tutar or not args.gun:
+                print("Gerekli: --usd-tutar --gun [--usd-faiz (varsayilan: 4.5)]")
+                sys.exit(1)
+            rates = get_tcmb_rates_with_search()
+            spot = rates.get("usd_kuru", 38.50)
+            r_tl = rates.get("politika_faizi", 42.5)
+            r_usd = args.usd_faiz
+            sonuc = hesap.doviz_forward(spot, r_tl, r_usd, args.gun)
+            display_calc_result("Doviz Forward Kur Tahmini", sonuc)
+
+        elif args.calc == "ithalat":
+            if not args.usd_tutar:
+                print("Gerekli: --usd-tutar [--navlun --gtip-vergi]")
+                sys.exit(1)
+            rates = get_tcmb_rates_with_search()
+            spot = rates.get("usd_kuru", 38.50)
+            sonuc = hesap.ithalat_maliyet(
+                usd_tutar=args.usd_tutar,
+                spot_kur=spot,
+                navlun_usd=args.navlun,
+                gtip_vergi_pct=args.gtip_vergi,
+            )
+            display_calc_result("Ithalat Maliyet Hesabi", sonuc)
         return
 
     # ── Geçmiş ──
@@ -540,15 +826,37 @@ def main():
         try:
             file_content = read_file_content(args.file)
             filename = Path(args.file).name
-            full_prompt = (
-                f"{args.prompt}\n\n"
-                f"--- DOSYA: {filename} ---\n"
-                f"{file_content}\n"
-                f"--- DOSYA SONU ---"
-            )
-            print(f"[OK] {filename} okundu ({len(file_content)} karakter)", file=sys.stderr)
+
+            if isinstance(file_content, dict):
+                # pdfplumber ile zengin icerik dondu
+                metin = file_content.get("metin", "")
+                tablolar = file_content.get("tablolar", [])
+                fatura_meta = file_content.get("fatura_meta", {})
+
+                dosya_blok = f"--- DOSYA: {filename} ---\n{metin}\n"
+                if fatura_meta:
+                    dosya_blok += "\n--- FATURA VERILERI ---\n"
+                    for k, v in fatura_meta.items():
+                        dosya_blok += f"  {k}: {v}\n"
+                if tablolar:
+                    dosya_blok += f"\n--- TABLOLAR ({len(tablolar)} adet) ---\n"
+                    for i, tbl in enumerate(tablolar[:3], 1):
+                        dosya_blok += f"Tablo {i}:\n"
+                        for row in tbl[:20]:  # Maks 20 satir/tablo
+                            dosya_blok += "  | " + " | ".join(str(c or "") for c in row) + " |\n"
+                dosya_blok += "--- DOSYA SONU ---"
+                full_prompt = f"{args.prompt}\n\n{dosya_blok}"
+                print(f"[OK] {filename} okundu ({len(metin)} karakter, {len(tablolar)} tablo)", file=sys.stderr)
+            else:
+                full_prompt = (
+                    f"{args.prompt}\n\n"
+                    f"--- DOSYA: {filename} ---\n"
+                    f"{file_content}\n"
+                    f"--- DOSYA SONU ---"
+                )
+                print(f"[OK] {filename} okundu ({len(file_content)} karakter)", file=sys.stderr)
         except Exception as e:
-            print(f"[HATA] Dosya okunamadı: {e}", file=sys.stderr)
+            print(f"[HATA] Dosya okunamadi: {e}", file=sys.stderr)
             sys.exit(1)
 
     # Güncel TCMB oranını prompt'a otomatik ekle

@@ -26,7 +26,7 @@ TCMB_ORANI=$(echo $RATES | python3 -c "import sys,json; d=json.load(sys.stdin); 
 python3 -c "
 # Kullanıcının verdiği rakamlara göre doldur
 tutar = TUTAR
-aylik_repo = ${TCMB_ORANI} / 12 / 100
+aylik_politika = ${TCMB_ORANI} / 12 / 100
 
 # Anlaşma maliyeti (iyimser — indirim kabul)
 indirim_pct = 0.10
@@ -35,14 +35,14 @@ anlasma_tutari = tutar * (1 - indirim_pct)
 # Kısmi ödeme (gerçekçi — taksit)
 taksit_sayisi = 3
 aylik_taksit = tutar / taksit_sayisi
-repo_maliyeti = tutar * aylik_repo * taksit_sayisi
+firsat_maliyet_taksit = tutar * aylik_politika * taksit_sayisi
 
 # Hukuki yol (kötümser — icra + dava)
 avukat_ucreti = 15000
 icra_masraf = tutar * 0.02
 toplam_hukuki = tutar + avukat_ucreti + icra_masraf
 bekleme_suresi_ay = 18
-firsat_maliyeti = tutar * aylik_repo * bekleme_suresi_ay
+firsat_maliyeti = tutar * aylik_politika * bekleme_suresi_ay
 
 print('=== SENARYO MALİYET ANALİZİ ===')
 print()
@@ -54,7 +54,7 @@ print(f'  Bugün çözülür, ilişki korunur')
 print()
 print('GERÇEKÇİ (Taksit):')
 print(f'  {taksit_sayisi} taksit x {aylik_taksit:,.0f} TL')
-print(f'  Repo fırsat maliyeti: {repo_maliyeti:,.0f} TL')
+print(f'  Firsat maliyeti: {firsat_maliyet_taksit:,.0f} TL (TCMB politika faizi ile)')
 print()
 print('KÖTÜMSER (Hukuki):')
 print(f'  Toplam maliyet: {toplam_hukuki:,.0f} TL')
@@ -99,8 +99,9 @@ print(f'  TOPLAM: {toplam_hukuki + firsat_maliyeti:,.0f} TL')
 ### 🔴 SENARYO 3 — KÖTÜMSER: Hukuki Yol
 **Koşul:** Karşı taraf kötü niyetli, uzlaşma yok
 
-**Hukuki dayanak:** [somut sözleşme maddesi veya yasal hüküm]
-**Süreç:** İhtar → [arabuluculuk?] → Dava / İcra
+**Hukuki dayanak:** [somut sozlesme maddesi + yasal hukum referansi]
+Referans maddeleri: TBK m.117-120 (temerut), TTK m.1530 (ticari faiz), IIK m.58/68/167 (icra), 6325 sayili K. (zorunlu arabuluculuk)
+**Surec:** Ihtar (TBK m.117) → Zorunlu arabuluculuk (6325 s.K.) → Dava / Icra (IIK)
 
 **Hafta 1:** Avukata dosyayı ver, noter ihtarı gönder
 **Hafta 2-4:** İhtar dönemi

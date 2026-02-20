@@ -39,9 +39,9 @@ toplam = anapara + vade_farki
 gunluk_maliyet = vade_farki / gun
 
 # TVM - Politika faizine göre fırsat maliyeti (canlı TCMB verisi)
-yillik_repo = ${TCMB_ORANI} / 100
-firsatmaliyeti = anapara * yillik_repo * gun / 365
-gunluk_firsat = firsatmaliyeti / gun
+yillik_politika = ${TCMB_ORANI} / 100
+firsatmaliyeti = anapara * yillik_politika * gun / 365
+gunluk_firsat = firsatmaliyeti / gun if gun > 0 else 0
 
 # Erken ödeme: kaç gün erken ödersen ne kadar iskonto isteyebilirsin?
 # (burada gün = kazanılan gün = tam vade süresi)
@@ -57,7 +57,7 @@ print(f'Toplam borç    : {toplam:>15,.2f} TL')
 print(f'Günlük maliyet : {gunluk_maliyet:>15,.2f} TL/gün')
 print()
 print(f'=== FIRSAT MALİYETİ (TVM) ===')
-print(f'TCMB repo oranı: %{yillik_repo*100:.1f} yıllık')
+print(f'TCMB politika faizi: %{yillik_politika*100:.1f} yillik')
 print(f'Fırsat maliyeti: {firsatmaliyeti:>15,.2f} TL ({gun} günde)')
 print(f'Günlük fırsat  : {gunluk_firsat:>15,.2f} TL/gün')
 print()
@@ -68,8 +68,8 @@ print(f'(Bu vadeyi tamamen kullanmaktan vazgeçersen isteyebileceğin max indiri
 ```
 
 **3. Yorum yaz:**
-- Distribütörün kestiği oran mantıklı mı? (yasal gecikme faizi = %52 yıllık = ~%4.3/ay)
-- Parayı repoda tutmak mı, erken ödemek mi daha karlı?
+- Distributorun kestigi oran mantikli mi? (yukaridaki TCMB yasal gecikme faizi ile karsilastir)
+- Parayi bankada/mevduatta tutmak mi, erken odemek mi daha karli?
 - Müzakere önerisi: hangi rakamla masaya otur?
 
 ## Çıktı Formatı

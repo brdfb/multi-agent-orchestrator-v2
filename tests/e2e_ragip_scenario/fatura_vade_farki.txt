@@ -1,0 +1,58 @@
+============================================================
+                   FATURA
+============================================================
+
+Fatura No    : YD-2026-001847
+Fatura Tarihi: 05.02.2026
+Vade Tarihi  : 05.02.2026 (Goruldugunde)
+
+SATICI:
+  Yildiz Dagitim Ticaret A.S.
+  Vergi Dairesi: Ikitelli
+  Vergi No: 4820137695
+
+ALICI:
+  Orka Teknoloji Ltd. Sti.
+  Vergi Dairesi: Uskudar
+  Vergi No: 8901234567
+
+============================================================
+VADE FARKI FATURASI
+============================================================
+
+Aciklama                                      Tutar (TL)
+------------------------------------------------------------
+Vade farki hesabi:
+  Geciken faturalar:
+    - YD-2026-001523 (01.12.2025, vade: 30.01.2026)
+      Fatura tutari  : 239.615,03 TL (KDV dahil)
+    - YD-2026-001412 (01.11.2025, vade: 31.12.2025)
+      Fatura tutari  : 228.340,50 TL (KDV dahil)
+
+  Toplam geciken     : 467.955,53 TL
+  Gecikme suresi     : 75 gun (ortalama)
+  Vade farki orani   : %3,5 / ay
+
+  Hesaplama:
+    467.955,53 x 3,5% x 75/30
+    = 467.955,53 x 0,035 x 2,5
+    = 40.946,11 TL
+
+------------------------------------------------------------
+Ara Toplam                                    40.946,11 TL
+KDV (%20)                                      8.189,22 TL
+------------------------------------------------------------
+GENEL TOPLAM                                  49.135,33 TL
+============================================================
+
+ODEME BILGILERI:
+  Banka: Garanti BBVA
+  IBAN : TR12 0006 2001 2345 6789 0123 45
+  Aciklama: YD-2026-001847 nolu vade farki faturasi
+
+NOT:
+- Bu fatura, vade tarihini gecen 2 adet NCE lisans faturasina
+  istinaden duzenlenmistir.
+- KDV dahil toplam uzerinden vade farki hesaplanmistir.
+- Odeme derhal yapilmalidir.
+============================================================
