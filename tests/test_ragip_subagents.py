@@ -343,3 +343,141 @@ class TestCiktiYonetimi:
             assert beklenen in text, (
                 f"{f.name} icinde '{beklenen}' referansi eksik"
             )
+
+
+# --- Test: Portability (repo-relative paths) ---
+
+class TestPortability:
+    """Tum agent ve skill dosyalari portable olmali — hardcoded path kalmamali"""
+
+    @pytest.fixture(autouse=True)
+    def setup(self):
+        self.agent_files = list(AGENTS_DIR.glob("ragip-*.md"))
+        self.skill_files = list(SKILLS_DIR.glob("ragip-*/SKILL.md"))
+        self.all_files = self.agent_files + self.skill_files
+
+    def _extract_python_blocks(self, text: str) -> list[str]:
+        """Python inline bloklarini cikar (python3 -c '...' icerikleri)"""
+        blocks = []
+        in_block = False
+        current = []
+        for line in text.split("\n"):
+            if 'python3 -c "' in line or "python3 -c '" in line:
+                in_block = True
+                current = [line]
+            elif in_block:
+                current.append(line)
+                if line.strip() == '"' or line.strip() == "'":
+                    blocks.append("\n".join(current))
+                    in_block = False
+                    current = []
+        return blocks
+
+    def _extract_bash_blocks(self, text: str) -> list[str]:
+        """Markdown bash bloklarini cikar"""
+        blocks = []
+        in_block = False
+        current = []
+        for line in text.split("\n"):
+            if line.strip() == "```bash":
+                in_block = True
+                current = []
+            elif in_block and line.strip() == "```":
+                blocks.append("\n".join(current))
+                in_block = False
+            elif in_block:
+                current.append(line)
+        return blocks
+
+    def test_no_hardcoded_path_home_in_python_blocks(self):
+        """Python bloklarinda Path.home() / '.orchestrator' kalmamis olmali"""
+        for f in self.all_files:
+            text = f.read_text(encoding="utf-8")
+            blocks = self._extract_python_blocks(text)
+            for i, block in enumerate(blocks):
+                assert "Path.home() / '.orchestrator" not in block, (
+                    f"{f.name} Python blok #{i+1}: "
+                    f"Path.home() / '.orchestrator' hala mevcut"
+                )
+
+    def test_no_tilde_orchestrator_in_python_blocks(self):
+        """Python bloklarinda ~/.orchestrator kalmamis olmali"""
+        for f in self.all_files:
+            text = f.read_text(encoding="utf-8")
+            blocks = self._extract_python_blocks(text)
+            for i, block in enumerate(blocks):
+                assert "~/.orchestrator" not in block, (
+                    f"{f.name} Python blok #{i+1}: "
+                    f"~/.orchestrator hala mevcut"
+                )
+
+    def test_bash_blocks_use_git_rev_parse(self):
+        """Script cagiran bash bloklarinda git rev-parse kullaniliyor olmali"""
+        for f in self.all_files:
+            text = f.read_text(encoding="utf-8")
+            blocks = self._extract_bash_blocks(text)
+            for i, block in enumerate(blocks):
+                # ~/.orchestrator/scripts/ referansi varsa git rev-parse olmali
+                if "~/.orchestrator/scripts/" in block:
+                    assert False, (
+                        f"{f.name} Bash blok #{i+1}: "
+                        f"~/.orchestrator/scripts/ var ama git rev-parse yok"
+                    )
+
+    def test_python_blocks_have_root_preamble(self):
+        """Path kullanan Python bloklarinda _ROOT tanimli olmali"""
+        for f in self.skill_files:
+            text = f.read_text(encoding="utf-8")
+            blocks = self._extract_python_blocks(text)
+            for i, block in enumerate(blocks):
+                if "data/RAGIP_AGA/" in block:
+                    assert "_ROOT" in block, (
+                        f"{f.name} Python blok #{i+1}: "
+                        f"data/RAGIP_AGA/ referansi var ama _ROOT tanimli degil"
+                    )
+
+    def test_git_rev_parse_works_in_repo(self):
+        """git rev-parse --show-toplevel mevcut repoda dogru path dondurmeli"""
+        import subprocess
+        result = subprocess.check_output(
+            ["git", "rev-parse", "--show-toplevel"],
+            text=True, stderr=subprocess.DEVNULL
+        ).strip()
+        repo_root = Path(result)
+        assert repo_root.exists(), f"git rev-parse sonucu mevcut degil: {result}"
+        assert (repo_root / ".claude" / "agents").is_dir(), (
+            f"{result}/.claude/agents dizini bulunamadi"
+        )
+
+    def test_doc_text_uses_relative_paths(self):
+        """Dokumantasyon metinlerinde path'ler repo-relative olmali"""
+        # Agent dosyalarindaki **Dizin:** satirlari
+        for f in self.agent_files:
+            text = f.read_text(encoding="utf-8")
+            if "**Dizin:**" in text:
+                for line in text.split("\n"):
+                    if "**Dizin:**" in line:
+                        assert "~/.orchestrator" not in line, (
+                            f"{f.name}: Dizin referansinda "
+                            f"~/.orchestrator hala mevcut"
+                        )
+
+    def test_no_hardcoded_path_in_skill_descriptions(self):
+        """Skill aciklama metinlerinde hardcoded path olmamali"""
+        for f in self.skill_files:
+            text = f.read_text(encoding="utf-8")
+            # Frontmatter sonrasi ilk paragraf
+            parts = text.split("---", 2)
+            if len(parts) >= 3:
+                body = parts[2]
+                # Python/bash bloklari DISINDA ~/.orchestrator olmamali
+                lines = body.split("\n")
+                in_code = False
+                for line in lines:
+                    if line.strip().startswith("```"):
+                        in_code = not in_code
+                    elif not in_code and "~/.orchestrator" in line:
+                        assert False, (
+                            f"{f.name}: Metin icinde "
+                            f"~/.orchestrator hala mevcut: {line.strip()}"
+                        )
