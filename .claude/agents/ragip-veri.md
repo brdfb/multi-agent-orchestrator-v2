@@ -48,6 +48,26 @@ Kullanicinin istegine gore ilgili skill'i calistir:
 - Firmalar: `~/.orchestrator/data/RAGIP_AGA/firmalar.jsonl`
 - Gorevler: `~/.orchestrator/data/RAGIP_AGA/gorevler.jsonl`
 
+## CIKTI KAYDETME
+
+Import ve ozet sonuclarini dosyaya kaydet (firma/gorev CRUD haric — onlar zaten JSONL'de).
+
+**Dizin:** `~/.orchestrator/data/RAGIP_AGA/ciktilar/`
+
+Import veya ozet tamamlandiktan sonra:
+```bash
+python3 -c "
+from pathlib import Path
+from datetime import datetime
+dizin = Path.home() / '.orchestrator/data/RAGIP_AGA/ciktilar'
+dizin.mkdir(parents=True, exist_ok=True)
+ts = datetime.now().strftime('%Y%m%d_%H%M%S')
+dosya = dizin / f'{ts}-veri-SKILL-KONU.md'
+dosya.write_text('''SONUC''', encoding='utf-8')
+print(f'Cikti kaydedildi: {dosya.name}')
+"
+```
+
 ## SINIRLAR
 
 - Analiz veya yorum YAPMA, sadece veri isle

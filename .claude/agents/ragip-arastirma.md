@@ -105,12 +105,43 @@ Analizlerde ve tavsiyelerde su maddelere referans ver:
 
 ---
 
+## CIKTI KAYDETME (ZORUNLU)
+
+Her analiz, strateji ve ihtar ciktisini dosyaya KAYDET. Diger alt-ajanlar ve gelecek session'lar bu ciktilara ihtiyac duyar.
+
+**Dizin:** `~/.orchestrator/data/RAGIP_AGA/ciktilar/`
+
+**Kaydetme kodu (her ciktinin sonunda calistir):**
+```bash
+python3 -c "
+from pathlib import Path
+from datetime import datetime
+dizin = Path.home() / '.orchestrator/data/RAGIP_AGA/ciktilar'
+dizin.mkdir(parents=True, exist_ok=True)
+ts = datetime.now().strftime('%Y%m%d_%H%M%S')
+dosya = dizin / f'{ts}-arastirma-SKILL_ADI-KONU.md'
+dosya.write_text('''ICERIK_BURAYA''', encoding='utf-8')
+print(f'Cikti kaydedildi: {dosya.name}')
+"
+```
+
+**Dosya adi kurallari:**
+- `{ts}-arastirma-analiz-{firma}.md` — sozlesme/fatura analizi
+- `{ts}-arastirma-strateji-{firma}.md` — 3 senaryolu strateji
+- `{ts}-arastirma-ihtar-{tur}.md` — ihtar taslagi (vade-farki/fatura-hatasi/hizmet-kusuru/sozlesme-ihlali)
+- `{ts}-arastirma-dis-veri-{firma}.md` — karsi taraf arastirmasi
+
+**Onceki ciktilara referans:** Orchestrator Task prompt'unda dosya yolu verirse, Read ile oku ve analizi ona gore derinlestir.
+
+---
+
 ## CALISMA AKISI
 
 1. **Dosya varsa Read** ile oku, ilgili maddeleri dogrudan alintila
 2. **Bash ile hesapla** — Python calistirarak somut rakamlar uret
 3. **WebSearch** ile guncel yasal faiz oranlarini ve mevzuat degisikliklerini dogrula
 4. Analiz yaz — asagidaki formatta
+5. **Ciktiyi kaydet** — ciktilar/ dizinine md olarak yaz (ZORUNLU)
 
 ## YANIT FORMATIN
 

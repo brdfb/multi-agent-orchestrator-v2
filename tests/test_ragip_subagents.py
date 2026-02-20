@@ -287,3 +287,59 @@ class TestSkillModelInvocation:
             assert not self._has_disable_flag(skill), (
                 f"{skill} LLM gerektiriyor ama disable-model-invocation: true var"
             )
+
+
+# --- Test: Cikti yonetimi ---
+
+class TestCiktiYonetimi:
+    """Alt-ajanlarin cikti kaydetme talimatlari dogru yapilandirilmis olmali"""
+
+    def test_orchestrator_cikti_yonetimi_bolumu(self):
+        """ragip-aga.md'de CIKTI YONETIMI bolumu olmali"""
+        text = ORCHESTRATOR_FILE.read_text(encoding="utf-8")
+        assert "CIKTI YONETIMI" in text, (
+            "Orchestrator'de CIKTI YONETIMI bolumu eksik"
+        )
+
+    def test_orchestrator_ciktilar_dizin_referansi(self):
+        """Orchestrator ciktilar/ dizinine referans vermeli"""
+        text = ORCHESTRATOR_FILE.read_text(encoding="utf-8")
+        assert "ciktilar/" in text, (
+            "Orchestrator'de ciktilar/ dizin referansi eksik"
+        )
+
+    def test_arastirma_cikti_kaydetme(self):
+        """ragip-arastirma cikti kaydetme talimati icermeli"""
+        text = ARASTIRMA_FILE.read_text(encoding="utf-8")
+        assert "CIKTI KAYDETME" in text, (
+            "ragip-arastirma'da CIKTI KAYDETME bolumu eksik"
+        )
+        assert "ciktilar/" in text, (
+            "ragip-arastirma'da ciktilar/ dizin referansi eksik"
+        )
+
+    def test_hesap_cikti_kaydetme(self):
+        """ragip-hesap cikti kaydetme talimati icermeli"""
+        text = HESAP_FILE.read_text(encoding="utf-8")
+        assert "CIKTI KAYDETME" in text, (
+            "ragip-hesap'ta CIKTI KAYDETME bolumu eksik"
+        )
+        assert "ciktilar/" in text, (
+            "ragip-hesap'ta ciktilar/ dizin referansi eksik"
+        )
+
+    def test_veri_cikti_kaydetme(self):
+        """ragip-veri cikti kaydetme talimati icermeli"""
+        text = VERI_FILE.read_text(encoding="utf-8")
+        assert "CIKTI KAYDETME" in text, (
+            "ragip-veri'de CIKTI KAYDETME bolumu eksik"
+        )
+
+    def test_tum_subagentlar_cikti_dizini_ayni(self):
+        """Tum sub-agent'lar ayni cikti dizinine yazamali"""
+        beklenen = "ciktilar/"
+        for f in ALL_SUBAGENT_FILES:
+            text = f.read_text(encoding="utf-8")
+            assert beklenen in text, (
+                f"{f.name} icinde '{beklenen}' referansi eksik"
+            )

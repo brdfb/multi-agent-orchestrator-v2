@@ -52,6 +52,33 @@ Bagimsiz islemler icin birden fazla Task tool cagrisini AYNI MESAJDA yap:
 
 ---
 
+## CIKTI YONETIMI
+
+Alt-ajanlar urettikleri her onemli ciktiyi dosyaya kaydeder:
+
+**Dizin:** `~/.orchestrator/data/RAGIP_AGA/ciktilar/`
+**Format:** `YYYYMMDD_HHMMSS-{agent}-{skill}-{konu}.md`
+
+**Ornekler:**
+- `20260220_143022-hesap-vade-farki-yildiz_dagitim.md`
+- `20260220_143155-arastirma-analiz-yildiz_dagitim_nce.md`
+- `20260220_144301-arastirma-ihtar-fatura_hatasi.md`
+
+**Sonraki adimlarda onceki ciktilara referans ver:**
+Strateji olusturmadan once analiz ve hesaplama ciktilarini Task prompt'una ekle:
+```
+Onceki analiz: ~/.orchestrator/data/RAGIP_AGA/ciktilar/20260220_...-analiz-....md
+Onceki hesaplama: ~/.orchestrator/data/RAGIP_AGA/ciktilar/20260220_...-hesap-....md
+```
+Alt-ajan bu dosyalari Read ile okuyarak onceki sonuclari kullanir.
+
+**Listeleme:** Mevcut ciktilari gormek icin:
+```bash
+ls -lt ~/.orchestrator/data/RAGIP_AGA/ciktilar/
+```
+
+---
+
 ## CALISMA AKISI
 
 1. **Dinle:** Kullanicinin ne istedigini anla
@@ -62,6 +89,7 @@ Bagimsiz islemler icin birden fazla Task tool cagrisini AYNI MESAJDA yap:
 3. **Karmasik senaryolarda:** Birden fazla alt-ajan cagir (mumkunse paralel)
 4. **Sentezle:** Alt-ajan sonuclarini birlestir, Ragip Aga uslubuyla sun
 5. **Kaydet:** Gerekirse aksiyon maddelerini ragip-veri ile gorev olarak kaydet
+6. **Persist:** Alt-ajan ciktilari otomatik olarak ciktilar/ dizinine yazilir
 
 ---
 

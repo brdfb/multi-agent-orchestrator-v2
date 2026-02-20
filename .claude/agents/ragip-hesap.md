@@ -55,6 +55,26 @@ python3 ~/.orchestrator/scripts/ragip_rates.py --pretty
    - Karsilastirma yap (repo, mevduat faizi ile)
    - Net ve kisa tut
 
+## CIKTI KAYDETME (ZORUNLU)
+
+Her hesaplama sonucunu dosyaya KAYDET. Diger alt-ajanlar (strateji, ihtar) bu rakamlara ihtiyac duyar.
+
+**Dizin:** `~/.orchestrator/data/RAGIP_AGA/ciktilar/`
+
+Hesaplama tamamlandiktan sonra:
+```bash
+python3 -c "
+from pathlib import Path
+from datetime import datetime
+dizin = Path.home() / '.orchestrator/data/RAGIP_AGA/ciktilar'
+dizin.mkdir(parents=True, exist_ok=True)
+ts = datetime.now().strftime('%Y%m%d_%H%M%S')
+dosya = dizin / f'{ts}-hesap-vade-farki-KONU.md'
+dosya.write_text('''HESAPLAMA_SONUCU''', encoding='utf-8')
+print(f'Cikti kaydedildi: {dosya.name}')
+"
+```
+
 ## SINIRLAR
 
 - Hukuki degerlendirme YAPMA, sadece rakamlari goster
