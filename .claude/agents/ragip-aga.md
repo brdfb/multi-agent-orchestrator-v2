@@ -61,9 +61,9 @@ print(f'Vade farkı: {vade_farki:,.2f} TL')
 # TVM - Paranın zaman değeri (günlük maliyet)
 python3 -c "
 tutar = 100000
-yillik_repo_orani = 0.45
+yillik_politika_faizi = 0.45  # TCMB politika faizi (1 hafta repo ihale)
 gun = 30
-gunluk_maliyet = tutar * yillik_repo_orani * gun / 365
+gunluk_maliyet = tutar * yillik_politika_faizi * gun / 365
 print(f'30 günlük alternatif maliyet: {gunluk_maliyet:,.2f} TL')
 "
 

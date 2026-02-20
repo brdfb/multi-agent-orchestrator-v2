@@ -95,7 +95,7 @@ class FinansalHesap:
     def tvm_gunluk_maliyet(tutar: float, yillik_oran_pct: float, gun: int) -> dict:
         """
         Paranın zaman değeri - belirtilen süre için fırsat maliyeti.
-        yillik_oran_pct: yıllık oran % (örn: repo oranı, 42.5)
+        yillik_oran_pct: yıllık oran % (örn: TCMB politika faizi, 42.5)
         """
         FinansalHesap._validate_positive(tutar, "tutar")
         FinansalHesap._validate_rate(yillik_oran_pct, "yillik_oran_pct")
@@ -128,6 +128,59 @@ class FinansalHesap:
             "max_iskonto_tl": round(max_iskonto, 2),
             "iskonto_pct": round(iskonto_pct, 2),
             "aciklama": f"{kazanilan_gun} gün erken ödersen en fazla %{iskonto_pct:.2f} iskonto isteyebilirsin",
+        }
+
+    @staticmethod
+    def indiferans_iskonto(
+        tutar: float,
+        aylik_vade_farki_pct: float,
+        yillik_firsat_oran_pct: float,
+        erken_gun: int,
+    ) -> dict:
+        """
+        Indiferans (break-even) iskonto hesabi.
+        Karsi tarafin erken odeme karsiliginda kabul edebilecegi minimum iskonto.
+        Mantik: Karsi taraf erken odeme yaparsa, o parayi bankada/mevduatta
+        tutarak kazanacagi faizden vazgeciyor. Indiferans noktasi =
+        karsi tarafin firsat maliyeti.
+
+        tutar: fatura tutari
+        aylik_vade_farki_pct: sozlesmedeki aylik vade farki orani %
+        yillik_firsat_oran_pct: karsi tarafin alternatif getiri orani (yillik %)
+        erken_gun: kac gun erken odenecek
+        """
+        FinansalHesap._validate_positive(tutar, "tutar")
+        FinansalHesap._validate_rate(aylik_vade_farki_pct, "aylik_vade_farki_pct")
+        FinansalHesap._validate_rate(yillik_firsat_oran_pct, "yillik_firsat_oran_pct")
+        FinansalHesap._validate_non_negative_int(erken_gun, "erken_gun")
+
+        # Senin max iskonto tavan = vade farki tasarrufu
+        aylik_oran = aylik_vade_farki_pct / 100
+        max_iskonto = tutar * aylik_oran * erken_gun / 30
+
+        # Karsi tarafin firsat maliyeti = erken odeme ile kaybedecegi faiz geliri
+        yillik_oran = yillik_firsat_oran_pct / 100
+        karsi_taraf_maliyeti = tutar * yillik_oran * erken_gun / 365
+
+        # Indiferans = karsi tarafin kabul edebilecegi minimum
+        indiferans_pct = (karsi_taraf_maliyeti / tutar) * 100
+
+        # Muzakere araliGi = indiferans ile max iskonto arasi
+        max_iskonto_pct = (max_iskonto / tutar) * 100
+
+        return {
+            "tutar": tutar,
+            "erken_gun": erken_gun,
+            "max_iskonto_tl": round(max_iskonto, 2),
+            "max_iskonto_pct": round(max_iskonto_pct, 2),
+            "indiferans_tl": round(karsi_taraf_maliyeti, 2),
+            "indiferans_pct": round(indiferans_pct, 2),
+            "muzakere_araligi_tl": f"{round(karsi_taraf_maliyeti, 2)} - {round(max_iskonto, 2)}",
+            "yorum": (
+                f"Sen en fazla {max_iskonto:,.0f} TL (%{max_iskonto_pct:.2f}) iskonto isteyebilirsin. "
+                f"Karsi taraf en az {karsi_taraf_maliyeti:,.0f} TL (%{indiferans_pct:.2f}) altina inmez. "
+                f"Muzakere araligi: {karsi_taraf_maliyeti:,.0f} - {max_iskonto:,.0f} TL."
+            ),
         }
 
     @staticmethod
@@ -616,6 +669,7 @@ def main():
   ragip --calc vade-farki --anapara 100000 --oran 3 --gun 45
   ragip --calc tvm --anapara 100000 --repo-orani 42.5 --gun 30
   ragip --calc iskonto --anapara 100000 --oran 3 --gun 30
+  ragip --calc indiferans --anapara 100000 --oran 3 --gun 30 --firsat-orani 42.5
   ragip --calc ncd --dio 45 --dso 30 --dpo 60
   ragip --calc doviz --usd-tutar 10000 --gun 90
   ragip --calc ithalat --usd-tutar 50000 --navlun 3000 --gtip-vergi 10
@@ -641,12 +695,13 @@ def main():
 
     # Hesaplama modu
     parser.add_argument("--calc", type=str,
-                        choices=["vade-farki", "tvm", "iskonto", "ncd", "doviz", "ithalat"],
-                        help="Finansal hesaplama: vade-farki | tvm | iskonto | ncd | doviz | ithalat")
+                        choices=["vade-farki", "tvm", "iskonto", "indiferans", "ncd", "doviz", "ithalat"],
+                        help="Finansal hesaplama: vade-farki | tvm | iskonto | indiferans | ncd | doviz | ithalat")
     parser.add_argument("--anapara", type=float, help="Ana para tutarı (TL)")
     parser.add_argument("--oran", type=float, help="Aylık faiz oranı (%%)")
     parser.add_argument("--gun", type=int, help="Gün sayısı")
-    parser.add_argument("--repo-orani", type=float, help="Yıllık repo/politika faizi (%%)")
+    parser.add_argument("--repo-orani", type=float, help="Yıllık politika faizi (%%)")
+    parser.add_argument("--firsat-orani", type=float, help="Karşı tarafın yıllık fırsat oranı (%%) (indiferans hesabı)")
     parser.add_argument("--dio", type=int, help="Stokta kalma süresi (gün)")
     parser.add_argument("--dso", type=int, help="Tahsilat süresi (gün)")
     parser.add_argument("--dpo", type=int, help="Ödeme süresi (gün)")
@@ -708,6 +763,14 @@ def main():
                 sys.exit(1)
             sonuc = hesap.erken_odeme_iskonto(args.anapara, args.oran, args.gun)
             display_calc_result("Erken Ödeme Maksimum İskonto", sonuc)
+
+        elif args.calc == "indiferans":
+            if not all([args.anapara, args.oran, args.gun]):
+                print("Gerekli: --anapara --oran --gun [--firsat-orani (varsayılan: TCMB)]")
+                sys.exit(1)
+            firsat = args.firsat_orani or get_tcmb_rates_with_search()["politika_faizi"]
+            sonuc = hesap.indiferans_iskonto(args.anapara, args.oran, firsat, args.gun)
+            display_calc_result("İndiferans (Break-Even) İskonto", sonuc)
 
         elif args.calc == "ncd":
             if not all([args.dio is not None, args.dso is not None, args.dpo is not None]):

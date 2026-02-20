@@ -183,6 +183,40 @@ class TestIthalatMaliyet:
         assert abs(sonuc["birim_maliyet_tl_usd"] - sonuc["toplam_tl"] / 10_000) < 0.001
 
 
+class TestIndiferansIskonto:
+    def test_basit(self):
+        """Indiferans = karsi tarafin firsat maliyeti"""
+        sonuc = FinansalHesap.indiferans_iskonto(100_000, 3.0, 42.5, 30)
+        # Max iskonto = 100K x 3% x 30/30 = 3000
+        assert sonuc["max_iskonto_tl"] == 3000.0
+        # Indiferans = 100K x 42.5% x 30/365
+        beklenen = 100_000 * 0.425 * 30 / 365
+        assert abs(sonuc["indiferans_tl"] - round(beklenen, 2)) < 0.01
+
+    def test_muzakere_araligi(self):
+        """Dusuk firsat orani ile indiferans < max iskonto olmali"""
+        # 3%/ay = ~36% yillik; firsat orani 25% < 36% -> indiferans < max_iskonto
+        sonuc = FinansalHesap.indiferans_iskonto(100_000, 3.0, 25.0, 30)
+        assert sonuc["indiferans_tl"] < sonuc["max_iskonto_tl"]
+
+    def test_yuksek_firsat_orani(self):
+        """Yuksek firsat orani ile indiferans > max iskonto (muzakere zor)"""
+        # 3%/ay = ~36% yillik; firsat orani 42.5% > 36% -> indiferans > max_iskonto
+        sonuc = FinansalHesap.indiferans_iskonto(100_000, 3.0, 42.5, 30)
+        assert sonuc["indiferans_tl"] > sonuc["max_iskonto_tl"]
+
+    def test_sifir_gun(self):
+        """0 gun erken odeme = her iki taraf 0"""
+        sonuc = FinansalHesap.indiferans_iskonto(100_000, 3.0, 42.5, 0)
+        assert sonuc["max_iskonto_tl"] == 0.0
+        assert sonuc["indiferans_tl"] == 0.0
+
+    def test_negatif_tutar_reddedilir(self):
+        import pytest as pt
+        with pt.raises(ValueError, match="negatif"):
+            FinansalHesap.indiferans_iskonto(-100_000, 3.0, 42.5, 30)
+
+
 import pytest
 
 
