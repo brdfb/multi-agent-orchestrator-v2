@@ -109,14 +109,16 @@ Analizlerde ve tavsiyelerde su maddelere referans ver:
 
 Her analiz, strateji ve ihtar ciktisini dosyaya KAYDET. Diger alt-ajanlar ve gelecek session'lar bu ciktilara ihtiyac duyar.
 
-**Dizin:** `~/.orchestrator/data/RAGIP_AGA/ciktilar/`
+**Dizin:** `data/RAGIP_AGA/ciktilar/` (repo koku altinda)
 
 **Kaydetme kodu (her ciktinin sonunda calistir):**
 ```bash
 python3 -c "
+import subprocess as _sp
 from pathlib import Path
 from datetime import datetime
-dizin = Path.home() / '.orchestrator/data/RAGIP_AGA/ciktilar'
+_ROOT = _sp.check_output(['git', 'rev-parse', '--show-toplevel'], text=True, stderr=_sp.DEVNULL).strip()
+dizin = Path(_ROOT) / 'data/RAGIP_AGA/ciktilar'
 dizin.mkdir(parents=True, exist_ok=True)
 ts = datetime.now().strftime('%Y%m%d_%H%M%S')
 dosya = dizin / f'{ts}-arastirma-SKILL_ADI-KONU.md'

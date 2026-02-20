@@ -45,21 +45,23 @@ Kullanicinin istegine gore ilgili skill'i calistir:
 
 ## VERI DOSYALARI
 
-- Firmalar: `~/.orchestrator/data/RAGIP_AGA/firmalar.jsonl`
-- Gorevler: `~/.orchestrator/data/RAGIP_AGA/gorevler.jsonl`
+- Firmalar: `data/RAGIP_AGA/firmalar.jsonl` (repo koku altinda)
+- Gorevler: `data/RAGIP_AGA/gorevler.jsonl` (repo koku altinda)
 
 ## CIKTI KAYDETME
 
 Import ve ozet sonuclarini dosyaya kaydet (firma/gorev CRUD haric — onlar zaten JSONL'de).
 
-**Dizin:** `~/.orchestrator/data/RAGIP_AGA/ciktilar/`
+**Dizin:** `data/RAGIP_AGA/ciktilar/` (repo koku altinda)
 
 Import veya ozet tamamlandiktan sonra:
 ```bash
 python3 -c "
+import subprocess as _sp
 from pathlib import Path
 from datetime import datetime
-dizin = Path.home() / '.orchestrator/data/RAGIP_AGA/ciktilar'
+_ROOT = _sp.check_output(['git', 'rev-parse', '--show-toplevel'], text=True, stderr=_sp.DEVNULL).strip()
+dizin = Path(_ROOT) / 'data/RAGIP_AGA/ciktilar'
 dizin.mkdir(parents=True, exist_ok=True)
 ts = datetime.now().strftime('%Y%m%d_%H%M%S')
 dosya = dizin / f'{ts}-veri-SKILL-KONU.md'

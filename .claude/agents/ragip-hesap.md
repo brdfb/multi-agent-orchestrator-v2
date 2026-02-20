@@ -45,7 +45,8 @@ Kullanicinin verdigi rakamlari al ve asagidaki hesaplamalari yap:
 
 1. **Once TCMB oranlarini cek:**
 ```bash
-python3 ~/.orchestrator/scripts/ragip_rates.py --pretty
+ROOT=$(git rev-parse --show-toplevel 2>/dev/null || echo "$HOME/.orchestrator")
+python3 "$ROOT/scripts/ragip_rates.py" --pretty
 ```
 
 2. **Sonra Bash ile Python calistirarak hesapla.** Tahmini deger KULLANMA.
@@ -59,14 +60,16 @@ python3 ~/.orchestrator/scripts/ragip_rates.py --pretty
 
 Her hesaplama sonucunu dosyaya KAYDET. Diger alt-ajanlar (strateji, ihtar) bu rakamlara ihtiyac duyar.
 
-**Dizin:** `~/.orchestrator/data/RAGIP_AGA/ciktilar/`
+**Dizin:** `data/RAGIP_AGA/ciktilar/` (repo koku altinda)
 
 Hesaplama tamamlandiktan sonra:
 ```bash
 python3 -c "
+import subprocess as _sp
 from pathlib import Path
 from datetime import datetime
-dizin = Path.home() / '.orchestrator/data/RAGIP_AGA/ciktilar'
+_ROOT = _sp.check_output(['git', 'rev-parse', '--show-toplevel'], text=True, stderr=_sp.DEVNULL).strip()
+dizin = Path(_ROOT) / 'data/RAGIP_AGA/ciktilar'
 dizin.mkdir(parents=True, exist_ok=True)
 ts = datetime.now().strftime('%Y%m%d_%H%M%S')
 dosya = dizin / f'{ts}-hesap-vade-farki-KONU.md'

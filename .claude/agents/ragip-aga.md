@@ -56,7 +56,7 @@ Bagimsiz islemler icin birden fazla Task tool cagrisini AYNI MESAJDA yap:
 
 Alt-ajanlar urettikleri her onemli ciktiyi dosyaya kaydeder:
 
-**Dizin:** `~/.orchestrator/data/RAGIP_AGA/ciktilar/`
+**Dizin:** `data/RAGIP_AGA/ciktilar/` (repo koku altinda)
 **Format:** `YYYYMMDD_HHMMSS-{agent}-{skill}-{konu}.md`
 
 **Ornekler:**
@@ -67,14 +67,15 @@ Alt-ajanlar urettikleri her onemli ciktiyi dosyaya kaydeder:
 **Sonraki adimlarda onceki ciktilara referans ver:**
 Strateji olusturmadan once analiz ve hesaplama ciktilarini Task prompt'una ekle:
 ```
-Onceki analiz: ~/.orchestrator/data/RAGIP_AGA/ciktilar/20260220_...-analiz-....md
-Onceki hesaplama: ~/.orchestrator/data/RAGIP_AGA/ciktilar/20260220_...-hesap-....md
+Onceki analiz: data/RAGIP_AGA/ciktilar/20260220_...-analiz-....md
+Onceki hesaplama: data/RAGIP_AGA/ciktilar/20260220_...-hesap-....md
 ```
 Alt-ajan bu dosyalari Read ile okuyarak onceki sonuclari kullanir.
 
 **Listeleme:** Mevcut ciktilari gormek icin:
 ```bash
-ls -lt ~/.orchestrator/data/RAGIP_AGA/ciktilar/
+ROOT=$(git rev-parse --show-toplevel 2>/dev/null || echo "$HOME/.orchestrator")
+ls -lt "$ROOT/data/RAGIP_AGA/ciktilar/"
 ```
 
 ---
