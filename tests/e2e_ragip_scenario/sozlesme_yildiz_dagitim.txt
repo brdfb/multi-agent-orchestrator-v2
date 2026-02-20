@@ -1,0 +1,199 @@
+============================================================
+     MICROSOFT CSP BAYI / LISANS DAGITIM SOZLESMESI
+============================================================
+
+Sozlesme No  : CSP-2024-0312
+Tarih        : 01.04.2024
+
+TARAFLAR:
+---------
+DAGITICI (CSP Indirect Provider):
+  Yildiz Dagitim Ticaret A.S.
+  Microsoft CSP Indirect Provider — MPN ID: 7891234
+  Vergi No: 4820137695
+  Adres: Ikitelli OSB Mah. 10. Sok. No:25
+         Basaksehir / Istanbul
+  Tel: 0212 549 88 00
+  KEP: yildiz.dagitim@hs01.kep.tr
+
+BAYI (CSP Indirect Reseller / Son Kullanici):
+  Orka Teknoloji Ltd. Sti.
+  Vergi No: 8901234567
+  Adres: Kucukbakkalkoy Mah. Kayisdagi Cad. No:72/4
+         Atasehir / Istanbul
+  Tel: 0216 340 55 00
+  KEP: orka.teknoloji@hs02.kep.tr
+
+============================================================
+
+MADDE 1 - KONU VE KAPSAM
+
+1.1. Bu sozlesme, Dagitici'nin Bayi'ye Microsoft Cloud Solution
+     Provider (CSP) programi kapsaminda bulut lisans dagitimi
+     ve teknik destek hizmetlerine iliskin kosullari duzenler.
+
+1.2. Kapsam: Microsoft 365, Office 365, Windows 365, Azure,
+     Dynamics 365, Power Platform ve diger Microsoft NCE
+     (New Commerce Experience) urunleri.
+
+1.3. Dagitici, Microsoft'un CSP Indirect Provider'i olarak
+     lisanslari Microsoft'tan temin eder ve Bayi'ye faturalandirir.
+
+MADDE 2 - SURE
+
+2.1. Sozlesme suresi 01.04.2024 tarihinden itibaren 2 (iki) yildir.
+2.2. Taraflardan biri sure bitiminden 60 gun once yazili bildirimde
+     bulunmadikca sozlesme ayni kosullarla 1 (bir) yil uzar.
+
+MADDE 3 - NCE LISANS MODELI VE FIYATLANDIRMA
+
+3.1. ABONELIK TIPLERI:
+     a) Yillik taahhutlu (12 ay): Microsoft liste fiyati + distributor
+        marji. Donem icinde lisans adedi azaltilamaz (NCE kurali).
+     b) Aylik taahhütsüz: Liste fiyati + %20 NCE primi + distributor
+        marji. Her ay iptal veya degisiklik yapilabilir.
+
+3.2. DISTRIBUTOR MARJI:
+     Microsoft CSP liste fiyati uzerine Dagitici %8 (yuzde sekiz)
+     hizmet bedeli ekler. Bu oran sozlesme suresi boyunca sabittir.
+
+3.3. DOVIZ KURU:
+     a) Faturalar TL cinsinden kesilir.
+     b) USD/TL donusumunde fatura gununun TCMB doviz alis kuru
+        esas alinir.
+     c) Dagitici, TCMB kuru uzerine %2'yi asan kur farki uygulayamaz.
+
+3.4. FIYAT DEGISIKLIGI:
+     a) Microsoft'un NCE liste fiyat degisiklikleri, yillik taahhut
+        doneminin yenileme tarihinde yansitilir.
+     b) Donem ici fiyat artisi uygulanamaz (NCE sabit fiyat garantisi).
+     c) Dagitici marj degisikligi 30 gun onceden yazili bildirilir.
+
+3.5. SEAT (LISANS ADEDI) YONETIMI:
+     a) Yeni seat ekleme: Her zaman yapilabilir, ayni fiyat ve
+        vadenin kalan suresiyle orantili faturalanir (pro-rata).
+     b) Seat azaltma: Yillik taahhutlu aboneliklerde donem icinde
+        azaltma YAPILAMAZ. Azaltma yalnizca yenileme doneminde
+        (renewal window) mumkundur.
+     c) Iptal: Yeni abonelikte 7 (yedi) takvim gunu icinde iptal
+        hakki vardir. 7 gun sonrasi donem sonu beklenir.
+
+MADDE 4 - ODEME KOSULLARI
+
+4.1. Odeme vadesi fatura tarihinden itibaren 60 (altmis) gundur.
+4.2. Odemeler banka havalesi ile yapilir. Cek kabul edilmez.
+4.3. Kismi odeme yapilabilir, kalan bakiye vade tarihine kadar
+     odenir. Kismi odeme faiz feragatini ifade etmez.
+
+MADDE 5 - VADE FARKI
+
+5.1. Vadesinde odenmeyen alacaklar icin aylik %2,5 (yuzde iki
+     nokta bes) oraninda vade farki uygulanir.
+5.2. Vade farki uygulamasi icin Dagitici'nin Bayi'ye yazili
+     bildirimde bulunmasi ve 15 (onbes) gun ek sure tanimasi
+     ZORUNLUDUR.
+5.3. Vade farki, mutabakat sonrasi ayri bir fatura ile kesilir.
+     Mutabakat olmaksizin kesilen vade farki faturalari gecersizdir.
+5.4. Vade farki hesabinda yalnizca geciken doneme ait fatura
+     tutarlari esas alinir; mevcut abonelik donemi faturalari
+     dahil edilemez.
+
+MADDE 6 - FATURA ITIRAZI
+
+6.1. Bayi, fatura icerigine 8 (sekiz) is gunu icinde yazili
+     olarak itiraz edebilir.
+6.2. Itiraz edilmeyen faturalar kabul edilmis sayilir (TTK m.21/2).
+6.3. Itiraz, KEP veya noter kanalyila yapilmalidir.
+6.4. Doviz kuru itirazlarinda TCMB doviz alis kuru referans alinir.
+
+MADDE 7 - HIZMET YUKUMLULUKLERI
+
+7.1. LISANS AKTIVASYONU:
+     a) Dagitici, siparis onayindan itibaren 2 (iki) is gunu
+        icinde lisanslari Microsoft Partner Center uzerinden
+        aktive eder.
+     b) Geciken aktivasyonlar icin geciken her is gunu basina
+        aktive edilmeyen lisans bedelinin %0,5'i (binde bes)
+        cezai sart olarak uygulanir.
+
+7.2. TEKNIK DESTEK:
+     a) Dagitici, is gunleri 09:00-18:00 arasi teknik destek saglar.
+     b) Kritik sorunlar (hizmet kesintisi) icin 4 saat icinde
+        mudahale taahhut edilir.
+     c) Standart talepler icin 2 is gunu cevap suresi.
+
+7.3. GECIKME VE KUSUR:
+     a) Tekrar eden aktivasyon gecikmeleri (ayda 3'ten fazla)
+        Bayi'ye sozlesmeyi fesih hakki tanir.
+     b) Microsoft hizmet kesintileri (SLA ihlali) Dagitici'nin
+        sorumlulugunda degildir; Microsoft SLA kredileri
+        Bayi'ye yansitilir.
+
+MADDE 8 - TEMERUT VE ICRA
+
+8.1. Vadesinde odenmeyen borclarda Dagitici, TBK m.117 uyarinca
+     noter ihtariyla Bayi'yi temerude dusurur.
+8.2. Temerut tarihinden itibaren 3095 sayili Kanun m.2 uyarinca
+     temerut faizi isletilir.
+8.3. Dagitici, odeme yapilmayana kadar yeni lisans siparislerini
+     durdurabilir. Mevcut aktif lisanslar etkilenmez.
+
+MADDE 9 - FESIH
+
+9.1. Taraflardan biri asagidaki durumlarda sozlesmeyi 30 gun
+     onceden yazili bildirimle feshedebilir:
+     a) Odeme temerrudunun 90 gunu asmasi
+     b) Iflas veya konkordato basvurusu
+     c) Tekrar eden hizmet kusurlari (3 ayda 5'ten fazla)
+     d) Microsoft CSP programindan cikarilma
+
+9.2. Fesih halinde mevcut yillik taahhutlu abonelikler donem
+     sonuna kadar aktif kalir ve faturalanmaya devam eder
+     (NCE taahhut kurali). Fesih bu yukumlulukleri ortadan
+     kaldirmaz.
+
+MADDE 10 - UYUSMAZLIK COZUMU
+
+10.1. Uyusmazliklarda once 30 gunluk sulh gorusmesi yapilir.
+10.2. Sulh saglanamadigi takdirde 6325 sayili Kanun geregi
+      zorunlu arabuluculuk yoluna basvurulur.
+10.3. Arabuluculuk sonucsuz kalirsa Istanbul Anadolu Mahkemeleri
+      ve Icra Daireleri yetkilidir.
+
+MADDE 11 - DIGER HUKUMLER
+
+11.1. Bu sozlesme Turk Hukuku'na tabidir.
+11.2. Microsoft CSP Program kosullari (MPA - Microsoft Partner
+      Agreement) bu sozlesmenin ayrilmaz parcasidir.
+11.3. Microsoft'un NCE politika degisiklikleri Dagitici
+      tarafindan 15 gun icinde Bayi'ye yazili bildirilir.
+11.4. Sozlesmede yapilacak degisiklikler ancak yazili ve her iki
+      tarafin imzasiyla gecerlidir.
+
+============================================================
+EK-1: AKTIF ABONELIKLER (01.02.2026 itibariyle)
+
+Urun                              Adet   Tip        Aylik USD
+-----------------------------------------------------------
+Microsoft 365 Business Premium     150   Yillik      $22.00
+Microsoft 365 E3                    20   Yillik      $36.00
+Microsoft Power BI Pro              30   Yillik       $9.99
+Windows 365 Business (2vCPU/8GB)    10   Aylik       $31.99
+-----------------------------------------------------------
+Toplam aylik USD:                                  $4,719.70
+Distributor marji (%8):                              $377.58
+Toplam aylik USD (marjli):                         $5,097.28
+
+Not: Yillik taahhutlu urunler Nisan 2025'te baslatildi.
+Yenileme tarihi: Nisan 2026.
+
+============================================================
+IMZALAR
+
+Yildiz Dagitim Ticaret A.S.       Orka Teknoloji Ltd. Sti.
+Genel Mudur                        Genel Mudur
+
+Mehmet Yildiz                      _______________
+
+Tarih: 01.04.2024                 Tarih: 01.04.2024
+============================================================
