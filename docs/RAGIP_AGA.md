@@ -1,6 +1,6 @@
 # Ragıp Aga — Kullanım Dokümantasyonu
 
-**Versiyon:** 2.0.0 | **Tarih:** 2026-02-18
+**Versiyon:** 2.1.0 | **Tarih:** 2026-02-21
 
 Ragıp Aga, nakit akışı yönetimi, vade müzakeresi ve sözleşme uyuşmazlıkları için geliştirilmiş bir iş danışmanı ajanıdır. İki ayrı arayüz üzerinden çalışır.
 
@@ -73,19 +73,58 @@ ragip --calc iskonto --anapara 100000 --oran 3 --gun 30
 # Nakit çevrim döngüsü
 # Stok: 45 gün, Tahsilat: 30 gün, Ödeme vadesi: 60 gün
 ragip --calc ncd --dio 45 --dso 30 --dpo 60
+
+# İndiferans (kayıtsızlık) noktası
+# İki ödeme planı arasında hangi faiz oranında fark etmez?
+ragip --calc indiferans --anapara 100000 --oran 3 --gun 30
+
+# Döviz forward kuru
+# 10.000 USD, 90 gün sonra teorik TL karşılığı
+ragip --calc doviz --anapara 10000 --gun 90
+
+# İthalat maliyet hesabı
+# FOB 50.000 USD, navlun 2000 USD, sigorta %0.3
+ragip --calc ithalat --fob 50000 --navlun 2000 --sigorta 0.3
+
+# CIP faiz paritesi arbitrajı
+# Piyasa forward kuru vs teorik forward karşılaştırması
+ragip --calc cip-arbitraj --market-forward 45.50 --gun 90
+
+# Üçgen kur arbitrajı
+# EUR-USD-TRY döngüsünde tutarsızlık tespiti (TCMB kurlarıyla)
+ragip --calc ucgen-arbitraj
+
+# Vade farkı vs mevduat arbitrajı
+# Tedarikçiye geç ödemek mi, bankaya yatırıp erken ödemek mi?
+ragip --calc vade-mevduat --anapara 500000 --oran 3 --gun 60
+
+# Carry trade analizi
+# USD borç al → TL mevduata yatır → başabaş kur hesapla
+ragip --calc carry-trade --gun 90
+ragip --calc carry-trade --gun 90 --beklenen-kur 46.00
 ```
 
 ### TCMB Faiz Oranları
+
+TCMB EVDS3 API'den canlı veri çeker. API key yoksa fallback değerler kullanılır.
 
 ```bash
 ragip --tcmb
 ```
 
-Çıktı:
+Çıktı (örnek):
 ```
-TCMB Politika Faizi: %42.50
-Yasal Gecikme Faizi: %52.00
-TÜFE Yıllık: %44.40
+TCMB Politika Faizi : %37.00
+Reeskont Oranı      : %38.75
+Avans Faizi (yasal) : %39.75
+USD/TRY             : 43.6900
+EUR/TRY             : 51.4800
+Kaynak: TCMB EVDS3
+```
+
+EUR/USD cross rate (TCMB verilerinden hesaplanır):
+```bash
+ragip --eur-usd
 ```
 
 ### Desteklenen Dosya Formatları (`--file`)
@@ -172,23 +211,58 @@ ragip "Bu faturanın vade farkı doğru mu hesaplanmış?" --file fatura.pdf
 
 Skills, `/skill-adı` ile doğrudan çağrılır veya Claude konuşmaya göre otomatik yükler.
 
-| Skill | Komut | Ne yapar |
-|-------|-------|---------|
-| **ragip-vade-farki** | `/ragip-vade-farki 250000 3 45` | Vade farkı + TVM + iskonto hesabı |
-| **ragip-ihtar** | `/ragip-ihtar vade-farki` | Resmi ihtar yazısı taslağı (sadece manuel) |
-| **ragip-analiz** | `/ragip-analiz sozlesme.pdf` | Sözleşme/fatura analizi + risk skoru |
-| **ragip-dis-veri** | `/ragip-dis-veri "ABC Dağıtım"` | Sicil, vergi, icra, kredi sorgulama |
-| **ragip-gorev** | `/ragip-gorev listele` | Aksiyon takip listesi |
-| **ragip-strateji** | `/ragip-strateji "vade farkı uyuşmazlığı"` | 3 senaryo × haftalık plan |
+| Skill | Komut | Ne yapar | Sub-agent |
+|-------|-------|---------|-----------|
+| **ragip-vade-farki** | `/ragip-vade-farki 250000 3 45` | Vade farkı + TVM + iskonto hesabı | ragip-hesap |
+| **ragip-arbitraj** | `/ragip-arbitraj cip 45.50 90` | CIP, üçgen kur, vade-mevduat, carry trade arbitrajı | ragip-hesap |
+| **ragip-analiz** | `/ragip-analiz sozlesme.pdf` | Sözleşme/fatura analizi + risk skoru | ragip-arastirma |
+| **ragip-dis-veri** | `/ragip-dis-veri "ABC Dağıtım"` | Kamuya açık sicil/haber araştırması | ragip-arastirma |
+| **ragip-strateji** | `/ragip-strateji "vade farkı uyuşmazlığı"` | 3 senaryo × haftalık plan | ragip-arastirma |
+| **ragip-ihtar** | `/ragip-ihtar vade-farki` | Resmi ihtar yazısı taslağı (sadece manuel) | ragip-arastirma |
+| **ragip-firma** | `/ragip-firma ekle ABC vergi_no=123` | Firma kartı CRUD (ekle/sil/listele/guncelle) | ragip-veri |
+| **ragip-gorev** | `/ragip-gorev listele` | Aksiyon takip listesi | ragip-veri |
+| **ragip-import** | `/ragip-import cari.csv` | CSV/Excel veri aktarımı | ragip-veri |
+| **ragip-ozet** | `/ragip-ozet` | Günlük brifing özeti | ragip-veri |
 
 ```bash
 # Örnekler
-/ragip-vade-farki 250000 3 45       # 250.000 TL, %3/ay, 45 gün
-/ragip-ihtar vade-farki             # Vade farkı itiraz ihtarı
-/ragip-analiz /path/to/fatura.pdf   # Fatura analizi
+/ragip-vade-farki 250000 3 45         # 250.000 TL, %3/ay, 45 gün
+/ragip-arbitraj cip 45.50 90          # CIP arbitraj, piyasa forward 45.50, 90 gün
+/ragip-arbitraj ucgen                  # Üçgen kur arbitrajı (TCMB kurlarıyla)
+/ragip-arbitraj vade-mevduat 500000 3 60  # Vade farkı vs mevduat
+/ragip-arbitraj carry-trade 90         # Carry trade, 90 gün
+/ragip-ihtar vade-farki               # Vade farkı itiraz ihtarı
+/ragip-analiz /path/to/fatura.pdf     # Fatura analizi
+/ragip-firma listele                  # Kayıtlı firmaları göster
 ```
 
 **Not:** `ragip-ihtar` sadece manuel çağrılır (`disable-model-invocation: true`) — Claude otomatik ihtar göndermez.
+
+---
+
+## Sub-Agent Mimarisi
+
+```
+ragip-aga (orchestrator, sonnet, 0 skill)
+  |
+  +-- ragip-hesap (haiku, 2 skill)
+  |     +-- ragip-vade-farki    # Vade farkı + TVM + iskonto
+  |     +-- ragip-arbitraj      # CIP, üçgen kur, vade-mevduat, carry trade
+  |
+  +-- ragip-arastirma (sonnet, 4 skill)
+  |     +-- ragip-analiz        # Sözleşme/fatura analizi
+  |     +-- ragip-dis-veri      # Karşı taraf araştırması
+  |     +-- ragip-strateji      # 3 senaryolu strateji planı
+  |     +-- ragip-ihtar         # İhtar taslağı (sadece manuel)
+  |
+  +-- ragip-veri (haiku, 4 skill)
+        +-- ragip-firma         # Firma kartı CRUD
+        +-- ragip-gorev         # Görev takibi
+        +-- ragip-import        # CSV/Excel import
+        +-- ragip-ozet          # Günlük brifing özeti
+```
+
+**Toplam:** 4 agent + 10 skill
 
 ---
 
@@ -196,11 +270,28 @@ Skills, `/skill-adı` ile doğrudan çağrılır veya Claude konuşmaya göre ot
 
 ```
 config/ragip_aga.yaml                          # Terminal CLI config
-scripts/ragip_aga.py                           # Terminal CLI
-.claude/agents/ragip-aga.md                   # Claude Code sub-agent
-.claude/skills/ragip-vade-farki/SKILL.md      # Hesaplama skill
-.claude/skills/ragip-ihtar/SKILL.md           # İhtar yazısı skill
-.claude/skills/ragip-analiz/SKILL.md          # Belge analiz skill
-data/RAGIP_AGA/history.jsonl                  # Terminal geçmişi (otomatik)
-docs/RAGIP_AGA.md                             # Bu dosya
+scripts/ragip_aga.py                           # Terminal CLI + hesap motoru
+scripts/ragip_rates.py                         # TCMB EVDS3 canlı oran çekici
+
+.claude/agents/
+  ragip-aga.md                                 # Orchestrator (hub)
+  ragip-arastirma.md                           # Araştırma & analiz sub-agent
+  ragip-hesap.md                               # Hesap motoru sub-agent
+  ragip-veri.md                                # Veri yönetimi sub-agent
+
+.claude/skills/
+  ragip-analiz/SKILL.md                        # Sözleşme/fatura analizi
+  ragip-arbitraj/SKILL.md                      # Arbitraj hesaplamaları
+  ragip-dis-veri/SKILL.md                      # Karşı taraf araştırması
+  ragip-firma/SKILL.md                         # Firma kartı CRUD
+  ragip-gorev/SKILL.md                         # Görev takibi
+  ragip-ihtar/SKILL.md                         # İhtar taslağı
+  ragip-import/SKILL.md                        # CSV/Excel import
+  ragip-ozet/SKILL.md                          # Günlük brifing özeti
+  ragip-strateji/SKILL.md                      # 3 senaryolu strateji
+  ragip-vade-farki/SKILL.md                    # Vade farkı hesaplama
+
+data/RAGIP_AGA/history.jsonl                   # Terminal geçmişi (otomatik)
+data/RAGIP_AGA/ciktilar/                       # Hesaplama çıktıları (otomatik)
+docs/RAGIP_AGA.md                              # Bu dosya
 ```

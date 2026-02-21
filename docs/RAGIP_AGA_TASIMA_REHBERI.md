@@ -21,7 +21,7 @@ python -m pytest tests/test_ragip_subagents.py -v
 ```
 
 `install.sh` otomatik olarak:
-- 4 agent + 9 skill + 2 script + 1 config kopyalar
+- 4 agent + 10 skill + 2 script + 1 config kopyalar
 - `data/RAGIP_AGA/ciktilar/` dizinini olusturur
 - `.gitignore`'a `data/RAGIP_AGA/` ekler
 - Eksik Python bagimliklarini uyarir
@@ -41,7 +41,7 @@ Asagidaki adimlar `install.sh` kullanmadan manuel tasima icin.
 
 ## Dosya Listesi
 
-### Zorunlu (4 agent + 9 skill + 2 script + 1 config = 16 dosya)
+### Zorunlu (4 agent + 10 skill + 2 script + 1 config = 17 dosya)
 
 ```
 .claude/agents/
@@ -52,6 +52,7 @@ Asagidaki adimlar `install.sh` kullanmadan manuel tasima icin.
 
 .claude/skills/
   ragip-analiz/SKILL.md   # Sozlesme/fatura analizi
+  ragip-arbitraj/SKILL.md # CIP, ucgen kur, vade-mevduat, carry trade arbitraji
   ragip-dis-veri/SKILL.md # Karsi taraf arastirmasi
   ragip-ihtar/SKILL.md    # Ihtar taslagi
   ragip-firma/SKILL.md    # Firma karti CRUD
@@ -141,9 +142,9 @@ cd $HEDEF
 python -m pytest tests/test_ragip_subagents.py -v
 ```
 
-45 test gecmeli. Kritik testler:
+Tum testler gecmeli. Kritik testler:
 - `TestPortability` (7 test): Hardcoded path kalmadigini dogrular
-- `TestSkillDagilimi` (5 test): 9 skill'in dogru dagitildigini dogrular
+- `TestSkillDagilimi` (5 test): 10 skill'in dogru dagitildigini dogrular
 - `TestDosyaVarligi` (4 test): Tum dosyalarin mevcut oldugunu dogrular
 
 ## Neden Calisiyor
@@ -179,8 +180,9 @@ Tasima sonrasi Claude Code'da:
 ```
 ragip-aga (orchestrator, sonnet, 0 skill)
   |
-  +-- ragip-hesap (haiku, 1 skill)
+  +-- ragip-hesap (haiku, 2 skill)
   |     +-- ragip-vade-farki
+  |     +-- ragip-arbitraj     # CIP, ucgen kur, vade-mevduat, carry trade
   |
   +-- ragip-arastirma (sonnet, 4 skill)
   |     +-- ragip-analiz
