@@ -263,7 +263,7 @@ class TestInputValidation:
         with pytest.raises(ValueError, match="0-100"):
             FinansalHesap.ithalat_maliyet(10_000, 38.50, 0, 0, 150.0)
 
-    def test_sifir_anapara_gecerli(self):
-        """0 anapara gecerli olmali (sifir = negatif degil)"""
-        sonuc = FinansalHesap.vade_farki(0, 3.0, 30)
-        assert sonuc["vade_farki_tl"] == 0.0
+    def test_sifir_anapara_reddedilir(self):
+        """0 anapara gecersiz — sifir tutarla finansal hesap anlamsiz"""
+        with pytest.raises(ValueError, match="sifir veya negatif"):
+            FinansalHesap.vade_farki(0, 3.0, 30)

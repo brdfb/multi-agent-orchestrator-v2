@@ -55,8 +55,8 @@ class FinansalHesap:
 
     @staticmethod
     def _validate_positive(value: float, name: str) -> None:
-        if value < 0:
-            raise ValueError(f"{name} negatif olamaz: {value}")
+        if value <= 0:
+            raise ValueError(f"{name} sifir veya negatif olamaz: {value}")
 
     @staticmethod
     def _validate_non_negative_int(value: int, name: str) -> None:
@@ -107,7 +107,7 @@ class FinansalHesap:
             "yillik_oran_pct": yillik_oran_pct,
             "gun": gun,
             "firsatmaliyeti_tl": round(maliyet, 2),
-            "gunluk_tl": round(maliyet / gun, 2),
+            "gunluk_tl": round(maliyet / gun, 2) if gun > 0 else 0.0,
         }
 
     @staticmethod
@@ -321,6 +321,11 @@ def _parse_turkish_number(s: str) -> float:
     last_comma = s.rfind(',')
 
     if last_dot > last_comma:
+        # Belirsizlik kontrolu: noktadan sonra tam 3 basamak varsa TR binlik ayirici
+        after_dot = s[last_dot + 1:]
+        if last_comma == -1 and len(after_dot) == 3 and after_dot.isdigit():
+            # TR format: 45.000 -> 45000 (binlik ayirici)
+            return float(s.replace('.', ''))
         # EN format: 45,000.00 — virgul binlik, nokta ondalik
         return float(s.replace(',', ''))
     elif last_comma > last_dot:
@@ -743,14 +748,14 @@ def main():
         hesap = FinansalHesap()
 
         if args.calc == "vade-farki":
-            if not all([args.anapara, args.oran, args.gun]):
+            if any(v is None for v in [args.anapara, args.oran, args.gun]):
                 print("Gerekli: --anapara --oran --gun")
                 sys.exit(1)
             sonuc = hesap.vade_farki(args.anapara, args.oran, args.gun)
             display_calc_result("Vade Farkı Hesabı", sonuc)
 
         elif args.calc == "tvm":
-            if not all([args.anapara, args.gun]):
+            if any(v is None for v in [args.anapara, args.gun]):
                 print("Gerekli: --anapara --gun [--repo-orani (varsayılan: TCMB)]")
                 sys.exit(1)
             repo = args.repo_orani or get_tcmb_rates_with_search()["politika_faizi"]
@@ -758,14 +763,14 @@ def main():
             display_calc_result("TVM - Fırsat Maliyeti", sonuc)
 
         elif args.calc == "iskonto":
-            if not all([args.anapara, args.oran, args.gun]):
+            if any(v is None for v in [args.anapara, args.oran, args.gun]):
                 print("Gerekli: --anapara --oran --gun")
                 sys.exit(1)
             sonuc = hesap.erken_odeme_iskonto(args.anapara, args.oran, args.gun)
             display_calc_result("Erken Ödeme Maksimum İskonto", sonuc)
 
         elif args.calc == "indiferans":
-            if not all([args.anapara, args.oran, args.gun]):
+            if any(v is None for v in [args.anapara, args.oran, args.gun]):
                 print("Gerekli: --anapara --oran --gun [--firsat-orani (varsayılan: TCMB)]")
                 sys.exit(1)
             firsat = args.firsat_orani or get_tcmb_rates_with_search()["politika_faizi"]
