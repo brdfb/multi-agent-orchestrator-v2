@@ -92,7 +92,9 @@ def load_cache(path: Path, ttl_hours: int) -> dict | None:
 
 def save_cache(path: Path, data: dict):
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    tmp = path.with_suffix('.tmp')
+    tmp.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    tmp.rename(path)
 
 
 # ─── TCMB EVDS ───────────────────────────────────────────────────────────────
