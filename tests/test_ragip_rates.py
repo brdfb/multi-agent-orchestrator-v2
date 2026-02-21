@@ -146,3 +146,23 @@ class TestSeriesConfig:
         """CollectAPI endpointleri gecerli URL olmali"""
         for name, url in ragip_rates.COLLECTAPI_ENDPOINTS.items():
             assert url.startswith("https://"), f"{name} endpoint HTTPS olmali"
+
+
+class TestEurUsdCross:
+    def test_cross_rate_calculation(self):
+        """EUR/USD = EUR/TRY / USD/TRY"""
+        rates = {"usd_kuru": 43.69, "eur_kuru": 51.48}
+        result = ragip_rates.eur_usd_cross(rates)
+        expected = round(51.48 / 43.69, 4)
+        assert abs(result - expected) < 0.001
+
+    def test_cross_rate_fallback(self):
+        """Rates None ise get_rates cagirilir"""
+        with patch.object(ragip_rates, "get_rates", return_value=ragip_rates.FALLBACK_RATES.copy()):
+            result = ragip_rates.eur_usd_cross()
+            assert result > 1.0  # EUR/USD her zaman > 1
+
+    def test_zero_usd_try(self):
+        """USD/TRY 0 ise 0.0 doner"""
+        result = ragip_rates.eur_usd_cross({"usd_kuru": 0, "eur_kuru": 51.48})
+        assert result == 0.0

@@ -229,6 +229,17 @@ def en_yuksek_mevduat(mevduat_list: list, vade_gun: int = 32) -> dict | None:
     return best
 
 
+def eur_usd_cross(rates: dict = None) -> float:
+    """EUR/USD = EUR/TRY / USD/TRY (TCMB verilerinden)."""
+    if rates is None:
+        rates = get_rates()
+    eur_try = rates.get("eur_kuru", FALLBACK_RATES["eur_kuru"])
+    usd_try = rates.get("usd_kuru", FALLBACK_RATES["usd_kuru"])
+    if usd_try <= 0:
+        return 0.0
+    return round(eur_try / usd_try, 4)
+
+
 # ─── Ana Faiz Çekici ─────────────────────────────────────────────────────────
 
 def get_rates(force_refresh: bool = False) -> dict:
@@ -328,12 +339,19 @@ def format_kredi(data: dict) -> str:
 # ─── CLI ─────────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
-    force   = "--refresh"  in sys.argv
-    pretty  = "--pretty"   in sys.argv
-    mevduat = "--mevduat"  in sys.argv
-    kredi   = "--kredi"    in sys.argv
+    force    = "--refresh"  in sys.argv
+    pretty   = "--pretty"   in sys.argv
+    mevduat  = "--mevduat"  in sys.argv
+    kredi    = "--kredi"    in sys.argv
+    eur_usd  = "--eur-usd"  in sys.argv
 
-    if mevduat:
+    if eur_usd:
+        rates = get_rates(force_refresh=force)
+        out = {k: v for k, v in rates.items() if not k.startswith("_")}
+        out["eur_usd"] = eur_usd_cross(rates)
+        print(json.dumps(out, ensure_ascii=False, indent=2))
+
+    elif mevduat:
         data = get_mevduat(force_refresh=force)
         if pretty or True:  # mevduat always pretty
             print(format_mevduat(data))

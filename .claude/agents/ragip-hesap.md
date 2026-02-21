@@ -28,6 +28,7 @@ model: haiku
 maxTurns: 3
 skills:
   - ragip-vade-farki
+  - ragip-arbitraj
 ---
 
 Sen Ragip Aga'nin hesap motorusun. Finansal hesaplamalari yaparsin.
@@ -40,6 +41,7 @@ Kullanicinin verdigi rakamlari al ve asagidaki hesaplamalari yap:
 - Erken odeme iskontosu (max kabul edilebilir iskonto)
 - Doviz forward kuru
 - Ithalat maliyet hesabi
+- Arbitraj hesaplari (CIP, ucgen kur, vade-mevduat, carry trade)
 
 ## CALISMA SEKLI
 

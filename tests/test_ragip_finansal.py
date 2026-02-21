@@ -267,3 +267,131 @@ class TestInputValidation:
         """0 anapara gecersiz — sifir tutarla finansal hesap anlamsiz"""
         with pytest.raises(ValueError, match="sifir veya negatif"):
             FinansalHesap.vade_farki(0, 3.0, 30)
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# Arbitraj Hesaplamalari
+# ═══════════════════════════════════════════════════════════════════════
+
+
+class TestCoveredInterestArbitrage:
+    def test_cip_dengede(self):
+        """Teorik forward = piyasa forward ise arbitraj yok"""
+        spot = 43.69
+        r_tl, r_usd, gun = 37.0, 4.5, 90
+        t = gun / 365
+        teorik = spot * (1 + r_tl / 100 * t) / (1 + r_usd / 100 * t)
+        sonuc = FinansalHesap.covered_interest_arbitrage(spot, round(teorik, 4), r_tl, r_usd, gun)
+        assert sonuc["arbitraj_var"] is False
+
+    def test_cip_arbitraj_var(self):
+        """Piyasa forward yuksekse arbitraj firsati olmali"""
+        spot = 43.69
+        r_tl, r_usd, gun = 37.0, 4.5, 90
+        t = gun / 365
+        teorik = spot * (1 + r_tl / 100 * t) / (1 + r_usd / 100 * t)
+        market_forward = teorik * 1.005  # %0.5 sapma
+        sonuc = FinansalHesap.covered_interest_arbitrage(spot, market_forward, r_tl, r_usd, gun)
+        assert sonuc["arbitraj_var"] is True
+        assert sonuc["tahmini_kar_pct"] > 0
+
+    def test_cip_islem_maliyeti_filtresi(self):
+        """Sapma islem maliyetinden kucukse arbitraj yok"""
+        spot = 43.69
+        r_tl, r_usd, gun = 37.0, 4.5, 90
+        t = gun / 365
+        teorik = spot * (1 + r_tl / 100 * t) / (1 + r_usd / 100 * t)
+        market_forward = teorik * 1.0005  # %0.05 sapma < %0.1
+        sonuc = FinansalHesap.covered_interest_arbitrage(spot, market_forward, r_tl, r_usd, gun, 0.1)
+        assert sonuc["arbitraj_var"] is False
+
+    def test_cip_negatif_spot_reddedilir(self):
+        with pytest.raises(ValueError, match="negatif"):
+            FinansalHesap.covered_interest_arbitrage(-43.69, 45.0, 37.0, 4.5, 90)
+
+
+class TestUcgenKurArbitraji:
+    def test_tutarli_kurlar_arbitraj_yok(self):
+        """EUR/USD = EUR/TRY / USD/TRY ise arbitraj yok"""
+        usd_try = 43.69
+        eur_try = 51.48
+        eur_usd = eur_try / usd_try
+        sonuc = FinansalHesap.ucgen_kur_arbitraji(usd_try, eur_try, eur_usd)
+        assert sonuc["arbitraj_var"] is False
+        assert abs(sonuc["sapma_pct"]) < 0.01
+
+    def test_tutarsiz_kurlar_sapma(self):
+        """Tutarsiz kurlarda sapma tespiti"""
+        sonuc = FinansalHesap.ucgen_kur_arbitraji(43.69, 51.48, 1.20)
+        # Dolayli: 1.20 * 43.69 = 52.428 vs dogrudan 51.48
+        assert abs(sonuc["sapma_pct"]) > 0.1
+
+    def test_negatif_kur_reddedilir(self):
+        with pytest.raises(ValueError, match="negatif"):
+            FinansalHesap.ucgen_kur_arbitraji(-43.69, 51.48, 1.18)
+
+
+class TestVadeMevduatArbitraji:
+    def test_mevduat_karli(self):
+        """Mevduat orani > vade farki yillik orani ise mevduat karli"""
+        sonuc = FinansalHesap.vade_mevduat_arbitraji(100_000, 3.0, 30, 45.0)
+        assert sonuc["mevduat_getirisi_tl"] > sonuc["vade_farki_maliyeti_tl"]
+        assert "mevduat" in sonuc["karar"].lower()
+
+    def test_erken_odeme_karli(self):
+        """Vade farki yillik orani > mevduat orani ise erken odeme karli"""
+        sonuc = FinansalHesap.vade_mevduat_arbitraji(100_000, 5.0, 30, 37.0)
+        assert sonuc["vade_farki_maliyeti_tl"] > sonuc["mevduat_getirisi_tl"]
+        assert "erken" in sonuc["karar"].lower()
+
+    def test_net_fark_hesabi(self):
+        """Net fark = mevduat - vade farki"""
+        sonuc = FinansalHesap.vade_mevduat_arbitraji(100_000, 3.0, 30, 45.0)
+        beklenen = sonuc["mevduat_getirisi_tl"] - sonuc["vade_farki_maliyeti_tl"]
+        assert abs(sonuc["net_fark_tl"] - beklenen) < 0.01
+
+    def test_sifir_gun(self):
+        """0 gun = her iki taraf 0"""
+        sonuc = FinansalHesap.vade_mevduat_arbitraji(100_000, 3.0, 0, 45.0)
+        assert sonuc["vade_farki_maliyeti_tl"] == 0.0
+        assert sonuc["mevduat_getirisi_tl"] == 0.0
+
+    def test_negatif_anapara_reddedilir(self):
+        with pytest.raises(ValueError, match="negatif"):
+            FinansalHesap.vade_mevduat_arbitraji(-100_000, 3.0, 30, 45.0)
+
+
+class TestCarryTradeAnalizi:
+    def test_basabas_kur_forward(self):
+        """Basabas kuru = CIP forward kuru olmali"""
+        spot = 43.69
+        r_tl, r_usd, gun = 37.0, 4.5, 90
+        t = gun / 365
+        beklenen = spot * (1 + r_tl / 100 * t) / (1 + r_usd / 100 * t)
+        sonuc = FinansalHesap.carry_trade_analizi(spot, r_tl, r_usd, gun)
+        assert abs(sonuc["basabas_kur"] - round(beklenen, 4)) < 0.01
+
+    def test_unhedged_pozitif(self):
+        """TL faizi > USD faizi iken unhedged kar pozitif olmali"""
+        sonuc = FinansalHesap.carry_trade_analizi(43.69, 37.0, 4.5, 90)
+        assert sonuc["unhedged_kar_pct"] > 0
+
+    def test_beklenen_kur_etkisi(self):
+        """Beklenen kur verilmisse hesaplanmali"""
+        sonuc = FinansalHesap.carry_trade_analizi(43.69, 37.0, 4.5, 90, beklenen_kur=50.0)
+        assert sonuc["beklenen_kur_kar_pct"] is not None
+
+    def test_beklenen_kur_none(self):
+        """Beklenen kur verilmezse None olmali"""
+        sonuc = FinansalHesap.carry_trade_analizi(43.69, 37.0, 4.5, 90)
+        assert sonuc["beklenen_kur_kar_pct"] is None
+
+    def test_sifir_gun(self):
+        """0 gun = basabas spot, kar 0"""
+        sonuc = FinansalHesap.carry_trade_analizi(43.69, 37.0, 4.5, 0)
+        assert abs(sonuc["basabas_kur"] - 43.69) < 0.01
+        assert abs(sonuc["unhedged_kar_pct"]) < 0.01
+
+    def test_negatif_spot_reddedilir(self):
+        with pytest.raises(ValueError, match="negatif"):
+            FinansalHesap.carry_trade_analizi(-43.69, 37.0, 4.5, 90)

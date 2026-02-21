@@ -76,6 +76,7 @@ ALL_SUBAGENT_FILES = [HESAP_FILE, ARASTIRMA_FILE, VERI_FILE]
 
 EXPECTED_ALL_SKILLS = {
     "ragip-vade-farki",
+    "ragip-arbitraj",
     "ragip-ihtar",
     "ragip-analiz",
     "ragip-dis-veri",
@@ -156,7 +157,7 @@ class TestSubAgentHesap:
         assert self.fm["model"] == "haiku"
 
     def test_skills(self):
-        assert self.fm["skills"] == ["ragip-vade-farki"]
+        assert self.fm["skills"] == ["ragip-vade-farki", "ragip-arbitraj"]
 
     def test_max_turns_kisa(self):
         assert self.fm["maxTurns"] <= 5, "Hesap motoru 3-5 turn yeterli"
@@ -223,7 +224,7 @@ class TestSkillDagilimi:
         self.all_subagents = [self.hesap, self.arastirma, self.veri]
 
     def test_tum_skilller_atanmis(self):
-        """9 skill'in tamami sub-agent'lara atanmis olmali"""
+        """10 skill'in tamami sub-agent'lara atanmis olmali"""
         assigned = set()
         for agent in self.all_subagents:
             assigned.update(agent["skills"])
@@ -256,9 +257,9 @@ class TestSkillDagilimi:
         assert orch["skills"] == [], "Orchestrator'de skill olmamali"
 
     def test_toplam_skill_sayisi(self):
-        """Tam 9 skill olmali"""
+        """Tam 10 skill olmali"""
         total = sum(len(a["skills"]) for a in self.all_subagents)
-        assert total == 9, f"Beklenen 9 skill, bulunan {total}"
+        assert total == 10, f"Beklenen 10 skill, bulunan {total}"
 
 
 # --- Test: Skill disable-model-invocation tutarliligi ---
