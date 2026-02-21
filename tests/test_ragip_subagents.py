@@ -85,6 +85,7 @@ EXPECTED_ALL_SKILLS = {
     "ragip-firma",
     "ragip-import",
     "ragip-ozet",
+    "ragip-profil",
 }
 
 
@@ -206,7 +207,7 @@ class TestSubAgentVeri:
         assert self.fm["model"] == "haiku"
 
     def test_skills(self):
-        expected = {"ragip-firma", "ragip-gorev", "ragip-import", "ragip-ozet"}
+        expected = {"ragip-firma", "ragip-gorev", "ragip-import", "ragip-ozet", "ragip-profil"}
         assert set(self.fm["skills"]) == expected
 
     def test_max_turns_kisa(self):
@@ -224,7 +225,7 @@ class TestSkillDagilimi:
         self.all_subagents = [self.hesap, self.arastirma, self.veri]
 
     def test_tum_skilller_atanmis(self):
-        """10 skill'in tamami sub-agent'lara atanmis olmali"""
+        """11 skill'in tamami sub-agent'lara atanmis olmali"""
         assigned = set()
         for agent in self.all_subagents:
             assigned.update(agent["skills"])
@@ -257,9 +258,9 @@ class TestSkillDagilimi:
         assert orch["skills"] == [], "Orchestrator'de skill olmamali"
 
     def test_toplam_skill_sayisi(self):
-        """Tam 10 skill olmali"""
+        """Tam 11 skill olmali"""
         total = sum(len(a["skills"]) for a in self.all_subagents)
-        assert total == 10, f"Beklenen 10 skill, bulunan {total}"
+        assert total == 11, f"Beklenen 11 skill, bulunan {total}"
 
 
 # --- Test: Skill disable-model-invocation tutarliligi ---
@@ -267,7 +268,7 @@ class TestSkillDagilimi:
 class TestSkillModelInvocation:
     """disable-model-invocation: true olan skill'ler veri/template skill'leri olmali"""
 
-    EXPECTED_DISABLED = {"ragip-firma", "ragip-gorev", "ragip-ihtar", "ragip-ozet", "ragip-import"}
+    EXPECTED_DISABLED = {"ragip-firma", "ragip-gorev", "ragip-ihtar", "ragip-ozet", "ragip-import", "ragip-profil"}
 
     def _has_disable_flag(self, skill_name: str) -> bool:
         skill_file = SKILLS_DIR / skill_name / "SKILL.md"

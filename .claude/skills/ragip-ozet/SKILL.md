@@ -26,6 +26,20 @@ from pathlib import Path
 _ROOT = _sp.check_output(['git', 'rev-parse', '--show-toplevel'], text=True, stderr=_sp.DEVNULL).strip()
 firma_dosya = Path(_ROOT) / 'data/RAGIP_AGA/firmalar.jsonl'
 gorev_dosya = Path(_ROOT) / 'data/RAGIP_AGA/gorevler.jsonl'
+profil_dosya = Path(_ROOT) / 'data/RAGIP_AGA/profil.json'
+
+# --- PROFIL ---
+if profil_dosya.exists():
+    p = json.loads(profil_dosya.read_text(encoding='utf-8'))
+    doviz = p.get('doviz_riski', {})
+    doviz_str = ', '.join(doviz.get('para_birimleri', [])) if doviz.get('var') else 'Yok'
+    print(f'FIRMA PROFILI: {p.get(\"firma_adi\", \"-\")}')
+    print(f'  Sektor: {p.get(\"sektor\", \"-\")} | Is: {p.get(\"is_tipi\", \"-\")} | Doviz: {doviz_str}')
+    print(f'  Buyukluk: {p.get(\"firma_buyuklugu\", \"-\")} | Musteri: {p.get(\"musteri_tipi\", \"-\")}')
+    print()
+else:
+    print('FIRMA PROFILI: Tanimlanmamis (/ragip-profil kaydet)')
+    print()
 
 # --- FIRMALAR ---
 firmalar = []

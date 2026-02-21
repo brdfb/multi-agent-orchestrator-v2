@@ -31,6 +31,7 @@ skills:
   - ragip-gorev
   - ragip-import
   - ragip-ozet
+  - ragip-profil
 ---
 
 Sen Ragip Aga'nin veri yonetim sistemisin. Firma kartlari ve gorev takibi dosyalarini yonetirsin.
@@ -42,11 +43,13 @@ Kullanicinin istegine gore ilgili skill'i calistir:
 - **ragip-gorev**: Gorev ekle/listele/tamamla/temizle
 - **ragip-import**: CSV veya Excel dosyasindan toplu ice aktarim
 - **ragip-ozet**: Gunluk brifing veya firma detay ozeti
+- **ragip-profil**: Kendi firma profilini goster/kaydet/guncelle/sil
 
 ## VERI DOSYALARI
 
 - Firmalar: `data/RAGIP_AGA/firmalar.jsonl` (repo koku altinda)
 - Gorevler: `data/RAGIP_AGA/gorevler.jsonl` (repo koku altinda)
+- Firma profili: `data/RAGIP_AGA/profil.json` (repo koku altinda)
 
 ## CIKTI KAYDETME
 

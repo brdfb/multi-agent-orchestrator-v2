@@ -21,7 +21,7 @@ python -m pytest tests/test_ragip_subagents.py -v
 ```
 
 `install.sh` otomatik olarak:
-- 4 agent + 10 skill + 2 script + 1 config kopyalar
+- 4 agent + 11 skill + 2 script + 1 config kopyalar
 - `data/RAGIP_AGA/ciktilar/` dizinini olusturur
 - `.gitignore`'a `data/RAGIP_AGA/` ekler
 - Eksik Python bagimliklarini uyarir
@@ -41,7 +41,7 @@ Asagidaki adimlar `install.sh` kullanmadan manuel tasima icin.
 
 ## Dosya Listesi
 
-### Zorunlu (4 agent + 10 skill + 2 script + 1 config = 17 dosya)
+### Zorunlu (4 agent + 11 skill + 2 script + 1 config = 18 dosya)
 
 ```
 .claude/agents/
@@ -61,6 +61,7 @@ Asagidaki adimlar `install.sh` kullanmadan manuel tasima icin.
   ragip-import/SKILL.md   # CSV/Excel import
   ragip-vade-farki/SKILL.md  # Vade farki hesaplama
   ragip-strateji/SKILL.md    # 3 senaryolu strateji
+  ragip-profil/SKILL.md      # Kendi firma profili
 
 scripts/
   ragip_rates.py          # TCMB canli oran cekici
@@ -92,6 +93,7 @@ tests/e2e_ragip_scenario/
 data/RAGIP_AGA/
   firmalar.jsonl           # Firma kartlari
   gorevler.jsonl           # Gorev listesi
+  profil.json              # Kendi firma profili
   ciktilar/                # Analiz/hesaplama ciktilari
   rates_cache.json         # TCMB oran cache
   mevduat_cache.json       # Mevduat faiz cache
@@ -144,7 +146,7 @@ python -m pytest tests/test_ragip_subagents.py -v
 
 Tum testler gecmeli. Kritik testler:
 - `TestPortability` (7 test): Hardcoded path kalmadigini dogrular
-- `TestSkillDagilimi` (5 test): 10 skill'in dogru dagitildigini dogrular
+- `TestSkillDagilimi` (5 test): 11 skill'in dogru dagitildigini dogrular
 - `TestDosyaVarligi` (4 test): Tum dosyalarin mevcut oldugunu dogrular
 
 ## Neden Calisiyor
@@ -167,6 +169,8 @@ Tasima sonrasi Claude Code'da:
 /ragip-firma ekle ABC Dagitim vergi_no=1234567890 vade_gun=60
 /ragip-gorev ekle Sozlesmeyi avukata gonder konu=ABC oncelik=yuksek
 /ragip-vade-farki 250000 3 45
+/ragip-profil kaydet firma_adi=X sektor=ithalat is_tipi=ithalat
+/ragip-profil goster
 /ragip-ozet
 
 # Agent (dogal dil)
@@ -190,9 +194,10 @@ ragip-aga (orchestrator, sonnet, 0 skill)
   |     +-- ragip-strateji
   |     +-- ragip-ihtar
   |
-  +-- ragip-veri (haiku, 4 skill)
+  +-- ragip-veri (haiku, 5 skill)
         +-- ragip-firma
         +-- ragip-gorev
         +-- ragip-import
         +-- ragip-ozet
+        +-- ragip-profil
 ```

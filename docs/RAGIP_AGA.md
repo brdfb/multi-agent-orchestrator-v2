@@ -1,6 +1,6 @@
 # Ragıp Aga — Kullanım Dokümantasyonu
 
-**Versiyon:** 2.1.0 | **Tarih:** 2026-02-21
+**Versiyon:** 2.2.0 | **Tarih:** 2026-02-21
 
 Ragıp Aga, nakit akışı yönetimi, vade müzakeresi ve sözleşme uyuşmazlıkları için geliştirilmiş bir iş danışmanı ajanıdır. İki ayrı arayüz üzerinden çalışır.
 
@@ -223,6 +223,7 @@ Skills, `/skill-adı` ile doğrudan çağrılır veya Claude konuşmaya göre ot
 | **ragip-gorev** | `/ragip-gorev listele` | Aksiyon takip listesi | ragip-veri |
 | **ragip-import** | `/ragip-import cari.csv` | CSV/Excel veri aktarımı | ragip-veri |
 | **ragip-ozet** | `/ragip-ozet` | Günlük brifing özeti | ragip-veri |
+| **ragip-profil** | `/ragip-profil kaydet firma_adi=X sektor=Y` | Kendi firma profilini yönet (goster/kaydet/guncelle/sil) | ragip-veri |
 
 ```bash
 # Örnekler
@@ -234,6 +235,8 @@ Skills, `/skill-adı` ile doğrudan çağrılır veya Claude konuşmaya göre ot
 /ragip-ihtar vade-farki               # Vade farkı itiraz ihtarı
 /ragip-analiz /path/to/fatura.pdf     # Fatura analizi
 /ragip-firma listele                  # Kayıtlı firmaları göster
+/ragip-profil goster                  # Kendi firma profilini göster
+/ragip-profil kaydet firma_adi=X sektor=ithalat is_tipi=ithalat
 ```
 
 **Not:** `ragip-ihtar` sadece manuel çağrılır (`disable-model-invocation: true`) — Claude otomatik ihtar göndermez.
@@ -255,14 +258,15 @@ ragip-aga (orchestrator, sonnet, 0 skill)
   |     +-- ragip-strateji      # 3 senaryolu strateji planı
   |     +-- ragip-ihtar         # İhtar taslağı (sadece manuel)
   |
-  +-- ragip-veri (haiku, 4 skill)
+  +-- ragip-veri (haiku, 5 skill)
         +-- ragip-firma         # Firma kartı CRUD
         +-- ragip-gorev         # Görev takibi
         +-- ragip-import        # CSV/Excel import
         +-- ragip-ozet          # Günlük brifing özeti
+        +-- ragip-profil        # Kendi firma profili
 ```
 
-**Toplam:** 4 agent + 10 skill
+**Toplam:** 4 agent + 11 skill
 
 ---
 
@@ -290,8 +294,10 @@ scripts/ragip_rates.py                         # TCMB EVDS3 canlı oran çekici
   ragip-ozet/SKILL.md                          # Günlük brifing özeti
   ragip-strateji/SKILL.md                      # 3 senaryolu strateji
   ragip-vade-farki/SKILL.md                    # Vade farkı hesaplama
+  ragip-profil/SKILL.md                        # Kendi firma profili
 
 data/RAGIP_AGA/history.jsonl                   # Terminal geçmişi (otomatik)
+data/RAGIP_AGA/profil.json                     # Firma profili (otomatik)
 data/RAGIP_AGA/ciktilar/                       # Hesaplama çıktıları (otomatik)
 docs/RAGIP_AGA.md                              # Bu dosya
 ```

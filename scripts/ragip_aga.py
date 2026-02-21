@@ -951,6 +951,8 @@ def main():
     parser.add_argument("--save-to", type=str, help="Yanıtı dosyaya kaydet")
     parser.add_argument("--tcmb", action="store_true",
                         help="Güncel TCMB faiz oranlarını göster")
+    parser.add_argument("--profil", action="store_true",
+                        help="Firma profilini göster")
 
     # Hesaplama modu
     parser.add_argument("--calc", type=str,
@@ -1003,6 +1005,36 @@ def main():
                     print(result.stdout)
             except Exception:
                 pass
+        return
+
+    # ── Firma profili ──
+    if args.profil:
+        profil_file = ROOT / "data" / "RAGIP_AGA" / "profil.json"
+        if not profil_file.exists():
+            print("Firma profili tanımlanmamış.")
+            print("Oluşturmak için: /ragip-profil kaydet firma_adi=X sektor=Y is_tipi=Z")
+            return
+        p = json.loads(profil_file.read_text(encoding="utf-8"))
+        doviz = p.get("doviz_riski", {})
+        doviz_str = ", ".join(doviz.get("para_birimleri", [])) if doviz.get("var") else "Yok"
+        stok = p.get("stok", {})
+        stok_str = stok.get("tur", "-") if stok.get("var") else "Yok"
+        print("=== FİRMA PROFİLİ ===")
+        print()
+        print(f"Firma     : {p.get('firma_adi', '-')}")
+        print(f"Sektör    : {p.get('sektor', '-')}")
+        print(f"İş Tipi   : {p.get('is_tipi', '-')}")
+        print(f"Gelir     : {p.get('gelir_modeli', '-')}")
+        print(f"Büyüklük  : {p.get('firma_buyuklugu', '-')}")
+        print(f"Müşteri   : {p.get('musteri_tipi', '-')}")
+        print()
+        print(f"Döviz Riski: {doviz_str}" + (f" ({doviz.get('yon', '-')})" if doviz.get("var") else ""))
+        print(f"Stok       : {stok_str}")
+        print(f"Vade Alıcı : {p.get('vade_alici', '-')} gün")
+        print(f"Vade Satıcı: {p.get('vade_satici', '-')} gün")
+        if p.get("notlar"):
+            print(f"Notlar     : {p['notlar']}")
+        print(f"Güncelleme : {p.get('guncelleme', '-')}")
         return
 
     # ── Finansal hesaplama modu ──
@@ -1177,6 +1209,24 @@ def main():
         f"Kaynak: {rates['kaynak']}]"
     )
     full_prompt = full_prompt + rate_context
+
+    # Firma profili varsa prompt'a ekle
+    profil_file = ROOT / "data" / "RAGIP_AGA" / "profil.json"
+    if profil_file.exists():
+        try:
+            p = json.loads(profil_file.read_text(encoding="utf-8"))
+            doviz = p.get("doviz_riski", {})
+            doviz_str = ", ".join(doviz.get("para_birimleri", [])) if doviz.get("var") else "yok"
+            profil_ctx = (
+                f"\n[Firma Profili: {p.get('firma_adi', '-')}, "
+                f"Sektor: {p.get('sektor', '-')}, "
+                f"Is: {p.get('is_tipi', '-')}, "
+                f"Doviz: {doviz_str}, "
+                f"Buyukluk: {p.get('firma_buyuklugu', '-')}]"
+            )
+            full_prompt = full_prompt + profil_ctx
+        except (json.JSONDecodeError, KeyError):
+            pass
 
     response, model, duration_ms, tokens = call_llm(config, full_prompt)
     display_response(response, model, duration_ms, tokens)
