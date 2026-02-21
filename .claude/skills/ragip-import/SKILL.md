@@ -132,6 +132,7 @@ format_adi = 'FORMAT_BURAYA'
 import pandas as pd
 
 ext = Path(dosya_yolu).suffix.lower()
+df = None
 if ext == '.csv':
     for enc in ['utf-8', 'latin-1', 'cp1254']:
         try:
@@ -139,8 +140,18 @@ if ext == '.csv':
             break
         except (UnicodeDecodeError, Exception):
             continue
+    if df is None:
+        print('HATA: CSV dosyasi okunamadi (encoding problemi)')
+        sys.exit(1)
 elif ext in ('.xlsx', '.xls'):
-    df = pd.read_excel(dosya_yolu)
+    try:
+        df = pd.read_excel(dosya_yolu)
+    except ImportError:
+        print('HATA: openpyxl kurulu degil. Kurmak icin: pip install openpyxl')
+        sys.exit(1)
+else:
+    print(f'HATA: Desteklenmeyen dosya formati: {ext}')
+    sys.exit(1)
 
 # Firma kartlari dosyasi
 _ROOT = _sp.check_output(['git', 'rev-parse', '--show-toplevel'], text=True, stderr=_sp.DEVNULL).strip()

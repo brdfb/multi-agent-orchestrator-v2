@@ -24,10 +24,12 @@ ROOT=$(git rev-parse --show-toplevel 2>/dev/null || echo "$HOME/.orchestrator")
 RATES=$(python3 "$ROOT/scripts/ragip_rates.py" 2>/dev/null)
 TCMB_ORANI=$(echo $RATES | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('politika_faizi', 42.5))" 2>/dev/null || echo "42.5")
 
-python3 -c "
+TCMB_ORANI_VAL="${TCMB_ORANI}" python3 -c "
+import os
 # Kullanıcının verdiği rakamlara göre doldur
 tutar = TUTAR
-aylik_politika = ${TCMB_ORANI} / 12 / 100
+tcmb_oran = float(os.environ.get('TCMB_ORANI_VAL', '42.5'))
+aylik_politika = tcmb_oran / 12 / 100
 
 # Anlaşma maliyeti (iyimser — indirim kabul)
 indirim_pct = 0.10

@@ -67,12 +67,12 @@ oncelik_icon = {'yuksek': '!', 'orta': '~', 'dusuk': '+'}
 from datetime import date
 bugun = str(date.today())
 
+geciken = 0
 print(f'AKTIF GOREVLER ({len(aktif)})')
 if not aktif:
     print('  Aktif gorev yok.')
 else:
     print('-' * 40)
-    geciken = 0
     for g in sorted(aktif, key=lambda x: x.get('son_tarih', '')):
         icon = oncelik_icon.get(g.get('oncelik', 'orta'), '?')
         st = g.get('son_tarih', '')
@@ -100,7 +100,7 @@ print(f'  Toplam firma    : {len(firmalar)}')
 print(f'  Yuksek riskli   : {risk_sayac[\"yuksek\"]}')
 print(f'  Aktif gorev     : {len(aktif)}')
 print(f'  Tamamlanan      : {len(tamamlanan)}')
-print(f'  Geciken gorev   : {geciken if aktif else 0}')
+print(f'  Geciken gorev   : {geciken}')
 print()
 print('HIZLI KOMUTLAR')
 print('  /ragip-firma listele       — Tum firma kartlari')

@@ -29,7 +29,7 @@ Her satir bir firma kaydi:
 Bash ile dosyayi oku ve tablo goster:
 ```bash
 python3 -c "
-import json, os, subprocess as _sp
+import json, subprocess as _sp
 from pathlib import Path
 
 _ROOT = _sp.check_output(['git', 'rev-parse', '--show-toplevel'], text=True, stderr=_sp.DEVNULL).strip()

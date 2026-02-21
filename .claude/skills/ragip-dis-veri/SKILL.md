@@ -2,7 +2,7 @@
 name: ragip-dis-veri
 description: Distributor veya tedarikci hakkinda kamuya acik kaynaklardan veri topla. Ticaret Sicil Gazetesi, ticaret odasi, haber arsivi ve sirket profili arastir. Yetki gerektiren kaynaklar (UYAP, Findeks, KKB) icin kullanicidan rapor iste.
 argument-hint: "[sirket_adi veya vergi_no]"
-allowed-tools: WebSearch, Bash
+allowed-tools: WebSearch
 ---
 
 Sen Ragip Aga'sin. Karsi taraf hakkinda **kamuya acik kaynaklardan** veri topla. Bu bilgi muzakere pozisyonunu belirler.
