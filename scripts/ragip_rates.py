@@ -26,15 +26,16 @@ KREDI_CACHE      = ROOT / "data" / "RAGIP_AGA" / "kredi_cache.json"
 CACHE_TTL_HOURS  = 4    # Faiz oranları 4 saatte bir yenile
 MARKET_TTL_HOURS = 12   # Mevduat/kredi oranları 12 saatte bir yenile
 
-# ─── TCMB EVDS Seri Kodları ───────────────────────────────────────────────────
+# ─── TCMB EVDS3 Seri Kodları ─────────────────────────────────────────────────
+# EVDS3 migration (Şubat 2026): evds2 → evds3.tcmb.gov.tr/igmevdsms-dis/
+# Eski TP.APF.* serileri kaldırıldı, yeni karşılıklar:
 SERIES = {
-    "politika_faizi":       "TP.APF.TRL01",    # 1 haftalık repo faizi
-    "gece_faizi_borcverme": "TP.APF.TRL05",    # Gecelik borç verme faizi
-    "gece_faizi_borclama":  "TP.APF.TRL03",    # Gecelik borçlanma faizi
-    "usd_kuru":             "TP.DK.USD.A.YTL", # USD/TRY
-    "eur_kuru":             "TP.DK.EUR.A.YTL", # EUR/TRY
+    "politika_faizi":       "TP.APIFON4",      # TCMB Ağırlıklı Ort. Fonlama Maliyeti
+    "reeskont_orani":       "TP.REESAVANS.RIO", # Reeskont iskonto oranı
+    "avans_faizi":          "TP.REESAVANS.AFO", # Avans faiz oranı (yasal gecikme ref.)
+    "usd_kuru":             "TP.DK.USD.A.YTL",  # USD/TRY
+    "eur_kuru":             "TP.DK.EUR.A.YTL",  # EUR/TRY
 }
-SERIES_YASAL = "TP.MB.B.AOFAB"  # MB avans/temerrüt faizi
 
 # ─── CollectAPI Endpoints ─────────────────────────────────────────────────────
 COLLECTAPI_BASE = "https://api.collectapi.com/credit"
@@ -45,15 +46,15 @@ COLLECTAPI_ENDPOINTS = {
 
 # ─── Fallback Değerler ────────────────────────────────────────────────────────
 FALLBACK_RATES = {
-    "politika_faizi":       42.50,
-    "gece_faizi_borcverme": 45.00,
-    "gece_faizi_borclama":  41.00,
-    "yasal_gecikme_faizi":  52.00,
-    "usd_kuru":             38.50,
-    "eur_kuru":             40.80,
+    "politika_faizi":       37.00,
+    "reeskont_orani":       38.75,
+    "avans_faizi":          39.75,
+    "yasal_gecikme_faizi":  39.75,
+    "usd_kuru":             43.69,
+    "eur_kuru":             51.48,
     "kaynak":               "fallback",
-    "guncelleme":           "Manuel — Şubat 2026",
-    "uyari":                "TCMB_API_KEY eksik. Kayıt: https://evds2.tcmb.gov.tr"
+    "guncelleme":           "Manuel — 21 Şubat 2026",
+    "uyari":                "TCMB_API_KEY eksik. Kayıt: https://evds3.tcmb.gov.tr"
 }
 
 
@@ -100,11 +101,12 @@ def save_cache(path: Path, data: dict):
 # ─── TCMB EVDS ───────────────────────────────────────────────────────────────
 
 def fetch_series(series_code: str, api_key: str) -> float | None:
+    """EVDS3 API'den tek seri verisi çek. Son 30 günün en güncel değerini döndür."""
     today = datetime.date.today()
-    start = (today - datetime.timedelta(days=14)).strftime("%d-%m-%Y")
+    start = (today - datetime.timedelta(days=30)).strftime("%d-%m-%Y")
     end = today.strftime("%d-%m-%Y")
     url = (
-        f"https://evds2.tcmb.gov.tr/service/evds/"
+        f"https://evds3.tcmb.gov.tr/igmevdsms-dis/"
         f"series={series_code}&startDate={start}&endDate={end}&type=json"
     )
     try:
@@ -112,13 +114,15 @@ def fetch_series(series_code: str, api_key: str) -> float | None:
         with urllib.request.urlopen(req, timeout=8) as resp:
             data = json.loads(resp.read().decode())
         for item in reversed(data.get("items", [])):
-            for v in item.values():
+            for k, v in item.items():
+                if k in ("Tarih", "UNIXTIME") or v is None:
+                    continue
                 try:
                     return float(str(v).replace(",", "."))
                 except (ValueError, TypeError):
                     continue
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"[rates] EVDS3 hata ({series_code}): {e}", file=sys.stderr)
     return None
 
 
@@ -131,14 +135,13 @@ def fetch_tcmb(api_key: str) -> dict:
             rates[name] = val
         else:
             errors.append(name)
-    # Yasal gecikme faizi
-    val = fetch_series(SERIES_YASAL, api_key)
-    if val is not None:
-        rates["yasal_gecikme_faizi"] = val
-    elif "gece_faizi_borcverme" in rates:
-        rates["yasal_gecikme_faizi"] = rates["gece_faizi_borcverme"] + 30.0
-        rates["yasal_gecikme_notu"] = "Hesaplama: gecelik borç verme + 30 puan"
-    rates["kaynak"] = "TCMB EVDS"
+    # Yasal gecikme faizi = avans faizi (3095 s.K. referansı)
+    if "avans_faizi" in rates:
+        rates["yasal_gecikme_faizi"] = rates["avans_faizi"]
+    else:
+        rates["yasal_gecikme_faizi"] = FALLBACK_RATES["yasal_gecikme_faizi"]
+        rates["yasal_gecikme_notu"] = "Fallback: avans faizi alınamadı"
+    rates["kaynak"] = "TCMB EVDS3"
     rates["guncelleme"] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
     if errors:
         rates["eksik_seriler"] = errors
@@ -266,9 +269,9 @@ def format_pretty(rates: dict) -> str:
         elif v:
             lines.append(f"  {label:<28}: {v}")
 
-    flt("politika_faizi",       "Politika Faizi (1h repo)")
-    flt("gece_faizi_borcverme", "Gecelik Borç Verme")
-    flt("gece_faizi_borclama",  "Gecelik Borçlanma")
+    flt("politika_faizi",       "Politika Faizi (TCMB fonlama)")
+    flt("reeskont_orani",       "Reeskont Oranı")
+    flt("avans_faizi",          "Avans Faizi")
     flt("yasal_gecikme_faizi",  "Yasal Gecikme Faizi")
     flt("usd_kuru",             "USD/TRY", prefix=" ")
     flt("eur_kuru",             "EUR/TRY", prefix=" ")

@@ -106,31 +106,34 @@ class TestFetchTcmbMock:
     def test_fetch_tcmb_success(self, mock_fetch):
         """TCMB API basarili donuste tum alanlari doldurmali"""
         mock_fetch.side_effect = lambda code, key: {
-            "TP.APF.TRL01": 42.5,
-            "TP.APF.TRL05": 45.0,
-            "TP.APF.TRL03": 41.0,
-            "TP.DK.USD.A.YTL": 38.50,
-            "TP.DK.EUR.A.YTL": 40.80,
-            "TP.MB.B.AOFAB": 52.0,
+            "TP.APIFON4": 37.0,
+            "TP.REESAVANS.RIO": 38.75,
+            "TP.REESAVANS.AFO": 39.75,
+            "TP.DK.USD.A.YTL": 43.69,
+            "TP.DK.EUR.A.YTL": 51.48,
         }.get(code)
 
         result = ragip_rates.fetch_tcmb("test_key")
-        assert result["politika_faizi"] == 42.5
-        assert result["usd_kuru"] == 38.50
-        assert result["eur_kuru"] == 40.80
-        assert result["yasal_gecikme_faizi"] == 52.0
-        assert result["kaynak"] == "TCMB EVDS"
+        assert result["politika_faizi"] == 37.0
+        assert result["reeskont_orani"] == 38.75
+        assert result["avans_faizi"] == 39.75
+        assert result["usd_kuru"] == 43.69
+        assert result["eur_kuru"] == 51.48
+        assert result["yasal_gecikme_faizi"] == 39.75  # avans_faizi ile ayni
+        assert result["kaynak"] == "TCMB EVDS3"
 
     @patch("ragip_rates.fetch_series")
     def test_fetch_tcmb_partial_failure(self, mock_fetch):
         """Bazi seriler basarisiz olsa da diger veriler donmeli"""
         mock_fetch.side_effect = lambda code, key: {
-            "TP.APF.TRL01": 42.5,
+            "TP.APIFON4": 37.0,
         }.get(code)
 
         result = ragip_rates.fetch_tcmb("test_key")
-        assert result["politika_faizi"] == 42.5
+        assert result["politika_faizi"] == 37.0
         assert "eksik_seriler" in result
+        # avans_faizi alinamadiysa fallback yasal gecikme kullanilmali
+        assert result["yasal_gecikme_faizi"] == ragip_rates.FALLBACK_RATES["yasal_gecikme_faizi"]
 
 
 class TestSeriesConfig:
