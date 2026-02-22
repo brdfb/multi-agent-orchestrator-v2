@@ -44,7 +44,7 @@ def get_tcmb_rates_with_search(force_refresh: bool = False) -> dict:
         "yasal_gecikme_faizi": 52.0,
         "kaynak": "fallback",
         "guncelleme": datetime.datetime.now().strftime("%Y-%m-%d %H:%M"),
-        "uyari": "TCMB_API_KEY eksik. Kayıt: https://evds2.tcmb.gov.tr"
+        "uyari": "TCMB_API_KEY eksik. Kayıt: https://evds3.tcmb.gov.tr"
     }
 
 
