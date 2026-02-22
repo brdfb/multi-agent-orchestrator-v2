@@ -17,6 +17,12 @@ from pathlib import Path
 
 ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(ROOT / "scripts"))
+
+try:
+    from ragip_rates import FALLBACK_RATES as _FB
+except ImportError:
+    _FB = {"politika_faizi": 37.0, "usd_kuru": 43.69, "eur_kuru": 51.48}
 
 
 # ─── TCMB Faiz Verisi ────────────────────────────────────────────────────────
@@ -38,14 +44,20 @@ def get_tcmb_rates_with_search(force_refresh: bool = False) -> dict:
     except Exception as e:
         print(f"[UYARI] Rate fetcher hatası: {e}", file=sys.stderr)
 
-    # Son çare fallback
-    return {
-        "politika_faizi": 42.5,
-        "yasal_gecikme_faizi": 52.0,
-        "kaynak": "fallback",
-        "guncelleme": datetime.datetime.now().strftime("%Y-%m-%d %H:%M"),
-        "uyari": "TCMB_API_KEY eksik. Kayıt: https://evds3.tcmb.gov.tr"
-    }
+    # Son çare fallback — ragip_rates.py'deki tek kaynak kullan
+    try:
+        from ragip_rates import FALLBACK_RATES
+        fallback = FALLBACK_RATES.copy()
+        fallback["guncelleme"] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
+        return fallback
+    except ImportError:
+        return {
+            "politika_faizi": 37.00,
+            "yasal_gecikme_faizi": 39.75,
+            "kaynak": "fallback",
+            "guncelleme": datetime.datetime.now().strftime("%Y-%m-%d %H:%M"),
+            "uyari": "TCMB_API_KEY eksik. Kayıt: https://evds3.tcmb.gov.tr"
+        }
 
 
 # ─── Finansal Hesap Motoru ────────────────────────────────────────────────────
@@ -1083,8 +1095,8 @@ def main():
                 print("Gerekli: --usd-tutar --gun [--usd-faiz (varsayilan: 4.5)]")
                 sys.exit(1)
             rates = get_tcmb_rates_with_search()
-            spot = rates.get("usd_kuru", 38.50)
-            r_tl = rates.get("politika_faizi", 42.5)
+            spot = rates.get("usd_kuru", _FB["usd_kuru"])
+            r_tl = rates.get("politika_faizi", _FB["politika_faizi"])
             r_usd = args.usd_faiz
             sonuc = hesap.doviz_forward(spot, r_tl, r_usd, args.gun)
             display_calc_result("Doviz Forward Kur Tahmini", sonuc)
@@ -1094,7 +1106,7 @@ def main():
                 print("Gerekli: --usd-tutar [--navlun --gtip-vergi]")
                 sys.exit(1)
             rates = get_tcmb_rates_with_search()
-            spot = rates.get("usd_kuru", 38.50)
+            spot = rates.get("usd_kuru", _FB["usd_kuru"])
             sonuc = hesap.ithalat_maliyet(
                 usd_tutar=args.usd_tutar,
                 spot_kur=spot,
@@ -1110,8 +1122,8 @@ def main():
                 print("Gerekli: --market-forward --gun [--usd-faiz --islem-maliyeti]")
                 sys.exit(1)
             rates = get_tcmb_rates_with_search()
-            spot = rates.get("usd_kuru", 43.69)
-            r_tl = rates.get("politika_faizi", 37.0)
+            spot = rates.get("usd_kuru", _FB["usd_kuru"])
+            r_tl = rates.get("politika_faizi", _FB["politika_faizi"])
             sonuc = hesap.covered_interest_arbitrage(
                 spot, args.market_forward, r_tl, args.usd_faiz, args.gun, args.islem_maliyeti
             )
@@ -1119,8 +1131,8 @@ def main():
 
         elif args.calc == "ucgen-arbitraj":
             rates = get_tcmb_rates_with_search()
-            usd_try = rates.get("usd_kuru", 43.69)
-            eur_try = rates.get("eur_kuru", 51.48)
+            usd_try = rates.get("usd_kuru", _FB["usd_kuru"])
+            eur_try = rates.get("eur_kuru", _FB["eur_kuru"])
             eur_usd = args.eur_usd or (eur_try / usd_try if usd_try > 0 else 1.18)
             sonuc = hesap.ucgen_kur_arbitraji(usd_try, eur_try, eur_usd, args.islem_maliyeti)
             display_calc_result("Ucgen Kur Arbitraji", sonuc)
@@ -1131,7 +1143,7 @@ def main():
                 sys.exit(1)
             mevduat_oran = args.mevduat_oran
             if mevduat_oran is None:
-                mevduat_oran = get_tcmb_rates_with_search().get("politika_faizi", 37.0)
+                mevduat_oran = get_tcmb_rates_with_search().get("politika_faizi", _FB["politika_faizi"])
             sonuc = hesap.vade_mevduat_arbitraji(args.anapara, args.oran, args.gun, mevduat_oran)
             display_calc_result("Vade Farki vs Mevduat Arbitraji", sonuc)
 
@@ -1140,8 +1152,8 @@ def main():
                 print("Gerekli: --gun [--usd-faiz --beklenen-kur]")
                 sys.exit(1)
             rates = get_tcmb_rates_with_search()
-            spot = rates.get("usd_kuru", 43.69)
-            r_tl = rates.get("politika_faizi", 37.0)
+            spot = rates.get("usd_kuru", _FB["usd_kuru"])
+            r_tl = rates.get("politika_faizi", _FB["politika_faizi"])
             sonuc = hesap.carry_trade_analizi(spot, r_tl, args.usd_faiz, args.gun, args.beklenen_kur)
             display_calc_result("Carry Trade / Faiz Arbitraji", sonuc)
 

@@ -27,7 +27,7 @@ python3 "$ROOT/scripts/ragip_rates.py" --pretty
 # Önce canlı oranı çek
 ROOT=$(git rev-parse --show-toplevel 2>/dev/null || echo "$HOME/.orchestrator")
 RATES=$(python3 "$ROOT/scripts/ragip_rates.py" 2>/dev/null)
-TCMB_ORANI=$(echo $RATES | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('politika_faizi', 42.5))" 2>/dev/null || echo "42.5")
+TCMB_ORANI=$(echo $RATES | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['politika_faizi'])" 2>/dev/null)
 
 TCMB_ORANI_VAL="${TCMB_ORANI}" python3 -c "
 import sys, os
@@ -41,7 +41,7 @@ toplam = anapara + vade_farki
 gunluk_maliyet = vade_farki / gun if gun > 0 else 0
 
 # TVM - Politika faizine göre fırsat maliyeti (canlı TCMB verisi)
-tcmb_oran = float(os.environ.get('TCMB_ORANI_VAL', '42.5'))
+tcmb_oran = float(os.environ.get('TCMB_ORANI_VAL', '37.0'))
 yillik_politika = tcmb_oran / 100
 firsatmaliyeti = anapara * yillik_politika * gun / 365
 gunluk_firsat = firsatmaliyeti / gun if gun > 0 else 0

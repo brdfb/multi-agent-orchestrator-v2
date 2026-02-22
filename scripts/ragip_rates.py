@@ -3,6 +3,15 @@
 Ragıp Aga — Canlı Faiz & Piyasa Veri Çekici
 Kaynaklar: TCMB EVDS (resmi) + CollectAPI (banka mevduat/kredi oranları)
 
+Taşınabilir tek dosya modülü — herhangi bir repoya kopyala-yapıştır ile taşınabilir.
+Sıfır bağımlılık (sadece stdlib), tek dosya.
+
+Taşıma:
+  1. Bu dosyayı kopyala:  cp ragip_rates.py /yeni-repo/scripts/
+  2. API key tanımla:     export TCMB_API_KEY=xxx
+  3. (Opsiyonel) Cache:   export RAGIP_CACHE_DIR=/yeni-repo/data/cache
+  4. Test:                python3 ragip_rates.py --pretty
+
 Kullanım:
   python3 ragip_rates.py              → JSON çıktı (skill'ler için)
   python3 ragip_rates.py --pretty     → Okunabilir tablo
@@ -19,10 +28,19 @@ import urllib.request
 import urllib.error
 from pathlib import Path
 
-ROOT = Path(__file__).parent.parent
-CACHE_FILE       = ROOT / "data" / "RAGIP_AGA" / "rates_cache.json"
-MEVDUAT_CACHE    = ROOT / "data" / "RAGIP_AGA" / "mevduat_cache.json"
-KREDI_CACHE      = ROOT / "data" / "RAGIP_AGA" / "kredi_cache.json"
+__all__ = [
+    "FALLBACK_RATES", "SERIES", "CACHE_DIR",
+    "get_rates", "get_mevduat", "get_kredi",
+    "fetch_tcmb", "fetch_series", "fetch_collectapi",
+    "eur_usd_cross", "en_yuksek_mevduat",
+    "format_pretty", "format_mevduat", "format_kredi",
+    "load_cache", "save_cache",
+]
+
+CACHE_DIR = Path(os.environ.get("RAGIP_CACHE_DIR", str(Path(__file__).parent / ".ragip_cache")))
+CACHE_FILE       = CACHE_DIR / "rates_cache.json"
+MEVDUAT_CACHE    = CACHE_DIR / "mevduat_cache.json"
+KREDI_CACHE      = CACHE_DIR / "kredi_cache.json"
 CACHE_TTL_HOURS  = 4    # Faiz oranları 4 saatte bir yenile
 MARKET_TTL_HOURS = 12   # Mevduat/kredi oranları 12 saatte bir yenile
 
@@ -56,24 +74,6 @@ FALLBACK_RATES = {
     "guncelleme":           "Manuel — 21 Şubat 2026",
     "uyari":                "TCMB_API_KEY eksik. Kayıt: https://evds3.tcmb.gov.tr"
 }
-
-
-# ─── Yardımcı: .env okuyucu ──────────────────────────────────────────────────
-
-def get_env_key(key_name: str) -> str | None:
-    """Ortam değişkeni veya .env dosyasından key al."""
-    val = os.environ.get(key_name, "").strip()
-    if val:
-        return val
-    env_file = ROOT / ".env"
-    if env_file.exists():
-        for line in env_file.read_text(encoding="utf-8").splitlines():
-            line = line.strip()
-            if line.startswith(f"{key_name}="):
-                v = line.split("=", 1)[1].strip().strip('"').strip("'")
-                if v:
-                    return v
-    return None
 
 
 # ─── Cache yardımcıları ───────────────────────────────────────────────────────
@@ -173,7 +173,7 @@ def get_mevduat(force_refresh: bool = False) -> dict:
             cached["_cache_hit"] = True
             return cached
 
-    api_key = get_env_key("COLLECTAPI_KEY")
+    api_key = os.environ.get("COLLECTAPI_KEY", "").strip() or None
     if not api_key:
         return {"hata": "COLLECTAPI_KEY eksik", "kaynak": "fallback"}
 
@@ -197,7 +197,7 @@ def get_kredi(force_refresh: bool = False) -> dict:
             cached["_cache_hit"] = True
             return cached
 
-    api_key = get_env_key("COLLECTAPI_KEY")
+    api_key = os.environ.get("COLLECTAPI_KEY", "").strip() or None
     if not api_key:
         return {"hata": "COLLECTAPI_KEY eksik", "kaynak": "fallback"}
 
@@ -250,7 +250,7 @@ def get_rates(force_refresh: bool = False) -> dict:
             cached["_cache_hit"] = True
             return cached
 
-    api_key = get_env_key("TCMB_API_KEY")
+    api_key = os.environ.get("TCMB_API_KEY", "").strip() or None
     if api_key:
         try:
             rates = fetch_tcmb(api_key)

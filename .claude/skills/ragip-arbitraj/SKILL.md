@@ -33,8 +33,8 @@ RATES=$(python3 "$ROOT/scripts/ragip_rates.py" 2>/dev/null)
 RATES_JSON="$RATES" python3 -c "
 import json, os
 rates = json.loads(os.environ.get('RATES_JSON', '{}'))
-spot = rates.get('usd_kuru', 43.69)
-r_tl = rates.get('politika_faizi', 37.0)
+spot = rates['usd_kuru']
+r_tl = rates['politika_faizi']
 
 market_forward = MARKET_FORWARD  # Kullanicidan al
 r_usd = R_USD  # Varsayilan: 4.5
@@ -70,8 +70,8 @@ RATES=$(python3 "$ROOT/scripts/ragip_rates.py" 2>/dev/null)
 RATES_JSON="$RATES" python3 -c "
 import json, os
 rates = json.loads(os.environ.get('RATES_JSON', '{}'))
-usd_try = rates.get('usd_kuru', 43.69)
-eur_try = rates.get('eur_kuru', 51.48)
+usd_try = rates['usd_kuru']
+eur_try = rates['eur_kuru']
 eur_usd = eur_try / usd_try
 
 baslangic = 1_000_000  # 1M EUR
@@ -113,7 +113,7 @@ RATES=$(python3 "$ROOT/scripts/ragip_rates.py" 2>/dev/null)
 RATES_JSON="$RATES" python3 -c "
 import json, os
 rates = json.loads(os.environ.get('RATES_JSON', '{}'))
-tcmb = rates.get('politika_faizi', 37.0)
+tcmb = rates['politika_faizi']
 
 anapara = ANAPARA  # Kullanicidan al
 vade_oran = VADE_ORAN  # Aylik %
@@ -148,8 +148,8 @@ RATES=$(python3 "$ROOT/scripts/ragip_rates.py" 2>/dev/null)
 RATES_JSON="$RATES" python3 -c "
 import json, os
 rates = json.loads(os.environ.get('RATES_JSON', '{}'))
-spot = rates.get('usd_kuru', 43.69)
-r_tl = rates.get('politika_faizi', 37.0) / 100
+spot = rates['usd_kuru']
+r_tl = rates['politika_faizi'] / 100
 r_usd = R_USD / 100  # Varsayilan: 4.5
 gun = GUN
 t = gun / 365
