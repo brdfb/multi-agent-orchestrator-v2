@@ -2,6 +2,39 @@
 
 Ragip Aga'yi herhangi bir git reposuna kopyalayip kullanmaya baslamak icin bu rehberi takip et.
 
+---
+
+## Sadece ragip_rates.py (En Hizli Yol)
+
+Sadece TCMB faiz/kur verisi lazimsa, `ragip_rates.py` tek dosya olarak tasinabilir — sifir bagimlilk:
+
+```bash
+# 1. Dosyayi kopyala
+cp ~/.orchestrator/scripts/ragip_rates.py /yeni-repo/scripts/
+
+# 2. API key tanimla (opsiyonel — yoksa fallback degerler kullanilir)
+export TCMB_API_KEY=xxx
+
+# 3. (Opsiyonel) Cache dizinini belirle
+export RAGIP_CACHE_DIR=/yeni-repo/data/cache
+
+# 4. Test
+python3 /yeni-repo/scripts/ragip_rates.py --pretty    # Okunabilir tablo
+python3 /yeni-repo/scripts/ragip_rates.py              # JSON cikti
+python3 /yeni-repo/scripts/ragip_rates.py --mevduat    # Banka mevduat (COLLECTAPI_KEY gerekli)
+```
+
+Python'dan import:
+```python
+from ragip_rates import get_rates, FALLBACK_RATES
+rates = get_rates()  # cache → API → fallback
+print(rates["politika_faizi"])  # 37.0
+```
+
+---
+
+## Tam Kurulum (Agent + Skill + CLI)
+
 ## GitHub'dan Kurulum (Onerilen)
 
 **Repo:** https://github.com/brdfb/ragip-aga-kit
@@ -95,7 +128,9 @@ data/RAGIP_AGA/
   gorevler.jsonl           # Gorev listesi
   profil.json              # Kendi firma profili
   ciktilar/                # Analiz/hesaplama ciktilari
-  rates_cache.json         # TCMB oran cache
+
+scripts/.ragip_cache/      # TCMB oran cache (RAGIP_CACHE_DIR ile degistirilebilir)
+  rates_cache.json         # Faiz oranlari cache
   mevduat_cache.json       # Mevduat faiz cache
   kredi_cache.json         # Kredi faiz cache
 ```
@@ -128,7 +163,11 @@ cp -r "$KAYNAK"/tests/e2e_ragip_scenario "$HEDEF/tests/"
 # Data dizini + gitignore
 mkdir -p "$HEDEF/data/RAGIP_AGA/ciktilar"
 echo "data/RAGIP_AGA/" >> "$HEDEF/.gitignore"
+echo "scripts/.ragip_cache/" >> "$HEDEF/.gitignore"
 ```
+
+> **Not:** `ragip_rates.py` cache'i varsayilan olarak `scripts/.ragip_cache/` altinda olusturur.
+> Degistirmek icin: `export RAGIP_CACHE_DIR=/yeni-repo/data/cache`
 
 ## Bagimlilik Kurulumu
 
@@ -151,11 +190,16 @@ Tum testler gecmeli. Kritik testler:
 
 ## Neden Calisiyor
 
-Tum path'ler `git rev-parse --show-toplevel` ile cozumlenir:
+**ragip_rates.py** (standalone):
+- Cache dizini `RAGIP_CACHE_DIR` env var ile veya script'in kendi dizininde `.ragip_cache/`
+- API key'ler `os.environ.get()` ile (`.env` otomatik okunmaz — cagiran uygulama yukler)
+- Sifir bagimlilk: sadece Python stdlib
 
-- **Python bloklari:** `subprocess.check_output(['git', 'rev-parse', '--show-toplevel'])` ile repo koku bulunur
+**Diger dosyalar** (agent, skill, CLI):
+- Path'ler `git rev-parse --show-toplevel` ile cozumlenir
 - **Bash bloklari:** `ROOT=$(git rev-parse --show-toplevel 2>/dev/null || echo "$HOME/.orchestrator")` fallback ile
-- **Dokumantasyon:** Relative path'ler (`data/RAGIP_AGA/...`)
+- **Python bloklari:** `subprocess.check_output(['git', 'rev-parse', '--show-toplevel'])` ile repo koku bulunur
+- Fallback degerler tek kaynaktan gelir: `ragip_rates.FALLBACK_RATES`
 
 Repo nerede olursa olsun, git koku otomatik tespit edilir.
 

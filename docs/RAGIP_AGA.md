@@ -1,6 +1,6 @@
 # Ragıp Aga — Kullanım Dokümantasyonu
 
-**Versiyon:** 2.2.0 | **Tarih:** 2026-02-21
+**Versiyon:** 2.3.0 | **Tarih:** 2026-02-22
 
 Ragıp Aga, nakit akışı yönetimi, vade müzakeresi ve sözleşme uyuşmazlıkları için geliştirilmiş bir iş danışmanı ajanıdır. İki ayrı arayüz üzerinden çalışır.
 
@@ -126,6 +126,28 @@ EUR/USD cross rate (TCMB verilerinden hesaplanır):
 ```bash
 ragip --eur-usd
 ```
+
+### ragip_rates.py — Taşınabilir Standalone Modül (v2.3.0)
+
+`scripts/ragip_rates.py` herhangi bir repoya tek dosya olarak kopyalanabilir. Sıfır bağımlılık (sadece stdlib).
+
+```bash
+# Başka repoya taşımak için:
+cp scripts/ragip_rates.py /yeni-repo/scripts/
+export TCMB_API_KEY=xxx                              # API key
+export RAGIP_CACHE_DIR=/yeni-repo/data/cache          # (opsiyonel) cache dizini
+python3 /yeni-repo/scripts/ragip_rates.py --pretty    # test
+```
+
+**Ortam Değişkenleri:**
+
+| Değişken | Zorunlu | Varsayılan | Açıklama |
+|----------|---------|------------|----------|
+| `TCMB_API_KEY` | Hayır | - | EVDS3 API anahtarı. Yoksa fallback kullanılır |
+| `COLLECTAPI_KEY` | Hayır | - | Banka mevduat/kredi oranları için |
+| `RAGIP_CACHE_DIR` | Hayır | `scripts/.ragip_cache/` | Cache dosyaları dizini |
+
+**Not:** `.env` dosyası otomatik okunmaz — çağıran uygulama kendi `.env`'ini yükleyebilir (ör. `python-dotenv`).
 
 ### Desteklenen Dosya Formatları (`--file`)
 
@@ -275,7 +297,7 @@ ragip-aga (orchestrator, sonnet, 0 skill)
 ```
 config/ragip_aga.yaml                          # Terminal CLI config
 scripts/ragip_aga.py                           # Terminal CLI + hesap motoru
-scripts/ragip_rates.py                         # TCMB EVDS3 canlı oran çekici
+scripts/ragip_rates.py                         # TCMB EVDS3 canlı oran çekici (standalone, taşınabilir)
 
 .claude/agents/
   ragip-aga.md                                 # Orchestrator (hub)
@@ -299,5 +321,6 @@ scripts/ragip_rates.py                         # TCMB EVDS3 canlı oran çekici
 data/RAGIP_AGA/history.jsonl                   # Terminal geçmişi (otomatik)
 data/RAGIP_AGA/profil.json                     # Firma profili (otomatik)
 data/RAGIP_AGA/ciktilar/                       # Hesaplama çıktıları (otomatik)
+scripts/.ragip_cache/                          # TCMB oran cache (RAGIP_CACHE_DIR ile değiştirilebilir)
 docs/RAGIP_AGA.md                              # Bu dosya
 ```
