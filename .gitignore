@@ -5,6 +5,7 @@ __pycache__/
 data/CONVERSATIONS/
 data/MEMORY/
 data/NOTES/
+.claude/settings.local.json
 .pytest_cache/
 .ruff_cache/
 *.db-journal
